@@ -1,0 +1,46 @@
+Using HTML canvas and no external libraries, create a driving game, where I can drive a car around using the arrow keys. Up arrow to accelerate down arrow to break and turn left and right. The car can be represented by a simple triangular arrow for now. The background should be green representing grass, with gray streets.
+
+The street app should be randomly generated as I drive around. Initially only one street/block is present, but when I drive off either end of that street an intersection is created. There's an 80% chance that if I keep driving straight, the road continues on straight (so 20% chance the street ends at that intersection).
+And a 60% chance that there's a street to the right, and a 60% chance that there's a street to the left.
+
+Internally, the map and everything else should be stored in units of feet, only converted to pixels when it's time to draw. Including player position and speed, which should be feet/second. For block size, the streets should be 400 feet long between intersections. Streets are 20 feet wide, 10 feet per lane, so intersections are 20' x 20'.
+
+Streets/blocks have a 20% chance to vary from the standard 400ft length. If they're in that 20%, they can randomly range from 200 to 600 feet.
+
+As new streets/blocks are generated, we need to check against all existing streets (or all existing streets in the area, we might eventually divide the map into very large cells, but not yet), to ensure we're not recreating a street where one already exists, or crossing over an existing street where there is no intersection.
+Because eventually we'll generate buildings on both sides of streets as they're generated, and new streets can't wipe out existing buildings along other streets, because we want the world to be persistent and consistent over time (go back to an old street, you should see the same buildings as before). But don't worry about actually creating buildings yet, we'll get to that later.
+
+---
+
+Hmm, looks like it's generating a whole lot of streets at startup, a large network of them.  There should only be one street segment, one block at startup.  Until I drive off one end of the street, which should trigger generation of an intersection and potentially more streets connecting there.  Then no more streets are generated until I again drive off the end of street with no intersection at the end (an "open end", frontier, open for generation).  No need to worry about or elegantly handle cases where I'm driving off in the middle of the grass, I'll mostly stick to the roads (and eventually, we'll probably add some collision logic restricting me to the roads, bouncing off the road edges or something)
+
+---
+
+Ok, now for CheckConflicts(), remember that we want to reserve a large "right-of-way" each both sides of each street, for houses and buildings that will (eventually) be generated there.  So a potential new street segment shouldn't be allowed if its endpoint lands within, say, 170ft (right-of-way width) of an existing street segment (houses, sidewalks, etc, can be up to 170ft "deep" beside a street).  Essentially, simply check if the endpoint of a potential new street would land within the "bounding rectangle" of any existing street segment.  Where the bounding rectangle is, for a standard 400ft block length, 400ft x 2x170ft.  That is, 400ft x 340ft.
+
+---
+
+Now carefully think through the logic of CheckConflicts.  Consider whether or not the new "right of way" makes some of the previous logic obsolete?  Is it possible that all we need is the "right of way" check?  Or, with this check, could the other logic in this function be simplified or streamlined at all?
+
+---
+
+Cool, good.  And, when this happens, it should detect the existing intersection/node and correctly link up to it?  That is, it won't create a new intersection overtop of an existing one, and start adding streets on top of existing streets?  Don't change any code yet, just checking
+
+---
+
+Ok, can you dump a copy of all of the prompts I've sent you so far in this conversation (just what I said, not what you said), into a file called "prompts.txt", in this same infinite-city-js folder?  Then, as we continue, update this file with each new prompt
+
+---
+
+It appears that sometimes, when a street loops around to form a grid block, if I go drive through the intersection where two streets met, it will never generate any new streets out from there (should still be 2 of 4 slots open on the intersection).  Possibly we only generate streets when there is no intersection there at all, maybe?
+This behavior is generally correct, in that if our probability "roll" previously said this is a 3 way intersection with no 4th street, we shouldn't change that later.
+But, if the player's car has never driven through an intersection, then it's still ok to add new streets connecting there, when the player finally does actually drive through it.  May need to have intersections track whether they've been driven through yet?
+Or, maybe you can think of something else that might be causing this?
+
+---
+
+Yes, fix both (in CitySim folder for now, I'll move the fixed file over).  I favor the option of reseting any remaining false directions back to null when a new street connects to a fully resolved intersection
+
+---
+
+Ok, just write prompts.txt to the CitySim folder, and I'll move it over and start a new ClaudeCode session in the new folder.  Also write compact.txt, with a summary of the current context, similiar to what you would do when you compact on running out of context window.  Thus allowing me to continue this in a new session.

@@ -1,0 +1,98 @@
+COMPACT CONTEXT — Infinite City JS Driving Game
+================================================
+
+## Project
+Single-file HTML canvas driving game (`index.html`). No external libraries. Player drives a car (red arrowhead) around procedurally generated streets on a green grass background.
+
+## Working File
+`/Users/jmartin2/infinite-city-js/index.html`
+
+User wants prompts.txt updated each turn with their latest prompt.
+
+## Architecture & Units
+- ALL internal units are FEET (position, speed in ft/s, dimensions)
+- Only converted to pixels at draw time via PX_PER_FT = 2
+- Streets are axis-aligned (horizontal or vertical, cardinal directions only)
+
+## Key Constants
+- STREET_WIDTH = 20ft (10ft per lane)
+- DEFAULT_BLOCK_LEN = 400ft
+- RIGHT_OF_WAY = 170ft (each side of street, reserved for future buildings)
+- PROXIMITY_THRESHOLD = 50ft (min distance between distinct intersections)
+- GENERATE_DIST = 30ft (player must be this close to trigger generation)
+- Block length: 80% chance of 400ft, 20% chance of random 200-600ft
+
+## Data Structures
+- `intersections`: Map<string "x,y", node> where node = { x, y, sourceDir, roads: { n, s, e, w } }
+  - roads[dir]: null = undecided, true = has road, false = no road
+  - sourceDir: direction the creating street came FROM
+- `streets`: Array of { x1, y1, x2, y2 } connecting intersection pairs
+- `player`: { x, y, angle, speed } in feet/ft-per-second/radians
+
+## Street Generation Logic
+- Generation triggers ONLY when player is within 30ft of an intersection with undecided directions (no cascading, no radius-based pre-generation)
+- Starts with single street from (0,0) to (400,0), player at (200,0)
+- When resolving an intersection:
+  - "Straight through" direction (opposite of sourceDir): 80% chance of road
+  - Other undecided directions: 60% chance each
+  - For each candidate road: generate block length, compute endpoint, run conflict checks
+
+## Conflict Detection (checkConflict)
+Two checks, simplified from original three:
+
+1. **Right-of-way check**: New endpoint (bx,by) must not land inside the bounding rectangle of any existing street. Bounding rect = full block length along street × 170ft each side perpendicular. HALF_STREET (10ft) margin at along-street ends so connections at intersections aren't blocked.
+
+2. **Perpendicular crossing check**: Still needed because streets can be up to 600ft long, clearing the 340ft ROW zone on both ends while crossing through an existing perpendicular street. Checks if crossing point is interior to both segments with no intersection there.
+
+The old **parallel overlap check** was removed — it's redundant because the ROW check + proximity threshold + generation logic (each direction resolved once) make parallel overlaps impossible.
+
+## Grid Formation
+- When a new street's endpoint matches an existing intersection (dist < 1), it connects to it rather than creating a duplicate
+- Both nodes' road directions are updated, one street segment is added
+- No duplicate streets because when A generates a road to B, B's reciprocal direction is set to true, so B never tries to generate back to A
+- With 80% standard block length, grids form naturally (~64% chance two parallel streets match length)
+
+## IMPORTANT: Known Pitfalls & Past Bugs (read before modifying generation code)
+
+### sourceDir semantics
+`sourceDir` means "the direction the source street is FROM" relative to this intersection.
+If a street travels NORTH from A to B, then B's sourceDir must be 's' (source is to the south).
+A previous bug set sourceDir to the direction of travel (`dir`) instead of `OPPOSITE[dir]`,
+which caused the 80% straight-through probability to be applied to the already-resolved
+back-direction (wasted), while the actual continuation only got 60%.
+FIX: `addIntersection(nx, ny, OPPOSITE[dir])` — NOT `dir`.
+
+### Grid closure and already-resolved intersections
+When a grid closes (a new street connects to an existing intersection), the target intersection
+may have already been fully resolved (all 4 directions decided) from a previous player visit.
+Without mitigation, the remaining `false` directions stay decided and no new streets can ever
+generate from them, even though the player expects generation on their next drive-through.
+FIX: After connecting a street to a fully-resolved intersection, reset any remaining `false`
+directions back to `null` so they get re-rolled on the player's next visit. This code lives
+in `resolveIntersection` right after the street is added.
+
+### Generation is player-proximity-driven, not cascading
+Generation only triggers when the player is within GENERATE_DIST (30ft) of an intersection
+with null directions. Do NOT use radius-based or cascading generation — an earlier version
+pre-generated a huge network at startup because new intersections added during Map iteration
+were themselves within range and got resolved immediately.
+
+## Player Physics
+- Max speed: 150 ft/s, reverse max: 30 ft/s
+- Acceleration: 40 ft/s², braking: 60 ft/s², drag: 3 ft/s²
+- Turning scales with speed (can't turn while stationary), max turn rate: 3 rad/s
+
+## Rendering
+- Green grass background (#2d8a2e)
+- Gray roads (#666) with lighter edge lines (#888)
+- Yellow dashed center lane markings (#FFD700), stopping 10ft from intersection centers
+- Red arrowhead car (#e33) with dark outline (#a00), 12ft long × 7ft wide
+- Camera follows player (centered)
+- Off-screen streets culled for performance
+- HUD: speed in mph, street count
+
+## Future Plans (discussed but not yet implemented)
+- Buildings on both sides of streets (within the 170ft right-of-way)
+- Road collision / edge bouncing to keep player on streets
+- World persistence (return to old streets, same buildings)
+- Possibly divide map into large cells for performance

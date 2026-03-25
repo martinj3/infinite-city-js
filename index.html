@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>City Driving</title>
+    <style>
+        * { margin: 0; padding: 0; overflow: hidden; }
+        canvas { display: block; }
+    </style>
+</head>
+<body>
+<canvas id="game"></canvas>
+<script>
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+
+function resize() {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+}
+resize();
+window.addEventListener('resize', resize);
+
+// --- Constants ---
+const STREET_WIDTH = 20;        // feet
+const HALF_STREET = STREET_WIDTH / 2;
+const DEFAULT_BLOCK_LEN = 400;  // feet
+const PX_PER_FT = 2;
+const GENERATE_DIST = 30;       // feet - how close player must be to trigger generation
+const PROXIMITY_THRESHOLD = 50; // feet - min distance between distinct intersections
+
+// Physics
+const MAX_SPEED = 150;          // ft/s (~102 mph)
+const REVERSE_MAX = 30;         // ft/s
+const ACCEL = 40;               // ft/s^2
+const BRAKE = 60;               // ft/s^2
+const DRAG = 3;                 // ft/s^2
+const MAX_TURN_RATE = 3;        // rad/s
+
+// Car dimensions (feet)
+const CAR_LENGTH = 12;
+const CAR_WIDTH = 7;
+
+// --- Input ---
+const keys = {};
+window.addEventListener('keydown', e => {
+    if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.key)) e.preventDefault();
+    keys[e.key] = true;
+});
+window.addEventListener('keyup', e => { keys[e.key] = false; });
+
+// --- Player ---
+const player = { x: 200, y: 0, angle: 0, speed: 0 };
+
+// --- Map Data ---
+const intersections = new Map(); // key "x,y" -> node
+const streets = [];              // { x1, y1, x2, y2 }
+
+function intKey(x, y) { return `${Math.round(x)},${Math.round(y)}`; }
+
+function getIntersection(x, y) { return intersections.get(intKey(x, y)); }
+
+function addIntersection(x, y, sourceDir) {
+    const key = intKey(x, y);
+    if (intersections.has(key)) return intersections.get(key);
+    const node = { x: Math.round(x), y: Math.round(y), sourceDir, roads: { n: null, s: null, e: null, w: null } };
+    intersections.set(key, node);
+    return node;
+}
+
+const OPPOSITE = { n: 's', s: 'n', e: 'w', w: 'e' };
+const DIR_VEC  = { n: [0, -1], s: [0, 1], e: [1, 0], w: [-1, 0] };
+
+function blockLength() {
+    if (Math.random() < 0.2) return Math.round(200 + Math.random() * 400);
+    return DEFAULT_BLOCK_LEN;
+}
+
+// --- Conflict Detection ---
+const RIGHT_OF_WAY = 170; // feet each side of street reserved for buildings
+
+function checkConflict(ax, ay, bx, by) {
+    const newH = Math.abs(ay - by) < 1;
+    for (const s of streets) {
+        const sH = Math.abs(s.y1 - s.y2) < 1;
+
+        // Right-of-way: new endpoint must not land inside any existing
+        // street's bounding rect (block length x 340ft).
+        // HALF_STREET margin at along-street ends so intersections aren't blocked.
+        if (sH) {
+            const sMinX = Math.min(s.x1, s.x2);
+            const sMaxX = Math.max(s.x1, s.x2);
+            if (bx > sMinX + HALF_STREET && bx < sMaxX - HALF_STREET &&
+                by > s.y1 - RIGHT_OF_WAY && by < s.y1 + RIGHT_OF_WAY) return true;
+        } else {
+            const sMinY = Math.min(s.y1, s.y2);
+            const sMaxY = Math.max(s.y1, s.y2);
+            if (by > sMinY + HALF_STREET && by < sMaxY - HALF_STREET &&
+                bx > s.x1 - RIGHT_OF_WAY && bx < s.x1 + RIGHT_OF_WAY) return true;
+        }
+
+        // Perpendicular crossing: a new street can be long enough (up to 600ft)
+        // to clear the ROW zone (170ft each side) yet still cross an existing
+        // street in between. Reject if crossing point has no intersection.
+        if (newH !== sH) {
+            let hx1, hx2, hy, vx, vy1, vy2;
+            if (newH) {
+                hx1 = Math.min(ax, bx); hx2 = Math.max(ax, bx); hy = ay;
+                vx = s.x1; vy1 = Math.min(s.y1, s.y2); vy2 = Math.max(s.y1, s.y2);
+            } else {
+                hx1 = Math.min(s.x1, s.x2); hx2 = Math.max(s.x1, s.x2); hy = s.y1;
+                vx = ax; vy1 = Math.min(ay, by); vy2 = Math.max(ay, by);
+            }
+            if (vx > hx1 + 1 && vx < hx2 - 1 && hy > vy1 + 1 && hy < vy2 - 1) {
+                if (!getIntersection(vx, hy)) return true;
+            }
+        }
+    }
+    return false;
+}
+
+// --- Generation ---
+function resolveIntersection(node) {
+    for (const dir of ['n', 's', 'e', 'w']) {
+        if (node.roads[dir] !== null) continue;
+
+        // Probability: 80% for continuing straight through, 60% for side streets
+        const prob = (node.sourceDir && dir === OPPOSITE[node.sourceDir]) ? 0.8 : 0.6;
+
+        if (Math.random() >= prob) { node.roads[dir] = false; continue; }
+
+        const [dx, dy] = DIR_VEC[dir];
+        const len = blockLength();
+        const nx = node.x + dx * len;
+        const ny = node.y + dy * len;
+
+        if (checkConflict(node.x, node.y, nx, ny)) { node.roads[dir] = false; continue; }
+
+        // Check proximity to existing intersections
+        let targetNode = null;
+        let tooClose = false;
+        for (const [, other] of intersections) {
+            const dist = Math.hypot(other.x - nx, other.y - ny);
+            if (dist < 1) { targetNode = other; break; }
+            if (dist < PROXIMITY_THRESHOLD) { tooClose = true; break; }
+        }
+        if (tooClose) { node.roads[dir] = false; continue; }
+
+        if (!targetNode) targetNode = addIntersection(nx, ny, OPPOSITE[dir]);
+
+        node.roads[dir] = true;
+        targetNode.roads[OPPOSITE[dir]] = true;
+        streets.push({ x1: node.x, y1: node.y, x2: nx, y2: ny });
+
+        // If target was fully resolved, re-open remaining false directions
+        // so the player can trigger generation on their next visit
+        const hasNull = Object.values(targetNode.roads).some(v => v === null);
+        if (!hasNull) {
+            for (const d of ['n', 's', 'e', 'w']) {
+                if (targetNode.roads[d] === false) targetNode.roads[d] = null;
+            }
+        }
+    }
+}
+
+function generateAtPlayer(px, py) {
+    for (const [, node] of intersections) {
+        if (Math.hypot(node.x - px, node.y - py) < GENERATE_DIST) {
+            if (node.roads.n === null || node.roads.s === null || node.roads.e === null || node.roads.w === null) {
+                resolveIntersection(node);
+            }
+        }
+    }
+}
+
+// --- Init ---
+function init() {
+    const a = addIntersection(0, 0, 'w');
+    const b = addIntersection(400, 0, 'w');
+    a.roads.e = true;
+    a.roads.w = false;
+    b.roads.w = true;
+    streets.push({ x1: 0, y1: 0, x2: 400, y2: 0 });
+}
+
+// --- Update ---
+function update(dt) {
+    // Acceleration / braking
+    if (keys['ArrowUp']) {
+        player.speed += ACCEL * dt;
+    }
+    if (keys['ArrowDown']) {
+        if (player.speed > 0) {
+            player.speed -= BRAKE * dt;
+            if (player.speed < 0) player.speed = 0;
+        } else {
+            player.speed -= ACCEL * 0.5 * dt;
+        }
+    }
+
+    // Drag
+    if (!keys['ArrowUp'] && !keys['ArrowDown']) {
+        if (player.speed > 0) {
+            player.speed = Math.max(0, player.speed - DRAG * dt);
+        } else if (player.speed < 0) {
+            player.speed = Math.min(0, player.speed + DRAG * dt);
+        }
+    }
+
+    player.speed = Math.max(-REVERSE_MAX, Math.min(MAX_SPEED, player.speed));
+
+    // Turning (scales with speed so you can't turn while stationary)
+    const turnFactor = Math.min(Math.abs(player.speed) / 20, 1);
+    if (keys['ArrowLeft'])  player.angle -= MAX_TURN_RATE * turnFactor * dt;
+    if (keys['ArrowRight']) player.angle += MAX_TURN_RATE * turnFactor * dt;
+
+    // Move
+    player.x += Math.cos(player.angle) * player.speed * dt;
+    player.y += Math.sin(player.angle) * player.speed * dt;
+
+    // Generate streets ahead
+    generateAtPlayer(player.x, player.y);
+}
+
+// --- Draw ---
+function draw() {
+    const W = canvas.width, H = canvas.height;
+    ctx.clearRect(0, 0, W, H);
+
+    // Green grass background
+    ctx.fillStyle = '#2d8a2e';
+    ctx.fillRect(0, 0, W, H);
+
+    // Camera: player at center of screen
+    const camX = player.x * PX_PER_FT - W / 2;
+    const camY = player.y * PX_PER_FT - H / 2;
+
+    // Visible bounds in feet (for culling)
+    const viewL = camX / PX_PER_FT - 50;
+    const viewR = (camX + W) / PX_PER_FT + 50;
+    const viewT = camY / PX_PER_FT - 50;
+    const viewB = (camY + H) / PX_PER_FT + 50;
+
+    ctx.save();
+    ctx.translate(-camX, -camY);
+
+    // Draw streets
+    for (const s of streets) {
+        const horiz = Math.abs(s.y1 - s.y2) < 1;
+        let minX, maxX, minY, maxY;
+        if (horiz) {
+            minX = Math.min(s.x1, s.x2) - HALF_STREET;
+            maxX = Math.max(s.x1, s.x2) + HALF_STREET;
+            minY = s.y1 - HALF_STREET;
+            maxY = s.y1 + HALF_STREET;
+        } else {
+            minX = s.x1 - HALF_STREET;
+            maxX = s.x1 + HALF_STREET;
+            minY = Math.min(s.y1, s.y2) - HALF_STREET;
+            maxY = Math.max(s.y1, s.y2) + HALF_STREET;
+        }
+
+        // Cull off-screen streets
+        if (maxX < viewL || minX > viewR || maxY < viewT || minY > viewB) continue;
+
+        // Road surface
+        ctx.fillStyle = '#666';
+        ctx.fillRect(minX * PX_PER_FT, minY * PX_PER_FT,
+                     (maxX - minX) * PX_PER_FT, (maxY - minY) * PX_PER_FT);
+
+        // Road edge lines
+        ctx.strokeStyle = '#888';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        if (horiz) {
+            ctx.moveTo(minX * PX_PER_FT, minY * PX_PER_FT);
+            ctx.lineTo(maxX * PX_PER_FT, minY * PX_PER_FT);
+            ctx.moveTo(minX * PX_PER_FT, maxY * PX_PER_FT);
+            ctx.lineTo(maxX * PX_PER_FT, maxY * PX_PER_FT);
+        } else {
+            ctx.moveTo(minX * PX_PER_FT, minY * PX_PER_FT);
+            ctx.lineTo(minX * PX_PER_FT, maxY * PX_PER_FT);
+            ctx.moveTo(maxX * PX_PER_FT, minY * PX_PER_FT);
+            ctx.lineTo(maxX * PX_PER_FT, maxY * PX_PER_FT);
+        }
+        ctx.stroke();
+    }
+
+    // Draw center lane markings
+    ctx.strokeStyle = '#FFD700';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([10 * PX_PER_FT, 10 * PX_PER_FT]);
+    for (const s of streets) {
+        const horiz = Math.abs(s.y1 - s.y2) < 1;
+        // Stop dashes 10ft from each intersection center
+        let x1, y1, x2, y2;
+        if (horiz) {
+            x1 = Math.min(s.x1, s.x2) + HALF_STREET;
+            x2 = Math.max(s.x1, s.x2) - HALF_STREET;
+            y1 = y2 = s.y1;
+        } else {
+            y1 = Math.min(s.y1, s.y2) + HALF_STREET;
+            y2 = Math.max(s.y1, s.y2) - HALF_STREET;
+            x1 = x2 = s.x1;
+        }
+        if (x2 < viewL && x1 < viewL) continue;
+        if (x1 > viewR && x2 > viewR) continue;
+        if (y2 < viewT && y1 < viewT) continue;
+        if (y1 > viewB && y2 > viewB) continue;
+
+        ctx.beginPath();
+        ctx.moveTo(x1 * PX_PER_FT, y1 * PX_PER_FT);
+        ctx.lineTo(x2 * PX_PER_FT, y2 * PX_PER_FT);
+        ctx.stroke();
+    }
+    ctx.setLineDash([]);
+
+    // Draw player (arrowhead shape)
+    const px = player.x * PX_PER_FT;
+    const py = player.y * PX_PER_FT;
+    const halfL = (CAR_LENGTH / 2) * PX_PER_FT;
+    const halfW = (CAR_WIDTH / 2) * PX_PER_FT;
+    const notch = (CAR_LENGTH / 4) * PX_PER_FT;
+
+    ctx.save();
+    ctx.translate(px, py);
+    ctx.rotate(player.angle);
+
+    ctx.beginPath();
+    ctx.moveTo(halfL, 0);            // nose
+    ctx.lineTo(-halfL, -halfW);      // back left
+    ctx.lineTo(-notch, 0);           // notch
+    ctx.lineTo(-halfL, halfW);       // back right
+    ctx.closePath();
+
+    ctx.fillStyle = '#e33';
+    ctx.fill();
+    ctx.strokeStyle = '#a00';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    ctx.restore();
+    ctx.restore();
+
+    // HUD
+    const mph = Math.abs(player.speed * 3600 / 5280);
+    ctx.fillStyle = 'rgba(0,0,0,0.5)';
+    ctx.fillRect(8, 8, 140, 52);
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 18px monospace';
+    ctx.fillText(`${mph.toFixed(0)} mph`, 16, 32);
+    ctx.font = '13px monospace';
+    ctx.fillText(`Streets: ${streets.length}`, 16, 52);
+
+    // Instructions (fade out after 5 seconds)
+    if (instructionAlpha > 0) {
+        ctx.globalAlpha = instructionAlpha;
+        ctx.fillStyle = 'rgba(0,0,0,0.6)';
+        const tw = 260, th = 50;
+        ctx.fillRect(W / 2 - tw / 2, H - 80, tw, th);
+        ctx.fillStyle = '#fff';
+        ctx.font = '14px monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText('Arrow keys to drive', W / 2, H - 50);
+        ctx.textAlign = 'left';
+        ctx.globalAlpha = 1;
+    }
+}
+
+// --- Game Loop ---
+let lastTime = performance.now();
+let elapsed = 0;
+let instructionAlpha = 1;
+
+function loop(time) {
+    const dt = Math.min((time - lastTime) / 1000, 0.05);
+    lastTime = time;
+    elapsed += dt;
+
+    // Fade instructions
+    if (elapsed > 4) instructionAlpha = Math.max(0, instructionAlpha - dt);
+
+    update(dt);
+    draw();
+    requestAnimationFrame(loop);
+}
+
+init();
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
