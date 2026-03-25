@@ -13,333 +13,424 @@
 <script>
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
-
-function resize() {
-    canvas.width = window.innerWidth;
-    canvas.height = window.innerHeight;
-}
+function resize() { canvas.width = innerWidth; canvas.height = innerHeight; }
 resize();
-window.addEventListener('resize', resize);
+addEventListener('resize', resize);
 
 // --- Constants ---
-const STREET_WIDTH = 20;        // feet
+const STREET_WIDTH = 20;
 const HALF_STREET = STREET_WIDTH / 2;
-const DEFAULT_BLOCK_LEN = 400;  // feet
+const DEFAULT_BLOCK_LEN = 400;
 const PX_PER_FT = 2;
-const GENERATE_DIST = 30;       // feet - how close player must be to trigger generation
-const PROXIMITY_THRESHOLD = 50; // feet - min distance between distinct intersections
+const GENERATE_DIST = 30;
+const PROXIMITY_THRESHOLD = 50;
+const RIGHT_OF_WAY = 170;
+const TWO_PI = Math.PI * 2;
 
-// Physics
-const MAX_SPEED = 150;          // ft/s (~102 mph)
-const REVERSE_MAX = 30;         // ft/s
-const ACCEL = 40;               // ft/s^2
-const BRAKE = 60;               // ft/s^2
-const DRAG = 3;                 // ft/s^2
-const MAX_TURN_RATE = 3;        // rad/s
-
-// Car dimensions (feet)
+const MAX_SPEED = 150;
+const REVERSE_MAX = 30;
+const ACCEL = 40;
+const BRAKE = 60;
+const DRAG = 3;
+const MAX_TURN_RATE = 3;
 const CAR_LENGTH = 12;
 const CAR_WIDTH = 7;
 
+const CURVE_PROB = 0.4;
+const CURVE_ANGLES = [30, 45, 60, 90].map(d => d * Math.PI / 180);
+const CURVE_RADII = [DEFAULT_BLOCK_LEN, DEFAULT_BLOCK_LEN * 2];
+const ANGLE_TOL = 0.02; // ~1 degree
+
+// --- Angle helpers ---
+function normA(a) { a %= TWO_PI; return a < 0 ? a + TWO_PI : a; }
+function anglesEq(a, b) {
+    let d = Math.abs(normA(a) - normA(b));
+    if (d > Math.PI) d = TWO_PI - d;
+    return d < ANGLE_TOL;
+}
+
+// Slot system: fwd = continuation direction, back = source, left/right = sides
+const SLOT_OFF = { fwd: 0, right: Math.PI / 2, back: Math.PI, left: -Math.PI / 2 };
+const OPP_SLOT = { fwd: 'back', back: 'fwd', left: 'right', right: 'left' };
+const SLOTS = ['fwd', 'right', 'back', 'left'];
+const GEN_SLOTS = ['fwd', 'left', 'right']; // back is always pre-set
+
+function slotAngle(ori, slot) { return normA(ori + SLOT_OFF[slot]); }
+function findSlot(ori, angle) {
+    const a = normA(angle);
+    for (const s of SLOTS) if (anglesEq(slotAngle(ori, s), a)) return s;
+    return null;
+}
+
+// --- Arc math ---
+// Compute curve endpoint, center, and canvas arc angles
+// heading = direction of travel at start, turn = turn amount (radians), r = radius
+function calcCurve(x, y, heading, turn, r, right) {
+    let cx, cy, eh, ex, ey, arcS, arcE, ccw;
+    if (right) {
+        cx = x - r * Math.sin(heading);
+        cy = y + r * Math.cos(heading);
+        eh = heading + turn;
+        ex = cx + r * Math.sin(eh);
+        ey = cy - r * Math.cos(eh);
+        arcS = heading - Math.PI / 2;
+        arcE = eh - Math.PI / 2;
+        ccw = false;
+    } else {
+        cx = x + r * Math.sin(heading);
+        cy = y - r * Math.cos(heading);
+        eh = heading - turn;
+        ex = cx - r * Math.sin(eh);
+        ey = cy + r * Math.cos(eh);
+        arcS = heading + Math.PI / 2;
+        arcE = eh + Math.PI / 2;
+        ccw = true;
+    }
+    return { ex, ey, eh: normA(eh), cx, cy, arcS, arcE, ccw };
+}
+
+function angleInArc(a, s, e, ccw) {
+    a = normA(a); s = normA(s); e = normA(e);
+    if (!ccw) return s <= e ? (a >= s && a <= e) : (a >= s || a <= e);
+    return s >= e ? (a <= s && a >= e) : (a <= s || a >= e);
+}
+
+function arcBounds(c) {
+    const { cx, cy, r, arcS, arcE, ccw } = c;
+    let mnx = Infinity, mxx = -Infinity, mny = Infinity, mxy = -Infinity;
+    const add = a => {
+        const x = cx + r * Math.cos(a), y = cy + r * Math.sin(a);
+        if (x < mnx) mnx = x; if (x > mxx) mxx = x;
+        if (y < mny) mny = y; if (y > mxy) mxy = y;
+    };
+    add(arcS); add(arcE);
+    for (const ca of [0, Math.PI / 2, Math.PI, 3 * Math.PI / 2])
+        if (angleInArc(ca, arcS, arcE, ccw)) add(ca);
+    return { mnx, mxx, mny, mxy };
+}
+
 // --- Input ---
 const keys = {};
-window.addEventListener('keydown', e => {
-    if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.key)) e.preventDefault();
-    keys[e.key] = true;
-});
-window.addEventListener('keyup', e => { keys[e.key] = false; });
+addEventListener('keydown', e => { if (e.key.startsWith('Arrow')) e.preventDefault(); keys[e.key] = true; });
+addEventListener('keyup', e => { keys[e.key] = false; });
 
 // --- Player ---
 const player = { x: 200, y: 0, angle: 0, speed: 0 };
 
-// --- Map Data ---
-const intersections = new Map(); // key "x,y" -> node
-const streets = [];              // { x1, y1, x2, y2 }
+// --- Map data ---
+const nodes = new Map(); // key "x,y" -> { x, y, ori, roads:{fwd,right,back,left} }
+const streets = [];      // { x1,y1,x2,y2, curve:null|{cx,cy,r,arcS,arcE,ccw}, bounds }
 
-function intKey(x, y) { return `${Math.round(x)},${Math.round(y)}`; }
+function nkey(x, y) { return `${Math.round(x)},${Math.round(y)}`; }
+function getNode(x, y) { return nodes.get(nkey(x, y)); }
 
-function getIntersection(x, y) { return intersections.get(intKey(x, y)); }
-
-function addIntersection(x, y, sourceDir) {
-    const key = intKey(x, y);
-    if (intersections.has(key)) return intersections.get(key);
-    const node = { x: Math.round(x), y: Math.round(y), sourceDir, roads: { n: null, s: null, e: null, w: null } };
-    intersections.set(key, node);
-    return node;
+function addNode(x, y, ori) {
+    const k = nkey(x, y);
+    if (nodes.has(k)) return nodes.get(k);
+    const n = {
+        x: Math.round(x), y: Math.round(y),
+        ori: normA(ori),
+        roads: { fwd: null, right: null, back: null, left: null }
+    };
+    nodes.set(k, n);
+    return n;
 }
 
-const OPPOSITE = { n: 's', s: 'n', e: 'w', w: 'e' };
-const DIR_VEC  = { n: [0, -1], s: [0, 1], e: [1, 0], w: [-1, 0] };
-
-function blockLength() {
-    if (Math.random() < 0.2) return Math.round(200 + Math.random() * 400);
-    return DEFAULT_BLOCK_LEN;
+function blockLen() {
+    return Math.random() < 0.2 ? Math.round(200 + Math.random() * 400) : DEFAULT_BLOCK_LEN;
 }
 
-// --- Conflict Detection ---
-const RIGHT_OF_WAY = 170; // feet each side of street reserved for buildings
+function pushStreet(x1, y1, x2, y2, curve) {
+    const s = { x1, y1, x2, y2, curve };
+    if (curve) {
+        const b = arcBounds(curve);
+        s.bounds = { mnx: b.mnx - HALF_STREET, mxx: b.mxx + HALF_STREET,
+                     mny: b.mny - HALF_STREET, mxy: b.mxy + HALF_STREET };
+    } else {
+        s.bounds = {
+            mnx: Math.min(x1, x2) - HALF_STREET, mxx: Math.max(x1, x2) + HALF_STREET,
+            mny: Math.min(y1, y2) - HALF_STREET, mxy: Math.max(y1, y2) + HALF_STREET
+        };
+    }
+    streets.push(s);
+}
+
+// --- Conflict detection ---
+function ptInRotRect(px, py, cx, cy, hl, hw, angle) {
+    const dx = px - cx, dy = py - cy;
+    const c = Math.cos(-angle), s = Math.sin(-angle);
+    return Math.abs(dx * c - dy * s) < hl && Math.abs(dx * s + dy * c) < hw;
+}
+
+function segsCross(ax, ay, bx, by, cx, cy, dx, dy) {
+    const d1 = (dx-cx)*(ay-cy) - (dy-cy)*(ax-cx);
+    const d2 = (dx-cx)*(by-cy) - (dy-cy)*(bx-cx);
+    const d3 = (bx-ax)*(cy-ay) - (by-ay)*(cx-ax);
+    const d4 = (bx-ax)*(dy-ay) - (by-ay)*(dx-ax);
+    if (((d1 > 0 && d2 < 0) || (d1 < 0 && d2 > 0)) &&
+        ((d3 > 0 && d4 < 0) || (d3 < 0 && d4 > 0))) {
+        const den = (bx-ax)*(dy-cy) - (by-ay)*(dx-cx);
+        if (Math.abs(den) < 1e-10) return null;
+        const t = ((cx-ax)*(dy-cy) - (cy-ay)*(dx-cx)) / den;
+        return { x: ax + t * (bx-ax), y: ay + t * (by-ay) };
+    }
+    return null;
+}
 
 function checkConflict(ax, ay, bx, by) {
-    const newH = Math.abs(ay - by) < 1;
     for (const s of streets) {
-        const sH = Math.abs(s.y1 - s.y2) < 1;
+        // Skip streets connected to our starting intersection
+        if (Math.hypot(ax - s.x1, ay - s.y1) < 1 || Math.hypot(ax - s.x2, ay - s.y2) < 1) continue;
 
-        // Right-of-way: new endpoint must not land inside any existing
-        // street's bounding rect (block length x 340ft).
-        // HALF_STREET margin at along-street ends so intersections aren't blocked.
-        if (sH) {
-            const sMinX = Math.min(s.x1, s.x2);
-            const sMaxX = Math.max(s.x1, s.x2);
-            if (bx > sMinX + HALF_STREET && bx < sMaxX - HALF_STREET &&
-                by > s.y1 - RIGHT_OF_WAY && by < s.y1 + RIGHT_OF_WAY) return true;
+        if (s.curve) {
+            // Simplified bounding box of curve endpoints + ROW padding
+            const mnx = Math.min(s.x1, s.x2) - RIGHT_OF_WAY;
+            const mxx = Math.max(s.x1, s.x2) + RIGHT_OF_WAY;
+            const mny = Math.min(s.y1, s.y2) - RIGHT_OF_WAY;
+            const mxy = Math.max(s.y1, s.y2) + RIGHT_OF_WAY;
+            if (bx > mnx && bx < mxx && by > mny && by < mxy) return true;
         } else {
-            const sMinY = Math.min(s.y1, s.y2);
-            const sMaxY = Math.max(s.y1, s.y2);
-            if (by > sMinY + HALF_STREET && by < sMaxY - HALF_STREET &&
-                bx > s.x1 - RIGHT_OF_WAY && bx < s.x1 + RIGHT_OF_WAY) return true;
-        }
+            // Right-of-way: rotated rectangle along existing street
+            const a = Math.atan2(s.y2 - s.y1, s.x2 - s.x1);
+            const len = Math.hypot(s.x2 - s.x1, s.y2 - s.y1);
+            const mx = (s.x1 + s.x2) / 2, my = (s.y1 + s.y2) / 2;
+            if (ptInRotRect(bx, by, mx, my, len / 2 - HALF_STREET, RIGHT_OF_WAY, a)) return true;
 
-        // Perpendicular crossing: a new street can be long enough (up to 600ft)
-        // to clear the ROW zone (170ft each side) yet still cross an existing
-        // street in between. Reject if crossing point has no intersection.
-        if (newH !== sH) {
-            let hx1, hx2, hy, vx, vy1, vy2;
-            if (newH) {
-                hx1 = Math.min(ax, bx); hx2 = Math.max(ax, bx); hy = ay;
-                vx = s.x1; vy1 = Math.min(s.y1, s.y2); vy2 = Math.max(s.y1, s.y2);
-            } else {
-                hx1 = Math.min(s.x1, s.x2); hx2 = Math.max(s.x1, s.x2); hy = s.y1;
-                vx = ax; vy1 = Math.min(ay, by); vy2 = Math.max(ay, by);
-            }
-            if (vx > hx1 + 1 && vx < hx2 - 1 && hy > vy1 + 1 && hy < vy2 - 1) {
-                if (!getIntersection(vx, hy)) return true;
-            }
+            // Crossing check: new chord vs existing straight
+            const cr = segsCross(ax, ay, bx, by, s.x1, s.y1, s.x2, s.y2);
+            if (cr && !getNode(cr.x, cr.y)) return true;
         }
     }
     return false;
 }
 
 // --- Generation ---
-function resolveIntersection(node) {
-    for (const dir of ['n', 's', 'e', 'w']) {
-        if (node.roads[dir] !== null) continue;
+function tryAddRoad(node, slot, nx, ny, endH, curve) {
+    if (checkConflict(node.x, node.y, nx, ny)) return false;
 
-        // Probability: 80% for continuing straight through, 60% for side streets
-        const prob = (node.sourceDir && dir === OPPOSITE[node.sourceDir]) ? 0.8 : 0.6;
-
-        if (Math.random() >= prob) { node.roads[dir] = false; continue; }
-
-        const [dx, dy] = DIR_VEC[dir];
-        const len = blockLength();
-        const nx = node.x + dx * len;
-        const ny = node.y + dy * len;
-
-        if (checkConflict(node.x, node.y, nx, ny)) { node.roads[dir] = false; continue; }
-
-        // Check proximity to existing intersections
-        let targetNode = null;
-        let tooClose = false;
-        for (const [, other] of intersections) {
-            const dist = Math.hypot(other.x - nx, other.y - ny);
-            if (dist < 1) { targetNode = other; break; }
-            if (dist < PROXIMITY_THRESHOLD) { tooClose = true; break; }
+    let target = null, tooClose = false;
+    for (const [, other] of nodes) {
+        if (other.x === node.x && other.y === node.y) continue;
+        const d = Math.hypot(other.x - nx, other.y - ny);
+        if (d < 1) {
+            const arr = normA(endH + Math.PI);
+            const ms = findSlot(other.ori, arr);
+            if (ms && other.roads[ms] === null) { target = other; }
+            else return false;
+            break;
         }
-        if (tooClose) { node.roads[dir] = false; continue; }
+        if (d < PROXIMITY_THRESHOLD) { tooClose = true; break; }
+    }
+    if (tooClose) return false;
 
-        if (!targetNode) targetNode = addIntersection(nx, ny, OPPOSITE[dir]);
+    if (!target) {
+        target = addNode(nx, ny, endH);
+        target.roads.back = true;
+    } else {
+        const arr = normA(endH + Math.PI);
+        target.roads[findSlot(target.ori, arr)] = true;
+    }
 
-        node.roads[dir] = true;
-        targetNode.roads[OPPOSITE[dir]] = true;
-        streets.push({ x1: node.x, y1: node.y, x2: nx, y2: ny });
+    node.roads[slot] = true;
+    pushStreet(node.x, node.y, target.x, target.y, curve);
 
-        // If target was fully resolved, re-open remaining false directions
-        // so the player can trigger generation on their next visit
-        const hasNull = Object.values(targetNode.roads).some(v => v === null);
-        if (!hasNull) {
-            for (const d of ['n', 's', 'e', 'w']) {
-                if (targetNode.roads[d] === false) targetNode.roads[d] = null;
-            }
+    // If target is now fully resolved, re-open false directions for future generation
+    if (!Object.values(target.roads).some(v => v === null)) {
+        for (const d of GEN_SLOTS) {
+            if (target.roads[d] === false) target.roads[d] = null;
         }
+    }
+    return true;
+}
+
+function tryStraight(node, slot, heading) {
+    const len = blockLen();
+    const nx = Math.round(node.x + Math.cos(heading) * len);
+    const ny = Math.round(node.y + Math.sin(heading) * len);
+    return tryAddRoad(node, slot, nx, ny, heading, null);
+}
+
+function tryCurve(node, slot, heading) {
+    const turn = CURVE_ANGLES[Math.floor(Math.random() * CURVE_ANGLES.length)];
+    const r = CURVE_RADII[Math.floor(Math.random() * CURVE_RADII.length)];
+    const right = Math.random() < 0.5;
+    const { ex, ey, eh, cx, cy, arcS, arcE, ccw } = calcCurve(node.x, node.y, heading, turn, r, right);
+    return tryAddRoad(node, slot, Math.round(ex), Math.round(ey), eh,
+        { cx, cy, r, arcS, arcE, ccw });
+}
+
+function resolveNode(node) {
+    for (const slot of GEN_SLOTS) {
+        if (node.roads[slot] !== null) continue;
+        const prob = slot === 'fwd' ? 0.8 : 0.6;
+        if (Math.random() >= prob) { node.roads[slot] = false; continue; }
+
+        const heading = slotAngle(node.ori, slot);
+        let ok = false;
+        if (Math.random() < CURVE_PROB) ok = tryCurve(node, slot, heading);
+        if (!ok) ok = tryStraight(node, slot, heading);
+        if (!ok) node.roads[slot] = false;
     }
 }
 
-function generateAtPlayer(px, py) {
-    for (const [, node] of intersections) {
+function generate(px, py) {
+    for (const [, node] of nodes) {
         if (Math.hypot(node.x - px, node.y - py) < GENERATE_DIST) {
-            if (node.roads.n === null || node.roads.s === null || node.roads.e === null || node.roads.w === null) {
-                resolveIntersection(node);
-            }
+            if (SLOTS.some(s => node.roads[s] === null)) resolveNode(node);
         }
     }
 }
 
 // --- Init ---
 function init() {
-    const a = addIntersection(0, 0, 'w');
-    const b = addIntersection(400, 0, 'w');
-    a.roads.e = true;
-    a.roads.w = false;
-    b.roads.w = true;
-    streets.push({ x1: 0, y1: 0, x2: 400, y2: 0 });
+    const a = addNode(0, 0, 0);   // orientation = east
+    const b = addNode(400, 0, 0);
+    a.roads.fwd = true;  a.roads.back = false;
+    b.roads.back = true;
+    pushStreet(0, 0, 400, 0, null);
 }
 
 // --- Update ---
 function update(dt) {
-    // Acceleration / braking
-    if (keys['ArrowUp']) {
-        player.speed += ACCEL * dt;
-    }
+    if (keys['ArrowUp']) player.speed += ACCEL * dt;
     if (keys['ArrowDown']) {
-        if (player.speed > 0) {
-            player.speed -= BRAKE * dt;
-            if (player.speed < 0) player.speed = 0;
-        } else {
-            player.speed -= ACCEL * 0.5 * dt;
-        }
+        if (player.speed > 0) { player.speed -= BRAKE * dt; if (player.speed < 0) player.speed = 0; }
+        else player.speed -= ACCEL * 0.5 * dt;
     }
-
-    // Drag
     if (!keys['ArrowUp'] && !keys['ArrowDown']) {
-        if (player.speed > 0) {
-            player.speed = Math.max(0, player.speed - DRAG * dt);
-        } else if (player.speed < 0) {
-            player.speed = Math.min(0, player.speed + DRAG * dt);
-        }
+        if (player.speed > 0) player.speed = Math.max(0, player.speed - DRAG * dt);
+        else if (player.speed < 0) player.speed = Math.min(0, player.speed + DRAG * dt);
     }
-
     player.speed = Math.max(-REVERSE_MAX, Math.min(MAX_SPEED, player.speed));
 
-    // Turning (scales with speed so you can't turn while stationary)
-    const turnFactor = Math.min(Math.abs(player.speed) / 20, 1);
-    if (keys['ArrowLeft'])  player.angle -= MAX_TURN_RATE * turnFactor * dt;
-    if (keys['ArrowRight']) player.angle += MAX_TURN_RATE * turnFactor * dt;
+    const tf = Math.min(Math.abs(player.speed) / 20, 1);
+    if (keys['ArrowLeft'])  player.angle -= MAX_TURN_RATE * tf * dt;
+    if (keys['ArrowRight']) player.angle += MAX_TURN_RATE * tf * dt;
 
-    // Move
     player.x += Math.cos(player.angle) * player.speed * dt;
     player.y += Math.sin(player.angle) * player.speed * dt;
 
-    // Generate streets ahead
-    generateAtPlayer(player.x, player.y);
+    generate(player.x, player.y);
+}
+
+// --- Draw helpers ---
+function drawStraight(s) {
+    const a = Math.atan2(s.y2 - s.y1, s.x2 - s.x1);
+    const len = Math.hypot(s.x2 - s.x1, s.y2 - s.y1);
+    const mx = (s.x1 + s.x2) / 2, my = (s.y1 + s.y2) / 2;
+    ctx.save();
+    ctx.translate(mx * PX_PER_FT, my * PX_PER_FT);
+    ctx.rotate(a);
+    const hl = (len / 2 + HALF_STREET) * PX_PER_FT;
+    const hw = HALF_STREET * PX_PER_FT;
+    ctx.fillStyle = '#666';
+    ctx.fillRect(-hl, -hw, hl * 2, hw * 2);
+    ctx.strokeStyle = '#888'; ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(-hl, -hw); ctx.lineTo(hl, -hw);
+    ctx.moveTo(-hl, hw);  ctx.lineTo(hl, hw);
+    ctx.stroke();
+    ctx.restore();
+}
+
+function drawCurve(s) {
+    const { cx, cy, r, arcS, arcE, ccw } = s.curve;
+    const pcx = cx * PX_PER_FT, pcy = cy * PX_PER_FT;
+    const outerR = (r + HALF_STREET) * PX_PER_FT;
+    const innerR = (r - HALF_STREET) * PX_PER_FT;
+
+    // Road surface
+    ctx.beginPath();
+    ctx.arc(pcx, pcy, outerR, arcS, arcE, ccw);
+    ctx.arc(pcx, pcy, innerR, arcE, arcS, !ccw);
+    ctx.closePath();
+    ctx.fillStyle = '#666';
+    ctx.fill();
+
+    // Edge lines
+    ctx.strokeStyle = '#888'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.arc(pcx, pcy, outerR, arcS, arcE, ccw); ctx.stroke();
+    ctx.beginPath(); ctx.arc(pcx, pcy, innerR, arcS, arcE, ccw); ctx.stroke();
+}
+
+function drawStraightCL(s) {
+    const a = Math.atan2(s.y2 - s.y1, s.x2 - s.x1);
+    const ca = Math.cos(a), sa = Math.sin(a);
+    ctx.beginPath();
+    ctx.moveTo((s.x1 + ca * HALF_STREET) * PX_PER_FT, (s.y1 + sa * HALF_STREET) * PX_PER_FT);
+    ctx.lineTo((s.x2 - ca * HALF_STREET) * PX_PER_FT, (s.y2 - sa * HALF_STREET) * PX_PER_FT);
+    ctx.stroke();
+}
+
+function drawCurveCL(s) {
+    const { cx, cy, r, arcS, arcE, ccw } = s.curve;
+    const off = HALF_STREET / r;
+    const ds = ccw ? arcS - off : arcS + off;
+    const de = ccw ? arcE + off : arcE - off;
+    ctx.beginPath();
+    ctx.arc(cx * PX_PER_FT, cy * PX_PER_FT, r * PX_PER_FT, ds, de, ccw);
+    ctx.stroke();
 }
 
 // --- Draw ---
 function draw() {
     const W = canvas.width, H = canvas.height;
     ctx.clearRect(0, 0, W, H);
-
-    // Green grass background
     ctx.fillStyle = '#2d8a2e';
     ctx.fillRect(0, 0, W, H);
 
-    // Camera: player at center of screen
     const camX = player.x * PX_PER_FT - W / 2;
     const camY = player.y * PX_PER_FT - H / 2;
-
-    // Visible bounds in feet (for culling)
-    const viewL = camX / PX_PER_FT - 50;
-    const viewR = (camX + W) / PX_PER_FT + 50;
-    const viewT = camY / PX_PER_FT - 50;
-    const viewB = (camY + H) / PX_PER_FT + 50;
+    const vl = camX / PX_PER_FT - 200, vr = (camX + W) / PX_PER_FT + 200;
+    const vt = camY / PX_PER_FT - 200, vb = (camY + H) / PX_PER_FT + 200;
 
     ctx.save();
     ctx.translate(-camX, -camY);
 
-    // Draw streets
+    // 1) Road surfaces + edge lines
     for (const s of streets) {
-        const horiz = Math.abs(s.y1 - s.y2) < 1;
-        let minX, maxX, minY, maxY;
-        if (horiz) {
-            minX = Math.min(s.x1, s.x2) - HALF_STREET;
-            maxX = Math.max(s.x1, s.x2) + HALF_STREET;
-            minY = s.y1 - HALF_STREET;
-            maxY = s.y1 + HALF_STREET;
-        } else {
-            minX = s.x1 - HALF_STREET;
-            maxX = s.x1 + HALF_STREET;
-            minY = Math.min(s.y1, s.y2) - HALF_STREET;
-            maxY = Math.max(s.y1, s.y2) + HALF_STREET;
-        }
-
-        // Cull off-screen streets
-        if (maxX < viewL || minX > viewR || maxY < viewT || minY > viewB) continue;
-
-        // Road surface
-        ctx.fillStyle = '#666';
-        ctx.fillRect(minX * PX_PER_FT, minY * PX_PER_FT,
-                     (maxX - minX) * PX_PER_FT, (maxY - minY) * PX_PER_FT);
-
-        // Road edge lines
-        ctx.strokeStyle = '#888';
-        ctx.lineWidth = 1;
-        ctx.beginPath();
-        if (horiz) {
-            ctx.moveTo(minX * PX_PER_FT, minY * PX_PER_FT);
-            ctx.lineTo(maxX * PX_PER_FT, minY * PX_PER_FT);
-            ctx.moveTo(minX * PX_PER_FT, maxY * PX_PER_FT);
-            ctx.lineTo(maxX * PX_PER_FT, maxY * PX_PER_FT);
-        } else {
-            ctx.moveTo(minX * PX_PER_FT, minY * PX_PER_FT);
-            ctx.lineTo(minX * PX_PER_FT, maxY * PX_PER_FT);
-            ctx.moveTo(maxX * PX_PER_FT, minY * PX_PER_FT);
-            ctx.lineTo(maxX * PX_PER_FT, maxY * PX_PER_FT);
-        }
-        ctx.stroke();
+        const b = s.bounds;
+        if (b.mxx < vl || b.mnx > vr || b.mxy < vt || b.mny > vb) continue;
+        s.curve ? drawCurve(s) : drawStraight(s);
     }
 
-    // Draw center lane markings
+    // 2) Intersection squares (covers junctions, hides edge lines at crossings)
+    ctx.fillStyle = '#666';
+    for (const [, n] of nodes) {
+        if (n.x < vl || n.x > vr || n.y < vt || n.y > vb) continue;
+        ctx.save();
+        ctx.translate(n.x * PX_PER_FT, n.y * PX_PER_FT);
+        ctx.rotate(n.ori);
+        const hs = HALF_STREET * PX_PER_FT;
+        ctx.fillRect(-hs, -hs, hs * 2, hs * 2);
+        ctx.restore();
+    }
+
+    // 3) Center lane markings
     ctx.strokeStyle = '#FFD700';
     ctx.lineWidth = 1;
     ctx.setLineDash([10 * PX_PER_FT, 10 * PX_PER_FT]);
     for (const s of streets) {
-        const horiz = Math.abs(s.y1 - s.y2) < 1;
-        // Stop dashes 10ft from each intersection center
-        let x1, y1, x2, y2;
-        if (horiz) {
-            x1 = Math.min(s.x1, s.x2) + HALF_STREET;
-            x2 = Math.max(s.x1, s.x2) - HALF_STREET;
-            y1 = y2 = s.y1;
-        } else {
-            y1 = Math.min(s.y1, s.y2) + HALF_STREET;
-            y2 = Math.max(s.y1, s.y2) - HALF_STREET;
-            x1 = x2 = s.x1;
-        }
-        if (x2 < viewL && x1 < viewL) continue;
-        if (x1 > viewR && x2 > viewR) continue;
-        if (y2 < viewT && y1 < viewT) continue;
-        if (y1 > viewB && y2 > viewB) continue;
-
-        ctx.beginPath();
-        ctx.moveTo(x1 * PX_PER_FT, y1 * PX_PER_FT);
-        ctx.lineTo(x2 * PX_PER_FT, y2 * PX_PER_FT);
-        ctx.stroke();
+        const b = s.bounds;
+        if (b.mxx < vl || b.mnx > vr || b.mxy < vt || b.mny > vb) continue;
+        s.curve ? drawCurveCL(s) : drawStraightCL(s);
     }
     ctx.setLineDash([]);
 
-    // Draw player (arrowhead shape)
-    const px = player.x * PX_PER_FT;
-    const py = player.y * PX_PER_FT;
-    const halfL = (CAR_LENGTH / 2) * PX_PER_FT;
-    const halfW = (CAR_WIDTH / 2) * PX_PER_FT;
+    // 4) Player
+    const px = player.x * PX_PER_FT, py = player.y * PX_PER_FT;
+    const hl = (CAR_LENGTH / 2) * PX_PER_FT, hw = (CAR_WIDTH / 2) * PX_PER_FT;
     const notch = (CAR_LENGTH / 4) * PX_PER_FT;
-
     ctx.save();
     ctx.translate(px, py);
     ctx.rotate(player.angle);
-
     ctx.beginPath();
-    ctx.moveTo(halfL, 0);            // nose
-    ctx.lineTo(-halfL, -halfW);      // back left
-    ctx.lineTo(-notch, 0);           // notch
-    ctx.lineTo(-halfL, halfW);       // back right
+    ctx.moveTo(hl, 0); ctx.lineTo(-hl, -hw); ctx.lineTo(-notch, 0); ctx.lineTo(-hl, hw);
     ctx.closePath();
-
-    ctx.fillStyle = '#e33';
-    ctx.fill();
-    ctx.strokeStyle = '#a00';
-    ctx.lineWidth = 2;
-    ctx.stroke();
-
+    ctx.fillStyle = '#e33'; ctx.fill();
+    ctx.strokeStyle = '#a00'; ctx.lineWidth = 2; ctx.stroke();
     ctx.restore();
+
     ctx.restore();
 
     // HUD
@@ -352,39 +443,26 @@ function draw() {
     ctx.font = '13px monospace';
     ctx.fillText(`Streets: ${streets.length}`, 16, 52);
 
-    // Instructions (fade out after 5 seconds)
     if (instructionAlpha > 0) {
         ctx.globalAlpha = instructionAlpha;
         ctx.fillStyle = 'rgba(0,0,0,0.6)';
-        const tw = 260, th = 50;
-        ctx.fillRect(W / 2 - tw / 2, H - 80, tw, th);
-        ctx.fillStyle = '#fff';
-        ctx.font = '14px monospace';
-        ctx.textAlign = 'center';
+        ctx.fillRect(W / 2 - 130, H - 80, 260, 50);
+        ctx.fillStyle = '#fff'; ctx.font = '14px monospace'; ctx.textAlign = 'center';
         ctx.fillText('Arrow keys to drive', W / 2, H - 50);
-        ctx.textAlign = 'left';
-        ctx.globalAlpha = 1;
+        ctx.textAlign = 'left'; ctx.globalAlpha = 1;
     }
 }
 
-// --- Game Loop ---
-let lastTime = performance.now();
-let elapsed = 0;
-let instructionAlpha = 1;
-
-function loop(time) {
-    const dt = Math.min((time - lastTime) / 1000, 0.05);
-    lastTime = time;
-    elapsed += dt;
-
-    // Fade instructions
+// --- Game loop ---
+let lastTime = performance.now(), elapsed = 0, instructionAlpha = 1;
+function loop(t) {
+    const dt = Math.min((t - lastTime) / 1000, 0.05);
+    lastTime = t; elapsed += dt;
     if (elapsed > 4) instructionAlpha = Math.max(0, instructionAlpha - dt);
-
     update(dt);
     draw();
     requestAnimationFrame(loop);
 }
-
 init();
 requestAnimationFrame(loop);
 </script>

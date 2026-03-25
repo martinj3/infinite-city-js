@@ -12,7 +12,8 @@ User wants prompts.txt updated each turn with their latest prompt.
 ## Architecture & Units
 - ALL internal units are FEET (position, speed in ft/s, dimensions)
 - Only converted to pixels at draw time via PX_PER_FT = 2
-- Streets are axis-aligned (horizontal or vertical, cardinal directions only)
+- Streets can be at ANY angle (not just axis-aligned) thanks to curved roads
+- Curved roads are circular arcs; straight roads connect intersections in any direction
 
 ## Key Constants
 - STREET_WIDTH = 20ft (10ft per lane)
@@ -21,75 +22,94 @@ User wants prompts.txt updated each turn with their latest prompt.
 - PROXIMITY_THRESHOLD = 50ft (min distance between distinct intersections)
 - GENERATE_DIST = 30ft (player must be this close to trigger generation)
 - Block length: 80% chance of 400ft, 20% chance of random 200-600ft
+- CURVE_PROB = 0.4 (40% chance to try curve before straight)
+- CURVE_ANGLES = [30, 45, 60, 90] degrees
+- CURVE_RADII = [400, 800, 1200] ft (1x, 2x, 3x block length)
+- ANGLE_TOL = 0.02 rad (~1 degree tolerance for angle matching)
 
 ## Data Structures
-- `intersections`: Map<string "x,y", node> where node = { x, y, sourceDir, roads: { n, s, e, w } }
-  - roads[dir]: null = undecided, true = has road, false = no road
-  - sourceDir: direction the creating street came FROM
-- `streets`: Array of { x1, y1, x2, y2 } connecting intersection pairs
-- `player`: { x, y, angle, speed } in feet/ft-per-second/radians
+
+### Intersections (nodes Map)
+Key: "x,y" string -> node object:
+- x, y: position (rounded to integers)
+- ori: orientation angle in radians (direction the source street was heading)
+- roads: { fwd, right, back, left } — null=undecided, true=has road, false=no road
+  - fwd = ori direction (continuation, 80% probability)
+  - back = ori + π (source direction, always true for non-initial nodes)
+  - left = ori - π/2 (60% probability)
+  - right = ori + π/2 (60% probability)
+
+### Streets array
+Each element: { x1, y1, x2, y2, curve, bounds }
+- curve: null for straight, or { cx, cy, r, arcS, arcE, ccw } for arcs
+  - cx, cy: center of curvature circle
+  - r: radius
+  - arcS, arcE: canvas arc start/end angles
+  - ccw: counterclockwise flag for ctx.arc()
+- bounds: cached { mnx, mxx, mny, mxy } for culling
+
+## Direction/Slot System (replaces old N/E/S/W)
+- Slots: fwd, right, back, left (relative to intersection orientation)
+- slotAngle(ori, slot) = ori + SLOT_OFF[slot]
+- SLOT_OFF: fwd=0, right=π/2, back=π, left=-π/2
+- findSlot(ori, angle): finds which slot matches a given angle (within tolerance)
+- Intersections only allow roads at exactly 90° intervals from orientation
+- Different grid orientations can coexist (curves create non-axis-aligned intersections)
+
+## Curved Road Math
+- calcCurve(x, y, heading, turn, r, right) computes:
+  - Center of curvature (perpendicular to heading, left or right side)
+  - End point and end heading after the arc
+  - Canvas arc parameters (arcS, arcE, ccw)
+- Right turn: center to the right, ccw=false, endHeading = heading + turn
+- Left turn: center to the left, ccw=true, endHeading = heading - turn
+- Arc angles for canvas: arcS = heading ∓ π/2, arcE = endHeading ∓ π/2
 
 ## Street Generation Logic
-- Generation triggers ONLY when player is within 30ft of an intersection with undecided directions (no cascading, no radius-based pre-generation)
-- Starts with single street from (0,0) to (400,0), player at (200,0)
-- When resolving an intersection:
-  - "Straight through" direction (opposite of sourceDir): 80% chance of road
-  - Other undecided directions: 60% chance each
-  - For each candidate road: generate block length, compute endpoint, run conflict checks
+1. Generation triggers when player is within GENERATE_DIST of a node with null slots
+2. For each undecided slot (fwd/left/right):
+   a. Roll probability (80% fwd, 60% sides). Fail → dead end.
+   b. 40% chance: try random curve (random angle, radius, direction)
+   c. If curve fails → try straight segment
+   d. If straight fails → dead end
+3. For connecting to existing intersections:
+   - Endpoint must be within 1ft of existing node
+   - Arrival angle must match an available slot (within ANGLE_TOL)
+   - If angle mismatch or slot taken → reject
 
 ## Conflict Detection (checkConflict)
-Two checks, simplified from original three:
+- Skips streets connected to the source intersection entirely
+- For existing CURVED streets: simplified bounding box of endpoints + RIGHT_OF_WAY padding
+- For existing STRAIGHT streets:
+  1. ROW check: pointInRotatedRect (rotated rectangle along street, len×340ft, with HALF_STREET margin at ends)
+  2. Crossing check: general segment intersection test (chord of new road vs existing straight)
+- For curved new roads, the chord (straight line start→end) is used for crossing checks
 
-1. **Right-of-way check**: New endpoint (bx,by) must not land inside the bounding rectangle of any existing street. Bounding rect = full block length along street × 170ft each side perpendicular. HALF_STREET (10ft) margin at along-street ends so connections at intersections aren't blocked.
-
-2. **Perpendicular crossing check**: Still needed because streets can be up to 600ft long, clearing the 340ft ROW zone on both ends while crossing through an existing perpendicular street. Checks if crossing point is interior to both segments with no intersection there.
-
-The old **parallel overlap check** was removed — it's redundant because the ROW check + proximity threshold + generation logic (each direction resolved once) make parallel overlaps impossible.
-
-## Grid Formation
-- When a new street's endpoint matches an existing intersection (dist < 1), it connects to it rather than creating a duplicate
-- Both nodes' road directions are updated, one street segment is added
-- No duplicate streets because when A generates a road to B, B's reciprocal direction is set to true, so B never tries to generate back to A
-- With 80% standard block length, grids form naturally (~64% chance two parallel streets match length)
-
-## IMPORTANT: Known Pitfalls & Past Bugs (read before modifying generation code)
-
-### sourceDir semantics
-`sourceDir` means "the direction the source street is FROM" relative to this intersection.
-If a street travels NORTH from A to B, then B's sourceDir must be 's' (source is to the south).
-A previous bug set sourceDir to the direction of travel (`dir`) instead of `OPPOSITE[dir]`,
-which caused the 80% straight-through probability to be applied to the already-resolved
-back-direction (wasted), while the actual continuation only got 60%.
-FIX: `addIntersection(nx, ny, OPPOSITE[dir])` — NOT `dir`.
-
-### Grid closure and already-resolved intersections
-When a grid closes (a new street connects to an existing intersection), the target intersection
-may have already been fully resolved (all 4 directions decided) from a previous player visit.
-Without mitigation, the remaining `false` directions stay decided and no new streets can ever
-generate from them, even though the player expects generation on their next drive-through.
-FIX: After connecting a street to a fully-resolved intersection, reset any remaining `false`
-directions back to `null` so they get re-rolled on the player's next visit. This code lives
-in `resolveIntersection` right after the street is added.
-
-### Generation is player-proximity-driven, not cascading
-Generation only triggers when the player is within GENERATE_DIST (30ft) of an intersection
-with null directions. Do NOT use radius-based or cascading generation — an earlier version
-pre-generated a huge network at startup because new intersections added during Map iteration
-were themselves within range and got resolved immediately.
+## Drawing (layered for clean junctions)
+1. Road surfaces + edge lines (straight: rotated rectangles extended HALF_STREET past intersections; curved: filled arc bands with inner/outer edge strokes)
+2. Intersection squares (STREET_WIDTH × STREET_WIDTH, rotated by node orientation, covers junction gaps and hides edge lines)
+3. Center lane markings (yellow dashed, stop HALF_STREET before intersection centers)
+4. Player car (red arrowhead)
+5. HUD (speed in mph, street count)
 
 ## Player Physics
 - Max speed: 150 ft/s, reverse max: 30 ft/s
 - Acceleration: 40 ft/s², braking: 60 ft/s², drag: 3 ft/s²
-- Turning scales with speed (can't turn while stationary), max turn rate: 3 rad/s
+- Turning scales with speed, max turn rate: 3 rad/s
 
-## Rendering
-- Green grass background (#2d8a2e)
-- Gray roads (#666) with lighter edge lines (#888)
-- Yellow dashed center lane markings (#FFD700), stopping 10ft from intersection centers
-- Red arrowhead car (#e33) with dark outline (#a00), 12ft long × 7ft wide
-- Camera follows player (centered)
-- Off-screen streets culled for performance
-- HUD: speed in mph, street count
+## IMPORTANT: Known Pitfalls & Past Bugs
+
+### sourceDir → orientation transition
+Old system used sourceDir (n/s/e/w) and DIR_VEC lookup. New system uses `ori` (radians) with trig. The `ori` field IS the direction the source street was traveling (NOT where it came from). `back` slot = ori + π = direction back to source.
+
+### Grid closure and already-resolved intersections
+When a new street connects to a fully-resolved intersection, remaining `false` directions in GEN_SLOTS (fwd/left/right) are reset to `null` for re-rolling. Back slot is never reset (always true).
+
+### Generation is player-proximity-driven, not cascading
+Generation only triggers within GENERATE_DIST. No radius-based or cascading generation.
+
+### Angle matching for cross-grid connections
+Two intersections from different "grids" (created by curves at different angles) can only connect if their orientations differ by a multiple of 90°. The findSlot function enforces this with ANGLE_TOL tolerance.
 
 ## Future Plans (discussed but not yet implemented)
 - Buildings on both sides of streets (within the 170ft right-of-way)
