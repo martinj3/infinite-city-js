@@ -64,13 +64,17 @@ function draw() {
     ctx.fillStyle = '#2d8a2e';
     ctx.fillRect(0, 0, W, H);
 
-    const camX = player.x * PX_PER_FT - W / 2;
-    const camY = player.y * PX_PER_FT - H / 2;
-    const vl = camX / PX_PER_FT - 200, vr = (camX + W) / PX_PER_FT + 200;
-    const vt = camY / PX_PER_FT - 200, vb = (camY + H) / PX_PER_FT + 200;
+    // Rotated camera: 45-degree isometric view
+    const VIEW_ANGLE = -Math.PI / 4;
+    const diagFt = Math.hypot(W, H) / PX_PER_FT / 2 + 200;
+    const vl = player.x - diagFt, vr = player.x + diagFt;
+    const vt = player.y - diagFt, vb = player.y + diagFt;
 
     ctx.save();
-    ctx.translate(-camX, -camY);
+    ctx.translate(W / 2, H / 2);
+    ctx.scale(1, 0.5);
+    ctx.rotate(VIEW_ANGLE);
+    ctx.translate(-player.x * PX_PER_FT, -player.y * PX_PER_FT);
 
     // 1) Road surfaces + edge lines
     for (const s of streets) {

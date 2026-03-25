@@ -56,3 +56,19 @@ Looks good.  But the 3x block size (1200ft) radius curves are way too large, let
 ---
 
 Ok, this index.html file is getting rather large.  Can we split the javascript out into some separate files, in a sensible way?  Maybe something like streets.js, drawing.js, and a main game.js?  Or something different, if you have better ideas?  Make sure I can still load it easily by simply opening index.html
+
+---
+
+Ok, now draw the game from a perspective rotated 45 degrees, like an isometric RPG, I think they call it?  Do it simply, just rotated 45 degrees, no need to compress either the X or Y axis (if that would further complicate the arc drawing, otherwise you can).  This should affect drawing logic only.  All the world/game/map logic that's done in feet, that should remain untouched.  Only the drawing/rendering/pixel logic should change for this.
+
+---
+
+Can we compress the Y direction (or whichever) compared to X?  Is this commonly done for isometric games, to give a more pleasing perspective effect?  Would this complicate drawing the arcs for the curved street segments at all?  Don't change any code, just answer questions
+
+---
+
+Ok, let's do option 1, add the Y scale
+
+---
+
+Hmm, that definitely didn't quite work right.  Might have compressed the wrong axis?  Looks odd, hard to tell
