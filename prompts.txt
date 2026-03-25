@@ -72,3 +72,23 @@ Ok, let's do option 1, add the Y scale
 ---
 
 Hmm, that definitely didn't quite work right.  Might have compressed the wrong axis?  Looks odd, hard to tell
+
+---
+
+Now I want to add buildings.  Big step.  To make this easier to test separately, maybe you can add a separate buildings.html file which I can load, referencing a new buildings.js that will eventually be shared with the existing driving game.  buildings.js should contain a random building generator function, used by some JS code in buildings.html to draw a 5x5 grid of buildings onscreen, using the same scale, angle, and perspective as the driving game so it's compatible.  For buildings.js, we'll start with generating houses as our first building type. Each building will be a "drawable," which has a list of polygons to draw, triangles and rectangles.  Each triangle has a list of 3 3D points, squares have 4 of course.  We'll probably reuse Drawable for more types of objects later.  Each house should consist of at least one rectangular prism (box), of random width and length (X and Y), and a height Z that varies just slightly from a standard "story height" or "floor height" (about 9 feet, probably).  I should mention that the building generator functions in buildings.js should work entirely in feet, and be unconcerned with pixels or drawing logic.  Any drawing logic that's needed can live in JS directly in the HTML file, buildings.html.  If a house has more than one rectangular prism, they should naturally touch along an edge (doesn't need to be the whole edge length), but not overlap.  Should probably create a sharable makeRectangularPrism(w,l,h) function which returns a list of rectangles.  A house's color should be random, but a colorful, pleasing color (not black or pure white, for example).  Maybe shoose a random hue, and use something close to full saturation?  That's plenty to start with.  We'll add more stuff like doors, windows, and roofs later.  buildings.js should use a green grass background, of course.
+
+---
+
+Hmm, the house on the left looks good, but the others are severely stretched and distorted horizontally.  If you're a multimodal model, you can see screen.png for the effect
+
+---
+
+Looks a lot better.  Pretty good, except some prisms appear open on top, and/or are overlapping with others.  See screen2.png
+
+---
+
+Looks good.  There are still a couple that appear to have overlapping rectangular prisms, which shouldn't be allowed if we can avoid it.  If we need a collision detection function, try to make it generic and sharable across anything that uses rectangular prisms
+
+---
+
+See screen3.png

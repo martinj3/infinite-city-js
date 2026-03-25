@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Buildings Test</title>
+    <style>
+        * { margin: 0; padding: 0; overflow: hidden; }
+        canvas { display: block; }
+    </style>
+</head>
+<body>
+<canvas id="bldg-canvas"></canvas>
+<script src="constants.js"></script>
+<script src="buildings.js"></script>
+<script>
+const canvas = document.getElementById('bldg-canvas');
+const ctx = canvas.getContext('2d');
+canvas.width = innerWidth;
+canvas.height = innerHeight;
+
+// Same isometric projection as the driving game
+const VIEW_ANGLE = -Math.PI / 4;
+const COS_V = Math.cos(VIEW_ANGLE);
+const SIN_V = Math.sin(VIEW_ANGLE);
+const Y_SCALE = 0.5;
+
+// Project a 3D world point to 2D screen coordinates.
+// Height (z) goes straight up on screen, independent of the isometric rotation.
+function project(wx, wy, wz, camX, camY) {
+    const dx = (wx - camX) * PX_PER_FT;
+    const dy = (wy - camY) * PX_PER_FT;
+    const rx = dx * COS_V - dy * SIN_V;
+    const ry = dx * SIN_V + dy * COS_V;
+    return [
+        rx + canvas.width / 2,
+        ry * Y_SCALE - wz * PX_PER_FT + canvas.height / 2
+    ];
+}
+
+// Generate a 5x5 grid of houses
+const GRID = 5;
+const CELL = 80; // feet between building centers
+const buildings = [];
+const camX = CELL * (GRID - 1) / 2;
+const camY = CELL * (GRID - 1) / 2;
+
+for (let row = 0; row < GRID; row++) {
+    for (let col = 0; col < GRID; col++) {
+        const house = generateHouse();
+        house.ox = col * CELL;
+        house.oy = row * CELL;
+        buildings.push(house);
+    }
+}
+
+// Collect all polygons, project, backface-cull, depth-sort, draw
+function render() {
+    ctx.fillStyle = '#2d8a2e';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    const projected = [];
+
+    for (const bldg of buildings) {
+        for (const poly of bldg.polys) {
+            const sp = poly.pts.map(p => project(p.x + bldg.ox, p.y + bldg.oy, p.z, camX, camY));
+
+            // Backface culling: skip if screen-space cross product <= 0
+            const cross = (sp[1][0] - sp[0][0]) * (sp[2][1] - sp[0][1])
+                        - (sp[1][1] - sp[0][1]) * (sp[2][0] - sp[0][0]);
+            if (cross <= 0) continue;
+
+            // Depth: avg screen Y compensated for height.
+            // screen_y includes -z*PX_PER_FT; adding 2*z*PX_PER_FT gives net +z,
+            // so higher faces sort later (drawn on top of lower faces).
+            const avgScreenY = sp.reduce((s, p) => s + p[1], 0) / sp.length;
+            const avgZ = poly.pts.reduce((s, p) => s + p.z, 0) / poly.pts.length;
+            const depth = avgScreenY + 2 * avgZ * PX_PER_FT;
+            projected.push({ sp, color: poly.color, depth });
+        }
+    }
+
+    // Painter's algorithm: draw far-to-near
+    projected.sort((a, b) => a.depth - b.depth);
+
+    for (const { sp, color } of projected) {
+        ctx.beginPath();
+        ctx.moveTo(sp[0][0], sp[0][1]);
+        for (let i = 1; i < sp.length; i++) ctx.lineTo(sp[i][0], sp[i][1]);
+        ctx.closePath();
+        ctx.fillStyle = color;
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(0,0,0,0.3)';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+    }
+}
+
+render();
+</script>
+</body>
+</html>
