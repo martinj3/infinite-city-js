@@ -52,3 +52,7 @@ Now read in index.html if you haven't already, so you have the full context.  Th
 ---
 
 Looks good.  But the 3x block size (1200ft) radius curves are way too large, let's remove that as a possibility.
+
+---
+
+Ok, this index.html file is getting rather large.  Can we split the javascript out into some separate files, in a sensible way?  Maybe something like streets.js, drawing.js, and a main game.js?  Or something different, if you have better ideas?  Make sure I can still load it easily by simply opening index.html
