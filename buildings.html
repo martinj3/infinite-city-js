@@ -12,6 +12,7 @@
 <canvas id="bldg-canvas"></canvas>
 <script src="constants.js"></script>
 <script src="buildings.js"></script>
+<script src="lighting.js"></script>
 <script>
 const canvas = document.getElementById('bldg-canvas');
 const ctx = canvas.getContext('2d');
@@ -75,7 +76,10 @@ function render() {
             const avgScreenY = sp.reduce((s, p) => s + p[1], 0) / sp.length;
             const avgZ = poly.pts.reduce((s, p) => s + p.z, 0) / poly.pts.length;
             const depth = avgScreenY + 2 * avgZ * PX_PER_FT;
-            projected.push({ sp, color: poly.color, depth });
+            // Apply lighting based on face normal
+            const normal = computeNormal(poly.pts);
+            const litColor = applyLighting(poly.color, normal);
+            projected.push({ sp, color: litColor, depth });
         }
     }
 

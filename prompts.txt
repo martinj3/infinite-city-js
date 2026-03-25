@@ -96,3 +96,11 @@ See screen3.png
 ---
 
 Ok, each house can have a single color that it assigns to all of its rectangles (or a single gradient, if that's what you're using).  Since later we'll add lighting effects that will provide shading at draw time to achieve a similar look.  Also these colors aren't quite working.  Very few house are purple, pink, green, or bright yellow.  Or such bright colors in general.  Instead, let's rework the color selection.  Have a list of a few base colors (a few shades of grey, shades of white, shades of brown, dark red, light yellow, dark blue and light blue).  Maybe also pink, but with a low probability.  Actually have a vector of pairs of base colors and there probabilities.  Greys and whites and browns are far more common than yellow and pink.  Blue is fairly common, but less so than the biege/brown/white shades.  Dark red less common.  Dark green too but rare, and not a bright neon green.  Then a small random adjustment can be applied to a house's base color.  Just use your knowledge of common American house colors, but with a just little variety added in for vibrancy.
+
+---
+
+Ok, go ahead and add some basic lighting for buildings.html.  New lighting logic should live in a js file that can be shared with index.html, since these houses will eventually be drawn in there too, and probably other objects using the same lighting effect.  Apply an adjustment to each retangle's color at draw time, according to the alignment (dot product) of its normal vector with the direction the light is coming from (assume light from the bottom left, infititely far away like the sun).  It shouldn't be so dramatic as to reach pure white in direct sunlight, nor should rectangles/polygons ever go fully black, not even when facing directly away from the light source.
+
+---
+
+Go ahead and update context.txt with some new context on what we've added and changed

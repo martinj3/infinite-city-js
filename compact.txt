@@ -2,12 +2,20 @@ COMPACT CONTEXT — Infinite City JS Driving Game
 ================================================
 
 ## Project
-Single-file HTML canvas driving game (`index.html`). No external libraries. Player drives a car (red arrowhead) around procedurally generated streets on a green grass background.
-
-## Working File
-`/Users/jmartin2/infinite-city-js/index.html`
+Multi-file HTML canvas driving game. No external libraries. Player drives a car (red arrowhead) around procedurally generated streets (straight and curved) on a green grass background, rendered in isometric perspective.
 
 User wants prompts.txt updated each turn with their latest prompt.
+
+## File Structure
+- `index.html` — minimal HTML shell, loads scripts
+- `constants.js` — all constants, angle/math helpers, slot system, arc math
+- `streets.js` — map data (nodes/streets), conflict detection, generation logic
+- `drawing.js` — all rendering (isometric camera, roads, intersections, player, HUD)
+- `buildings.js` — building generation (houses), works entirely in feet, no drawing logic
+- `lighting.js` — shared lighting system (light direction, normal computation, HSL shading)
+- `buildings.html` — standalone test page for buildings (5x5 grid, isometric renderer)
+- `prompts.txt` — running log of user prompts
+- `compact.txt` — this file
 
 ## Architecture & Units
 - ALL internal units are FEET (position, speed in ft/s, dimensions)
@@ -15,104 +23,113 @@ User wants prompts.txt updated each turn with their latest prompt.
 - Streets can be at ANY angle (not just axis-aligned) thanks to curved roads
 - Curved roads are circular arcs; straight roads connect intersections in any direction
 
+## Isometric Rendering
+- View is rotated -45° (VIEW_ANGLE = -π/4) with Y-axis compressed by 0.5
+- Camera transform: translate(W/2, H/2) → scale(1, 0.5) → rotate(-π/4) → translate(-player*PX)
+- Culling bounds use screen diagonal / PX_PER_FT to account for rotated viewport
+- For 3D objects (buildings), height (z) goes straight up on screen: screen_y -= wz * PX_PER_FT
+- 3D projection function in buildings.html computes this manually per-vertex
+
 ## Key Constants
 - STREET_WIDTH = 20ft (10ft per lane)
 - DEFAULT_BLOCK_LEN = 400ft
-- RIGHT_OF_WAY = 170ft (each side of street, reserved for future buildings)
-- PROXIMITY_THRESHOLD = 50ft (min distance between distinct intersections)
-- GENERATE_DIST = 30ft (player must be this close to trigger generation)
-- Block length: 80% chance of 400ft, 20% chance of random 200-600ft
-- CURVE_PROB = 0.4 (40% chance to try curve before straight)
-- CURVE_ANGLES = [30, 45, 60, 90] degrees
-- CURVE_RADII = [400, 800, 1200] ft (1x, 2x, 3x block length)
-- ANGLE_TOL = 0.02 rad (~1 degree tolerance for angle matching)
+- RIGHT_OF_WAY = 170ft (each side of street, reserved for buildings)
+- PROXIMITY_THRESHOLD = 50ft, GENERATE_DIST = 30ft
+- CURVE_PROB = 0.4, CURVE_ANGLES = [30, 45, 60, 90]°, CURVE_RADII = [400, 800] ft
+- ANGLE_TOL = 0.02 rad (~1 degree)
 
 ## Data Structures
 
-### Intersections (nodes Map)
-Key: "x,y" string -> node object:
-- x, y: position (rounded to integers)
+### Intersections (nodes Map in streets.js)
+Key: "x,y" string -> { x, y, ori, roads: { fwd, right, back, left } }
 - ori: orientation angle in radians (direction the source street was heading)
-- roads: { fwd, right, back, left } — null=undecided, true=has road, false=no road
-  - fwd = ori direction (continuation, 80% probability)
-  - back = ori + π (source direction, always true for non-initial nodes)
-  - left = ori - π/2 (60% probability)
-  - right = ori + π/2 (60% probability)
+- roads values: null=undecided, true=has road, false=no road
 
-### Streets array
-Each element: { x1, y1, x2, y2, curve, bounds }
-- curve: null for straight, or { cx, cy, r, arcS, arcE, ccw } for arcs
-  - cx, cy: center of curvature circle
-  - r: radius
-  - arcS, arcE: canvas arc start/end angles
-  - ccw: counterclockwise flag for ctx.arc()
+### Streets array (streets.js)
+{ x1, y1, x2, y2, curve, bounds }
+- curve: null | { cx, cy, r, arcS, arcE, ccw }
 - bounds: cached { mnx, mxx, mny, mxy } for culling
 
-## Direction/Slot System (replaces old N/E/S/W)
+### Drawables (buildings.js)
+{ polys: [ { pts: [{x,y,z}, ...], color: 'hsl(...)' }, ... ] }
+- Each polygon has 3-4 3D points and a single base HSL color string
+- Lighting/shading applied at draw time, not baked into the color
+
+## Direction/Slot System
 - Slots: fwd, right, back, left (relative to intersection orientation)
-- slotAngle(ori, slot) = ori + SLOT_OFF[slot]
 - SLOT_OFF: fwd=0, right=π/2, back=π, left=-π/2
-- findSlot(ori, angle): finds which slot matches a given angle (within tolerance)
 - Intersections only allow roads at exactly 90° intervals from orientation
 - Different grid orientations can coexist (curves create non-axis-aligned intersections)
 
-## Curved Road Math
-- calcCurve(x, y, heading, turn, r, right) computes:
-  - Center of curvature (perpendicular to heading, left or right side)
-  - End point and end heading after the arc
-  - Canvas arc parameters (arcS, arcE, ccw)
-- Right turn: center to the right, ccw=false, endHeading = heading + turn
-- Left turn: center to the left, ccw=true, endHeading = heading - turn
-- Arc angles for canvas: arcS = heading ∓ π/2, arcE = endHeading ∓ π/2
-
 ## Street Generation Logic
-1. Generation triggers when player is within GENERATE_DIST of a node with null slots
-2. For each undecided slot (fwd/left/right):
-   a. Roll probability (80% fwd, 60% sides). Fail → dead end.
-   b. 40% chance: try random curve (random angle, radius, direction)
-   c. If curve fails → try straight segment
-   d. If straight fails → dead end
-3. For connecting to existing intersections:
-   - Endpoint must be within 1ft of existing node
-   - Arrival angle must match an available slot (within ANGLE_TOL)
-   - If angle mismatch or slot taken → reject
+1. Triggers when player within GENERATE_DIST of node with null slots
+2. For each undecided slot: roll probability (80% fwd, 60% sides)
+3. 40% chance try curve first → fallback to straight → fallback to dead end
+4. Connecting to existing intersections requires angle match within ANGLE_TOL
 
-## Conflict Detection (checkConflict)
-- Skips streets connected to the source intersection entirely
-- For existing CURVED streets: simplified bounding box of endpoints + RIGHT_OF_WAY padding
-- For existing STRAIGHT streets:
-  1. ROW check: pointInRotatedRect (rotated rectangle along street, len×340ft, with HALF_STREET margin at ends)
-  2. Crossing check: general segment intersection test (chord of new road vs existing straight)
-- For curved new roads, the chord (straight line start→end) is used for crossing checks
+## Conflict Detection (checkConflict in streets.js)
+- Skips streets connected to the source intersection
+- Curved: simplified bounding box of endpoints + RIGHT_OF_WAY padding
+- Straight: rotated rectangle ROW check + general segment crossing check
 
-## Drawing (layered for clean junctions)
-1. Road surfaces + edge lines (straight: rotated rectangles extended HALF_STREET past intersections; curved: filled arc bands with inner/outer edge strokes)
-2. Intersection squares (STREET_WIDTH × STREET_WIDTH, rotated by node orientation, covers junction gaps and hides edge lines)
-3. Center lane markings (yellow dashed, stop HALF_STREET before intersection centers)
+## Building Generation (buildings.js)
+
+### Color System
+- HOUSE_COLORS: weighted palette of 22 realistic American house colors
+- Categories: whites/off-whites (most common), beiges/tans, grays, browns, blues, brick reds, yellows/creams, dark greens (rare), pinks (rare)
+- pickHouseColor(): weighted random selection + small HSL jitter for variety
+- Each house gets a single flat color; shading done at draw time via lighting
+
+### House Generation
+- generateHouse() → Drawable with 1-3 rectangular prisms
+- Main prism: 20-40ft wide, 25-45ft long, ~9ft tall
+- Wing prisms: 12-27ft, attached to random side of main prism
+- prismsOverlap(a, b): generic axis-aligned prism overlap check (allows touching, rejects interior overlap)
+- Wings retry up to 8 placements to avoid overlap; skipped if no valid position found
+
+### makeRectangularPrism(ox, oy, oz, w, l, h, color)
+- Returns 5 face polygons (skip bottom): top, north, south, west, east
+- All faces get the same base color string
+- Vertex winding produces correct outward normals for backface culling and lighting
+
+## Lighting System (lighting.js)
+- LIGHT_DIR = normalize(-2, 1, 3) — sun from bottom-left of screen, above
+- computeNormal(pts): unit outward normal from polygon vertices via cross product
+- applyLighting(hslStr, normal): adjusts HSL lightness by dot(normal, lightDir) * 12, clamped [10%, 95%]
+- Produces three distinct brightness levels on visible iso faces: top brightest, left wall medium, right wall darkest
+
+## 3D Rendering (buildings.html)
+- project(wx, wy, wz, camX, camY): manual isometric projection matching the driving game's canvas transform, with height going straight up on screen
+- Backface culling via screen-space cross product (skip if cross <= 0)
+- Depth sorting: avgScreenY + 2*avgZ*PX_PER_FT (compensates for height in screen_y, ensures tops draw after sides)
+- Painter's algorithm: sort ascending, draw far-to-near
+- Thin dark outlines on faces (rgba(0,0,0,0.3))
+
+### IMPORTANT: Shared vertex bug (past bug, fixed)
+makeRectangularPrism shares vertex objects across faces. Do NOT mutate poly.pts vertices in-place to offset buildings — use position offsets at projection time instead (store ox/oy on the building object).
+
+## Road Drawing (drawing.js, layered)
+1. Road surfaces + edge lines (straight: rotated rects; curved: arc bands)
+2. Intersection squares (rotated by node.ori, covers junctions)
+3. Center lane markings (yellow dashed)
 4. Player car (red arrowhead)
-5. HUD (speed in mph, street count)
+5. HUD (speed in mph, street count) — drawn in screen space after ctx.restore()
 
 ## Player Physics
-- Max speed: 150 ft/s, reverse max: 30 ft/s
-- Acceleration: 40 ft/s², braking: 60 ft/s², drag: 3 ft/s²
+- Max speed: 150 ft/s, reverse: 30 ft/s
+- Accel: 40 ft/s², brake: 60 ft/s², drag: 3 ft/s²
 - Turning scales with speed, max turn rate: 3 rad/s
 
-## IMPORTANT: Known Pitfalls & Past Bugs
+## Known Pitfalls & Past Bugs
+- sourceDir → orientation: `ori` IS direction of travel, NOT where source came from
+- Grid closure: false directions reset to null when new street connects to fully-resolved node
+- Generation is proximity-driven only, never cascading
+- Angle matching: findSlot enforces 90° multiples with ANGLE_TOL tolerance
+- Shared vertices: never mutate polygon vertex objects; offset at projection time
 
-### sourceDir → orientation transition
-Old system used sourceDir (n/s/e/w) and DIR_VEC lookup. New system uses `ori` (radians) with trig. The `ori` field IS the direction the source street was traveling (NOT where it came from). `back` slot = ori + π = direction back to source.
-
-### Grid closure and already-resolved intersections
-When a new street connects to a fully-resolved intersection, remaining `false` directions in GEN_SLOTS (fwd/left/right) are reset to `null` for re-rolling. Back slot is never reset (always true).
-
-### Generation is player-proximity-driven, not cascading
-Generation only triggers within GENERATE_DIST. No radius-based or cascading generation.
-
-### Angle matching for cross-grid connections
-Two intersections from different "grids" (created by curves at different angles) can only connect if their orientations differ by a multiple of 90°. The findSlot function enforces this with ANGLE_TOL tolerance.
-
-## Future Plans (discussed but not yet implemented)
-- Buildings on both sides of streets (within the 170ft right-of-way)
-- Road collision / edge bouncing to keep player on streets
-- World persistence (return to old streets, same buildings)
-- Possibly divide map into large cells for performance
+## Future Plans (not yet implemented)
+- Place buildings along streets in the driving game (within 170ft right-of-way)
+- Doors, windows, roofs on houses
+- Road collision / edge bouncing
+- World persistence
+- Large-cell spatial partitioning for performance
