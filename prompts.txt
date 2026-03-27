@@ -123,4 +123,12 @@ Yes, sounds good.  Doors can be the same color as roofs for now, randomly 3 to 5
 
 ---
 
+[Discussion about depth sorting for detail polygons like doors — settled on zBias sort tiebreaker approach, then discovered it's fragile due to different average Z values between door and wall polygons.]
+
+---
+
+[Discussion about depth sorting robustness. Settled on a Drawable tree with breadth-first layered rendering: each Drawable has polys and children. Buildings are sorted far-to-near, then within each building, polys are drawn in BFS layers (all walls/roofs first, then all details like doors). This replaces the zBias approach.]
+
+---
+
 When we eventually add houses into the driving game (not yet), we'll need to rotate them to match the orientation of the street they're along (we have curved roads even, so this can be any angle).  Rather than performing this rotation every time we draw a frame, does it make sense to do it once when the house is generated?  So the house's polys come pre-rotated?  [Yes, pre-rotating at generation time.]  Ok, let's add that now. Perhaps have generateHouse() take a facing angle argument?  A new rotate helper function, perhaps?  I want to do it now, in part because I can't yet see the doors you've added.  I suspect the north side of the houses face away from me in the rendered view.  So to test this, let's draw all the houses with a 180 degree rotation, see if I can see the doors then

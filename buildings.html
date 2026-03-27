@@ -54,37 +54,27 @@ for (let row = 0; row < GRID; row++) {
     }
 }
 
-// Collect all polygons, project, backface-cull, depth-sort, draw
-function render() {
-    ctx.fillStyle = '#2d8a2e';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-
+// Project, backface-cull, and depth-sort a list of polys, then draw them.
+function projectAndDraw(polys, ox, oy) {
     const projected = [];
+    for (const poly of polys) {
+        const sp = poly.pts.map(p => project(p.x + ox, p.y + oy, p.z, camX, camY));
 
-    for (const bldg of buildings) {
-        for (const poly of bldg.polys) {
-            const sp = poly.pts.map(p => project(p.x + bldg.ox, p.y + bldg.oy, p.z, camX, camY));
+        // Backface culling: skip if screen-space cross product <= 0
+        const cross = (sp[1][0] - sp[0][0]) * (sp[2][1] - sp[0][1])
+                    - (sp[1][1] - sp[0][1]) * (sp[2][0] - sp[0][0]);
+        if (cross <= 0) continue;
 
-            // Backface culling: skip if screen-space cross product <= 0
-            const cross = (sp[1][0] - sp[0][0]) * (sp[2][1] - sp[0][1])
-                        - (sp[1][1] - sp[0][1]) * (sp[2][0] - sp[0][0]);
-            if (cross <= 0) continue;
-
-            // Depth: avg screen Y compensated for height.
-            // screen_y includes -z*PX_PER_FT; adding 2*z*PX_PER_FT gives net +z,
-            // so higher faces sort later (drawn on top of lower faces).
-            const avgScreenY = sp.reduce((s, p) => s + p[1], 0) / sp.length;
-            const avgZ = poly.pts.reduce((s, p) => s + p.z, 0) / poly.pts.length;
-            const depth = avgScreenY + 2 * avgZ * PX_PER_FT;
-            // Apply lighting based on face normal
-            const normal = computeNormal(poly.pts);
-            const litColor = applyLighting(poly.color, normal);
-            projected.push({ sp, color: litColor, depth, zBias: poly.zBias || 0 });
-        }
+        // Depth: avg screen Y compensated for height
+        const avgScreenY = sp.reduce((s, p) => s + p[1], 0) / sp.length;
+        const avgZ = poly.pts.reduce((s, p) => s + p.z, 0) / poly.pts.length;
+        const depth = avgScreenY + 2 * avgZ * PX_PER_FT;
+        const normal = computeNormal(poly.pts);
+        const litColor = applyLighting(poly.color, normal);
+        projected.push({ sp, color: litColor, depth });
     }
 
-    // Painter's algorithm: draw far-to-near
-    projected.sort((a, b) => (a.depth - b.depth) || (a.zBias - b.zBias));
+    projected.sort((a, b) => a.depth - b.depth);
 
     for (const { sp, color } of projected) {
         ctx.beginPath();
@@ -96,6 +86,28 @@ function render() {
         ctx.strokeStyle = 'rgba(0,0,0,0.3)';
         ctx.lineWidth = 1;
         ctx.stroke();
+    }
+}
+
+function render() {
+    ctx.fillStyle = '#2d8a2e';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // Sort buildings far-to-near by projected screen Y
+    const sorted = buildings.slice().sort((a, b) => {
+        const [, ay] = project(a.ox, a.oy, 0, camX, camY);
+        const [, by] = project(b.ox, b.oy, 0, camX, camY);
+        return ay - by;
+    });
+
+    // Draw each building fully before the next (far-to-near).
+    // Within each building, draw breadth-first layers so that
+    // base geometry (walls/roofs) is drawn before details (doors/windows).
+    for (const bldg of sorted) {
+        const layers = collectDrawableLayers(bldg);
+        for (const layerPolys of layers) {
+            projectAndDraw(layerPolys, bldg.ox, bldg.oy);
+        }
     }
 }
 

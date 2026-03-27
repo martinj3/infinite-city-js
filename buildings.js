@@ -181,6 +181,32 @@ function rotatePolys(polys, angle, cx, cy) {
     }
 }
 
+// Recursively rotate all polys in a drawable tree.
+function rotateDrawable(drawable, angle, cx, cy) {
+    rotatePolys(drawable.polys, angle, cx, cy);
+    for (const child of drawable.children) {
+        rotateDrawable(child, angle, cx, cy);
+    }
+}
+
+// Collect polys from a drawable tree in breadth-first layers.
+// Returns an array of arrays: layers[0] = root polys, layers[1] = children's polys, etc.
+function collectDrawableLayers(drawable) {
+    const layers = [];
+    let current = [drawable];
+    while (current.length > 0) {
+        const polys = [];
+        const next = [];
+        for (const d of current) {
+            polys.push(...d.polys);
+            next.push(...d.children);
+        }
+        if (polys.length > 0) layers.push(polys);
+        current = next;
+    }
+    return layers;
+}
+
 // Check if two axis-aligned rectangular prisms overlap (interiors intersect).
 // Each prism: { x, y, z, w, l, h }
 // Touching along a face/edge is allowed; only interior overlap is rejected.
@@ -193,7 +219,9 @@ function prismsOverlap(a, b) {
 
 // Generate a random house made of 1-3 rectangular prisms.
 // facingAngle: rotation in radians applied to all geometry (0 = front faces -y).
-// Returns a Drawable: { polys: [ {pts, color}, ... ] }
+// Returns a Drawable tree: { polys, children: [child Drawables...] }
+// The root has no polys; children are the main prism and wings.
+// Details (doors) are grandchildren of their prism.
 function generateHouse(facingAngle = 0) {
     const color = pickHouseColor();
     const lengthwise = Math.random() < 0.5;
@@ -201,15 +229,17 @@ function generateHouse(facingAngle = 0) {
     const addRoof = useHipRoof ? makeHipRoof : makeGableRoof;
 
     const numPrisms = 1 + Math.floor(Math.random() * 3); // 1-3
-    const polys = [];
+    const children = [];
     const bounds = []; // track prism bounds for overlap checks
 
     // Main prism
     const w1 = 20 + Math.random() * 20;  // 20-40ft
     const l1 = 25 + Math.random() * 20;  // 25-45ft
     const h1 = 8.5 + Math.random() * 1;  // ~9ft
-    polys.push(...makeRectangularPrism(0, 0, 0, w1, l1, h1, color, false));
-    polys.push(...addRoof(0, 0, 0, w1, l1, h1, lengthwise, color));
+    const mainPolys = [
+        ...makeRectangularPrism(0, 0, 0, w1, l1, h1, color, false),
+        ...addRoof(0, 0, 0, w1, l1, h1, lengthwise, color),
+    ];
     bounds.push({ x: 0, y: 0, z: 0, w: w1, l: l1, h: h1 });
 
     // Front door on the north face (y=0, facing -y) of the main prism
@@ -217,16 +247,20 @@ function generateHouse(facingAngle = 0) {
     const doorH = 7 + Math.random() * 2;    // 7-9ft
     const doorX = (w1 - doorW) / 2;         // centered on main prism
     const eps = 0.05;
-    polys.push({
-        pts: [
-            {x: doorX,         y: -eps, z: 0},
-            {x: doorX + doorW, y: -eps, z: 0},
-            {x: doorX + doorW, y: -eps, z: doorH},
-            {x: doorX,         y: -eps, z: doorH},
-        ],
-        color: ROOF_COLOR,
-        zBias: 0.01,
-    });
+    const doorDrawable = {
+        polys: [{
+            pts: [
+                {x: doorX,         y: -eps, z: 0},
+                {x: doorX + doorW, y: -eps, z: 0},
+                {x: doorX + doorW, y: -eps, z: doorH},
+                {x: doorX,         y: -eps, z: doorH},
+            ],
+            color: ROOF_COLOR,
+        }],
+        children: [],
+    };
+
+    children.push({ polys: mainPolys, children: [doorDrawable] });
 
     // Additional wing prisms, attached to a random side of the main prism
     // (not north — that's the front door side)
@@ -256,18 +290,23 @@ function generateHouse(facingAngle = 0) {
 
             const candidate = { x: ox, y: oy, z: 0, w, l, h };
             if (!bounds.some(b => prismsOverlap(b, candidate))) {
-                polys.push(...makeRectangularPrism(ox, oy, 0, w, l, h, color, false));
-                polys.push(...addRoof(ox, oy, 0, w, l, h, lengthwise, color));
+                const wingPolys = [
+                    ...makeRectangularPrism(ox, oy, 0, w, l, h, color, false),
+                    ...addRoof(ox, oy, 0, w, l, h, lengthwise, color),
+                ];
+                children.push({ polys: wingPolys, children: [] });
                 bounds.push(candidate);
                 break;
             }
         }
     }
 
+    const house = { polys: [], children };
+
     // Rotate all geometry around the center of the main prism
     if (facingAngle !== 0) {
-        rotatePolys(polys, facingAngle, w1 / 2, l1 / 2);
+        rotateDrawable(house, facingAngle, w1 / 2, l1 / 2);
     }
 
-    return { polys };
+    return house;
 }
