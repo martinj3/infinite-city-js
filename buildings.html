@@ -54,23 +54,29 @@ for (let row = 0; row < GRID; row++) {
     }
 }
 
-// Project, backface-cull, and depth-sort a list of polys, then draw them.
+// Compute depth for a single poly (used for sorting)
+function polyDepth(poly, ox, oy) {
+    const sp = poly.pts.map(p => project(p.x + ox, p.y + oy, p.z, camX, camY));
+    const avgScreenY = sp.reduce((s, p) => s + p[1], 0) / sp.length;
+    const avgZ = poly.pts.reduce((s, p) => s + p.z, 0) / poly.pts.length;
+    return avgScreenY + 2 * avgZ * PX_PER_FT;
+}
+
+// Project, backface-cull, depth-sort, and draw a batch of polys.
 function projectAndDraw(polys, ox, oy) {
     const projected = [];
     for (const poly of polys) {
         const sp = poly.pts.map(p => project(p.x + ox, p.y + oy, p.z, camX, camY));
 
-        // Backface culling: skip if screen-space cross product <= 0
         const cross = (sp[1][0] - sp[0][0]) * (sp[2][1] - sp[0][1])
                     - (sp[1][1] - sp[0][1]) * (sp[2][0] - sp[0][0]);
         if (cross <= 0) continue;
 
-        // Depth: avg screen Y compensated for height
+        const normal = computeNormal(poly.pts);
+        const litColor = applyLighting(poly.color, normal);
         const avgScreenY = sp.reduce((s, p) => s + p[1], 0) / sp.length;
         const avgZ = poly.pts.reduce((s, p) => s + p.z, 0) / poly.pts.length;
         const depth = avgScreenY + 2 * avgZ * PX_PER_FT;
-        const normal = computeNormal(poly.pts);
-        const litColor = applyLighting(poly.color, normal);
         projected.push({ sp, color: litColor, depth });
     }
 
@@ -100,14 +106,13 @@ function render() {
         return ay - by;
     });
 
-    // Draw each building fully before the next (far-to-near).
-    // Within each building, draw breadth-first layers so that
-    // base geometry (walls/roofs) is drawn before details (doors/windows).
+    // Draw each building as a depth-first drawable tree.
+    // Each node's own polys draw first, then children sorted by depth,
+    // each drawn completely before the next. This ensures:
+    // - Details (windows/doors) draw after their own prism's walls
+    // - A nearer sibling prism's walls occlude a farther sibling's details
     for (const bldg of sorted) {
-        const layers = collectDrawableLayers(bldg);
-        for (const layerPolys of layers) {
-            projectAndDraw(layerPolys, bldg.ox, bldg.oy);
-        }
+        drawDrawableTree(bldg, bldg.ox, bldg.oy, projectAndDraw, polyDepth);
     }
 }
 

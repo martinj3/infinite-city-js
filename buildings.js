@@ -86,6 +86,7 @@ function makeRectangularPrism(ox, oy, oz, w, l, h, color, includeTop = true) {
 }
 
 const ROOF_COLOR = 'hsl(20, 30%, 35%)';
+const WINDOW_COLOR = 'hsl(210, 50%, 75%)';
 
 // Creates a gable roof on top of a rectangular prism.
 // ox, oy, oz: origin of the prism; w, l, h: prism dimensions.
@@ -189,22 +190,81 @@ function rotateDrawable(drawable, angle, cx, cy) {
     }
 }
 
-// Collect polys from a drawable tree in breadth-first layers.
-// Returns an array of arrays: layers[0] = root polys, layers[1] = children's polys, etc.
-function collectDrawableLayers(drawable) {
-    const layers = [];
-    let current = [drawable];
-    while (current.length > 0) {
-        const polys = [];
-        const next = [];
-        for (const d of current) {
-            polys.push(...d.polys);
-            next.push(...d.children);
+// Draw a drawable tree recursively: own polys first, then children sorted
+// by depth (far-to-near), each drawn completely before the next.
+// projectAndDrawFn(polys, ox, oy): renderer-provided function to project,
+// backface-cull, depth-sort, and draw a batch of polys.
+// depthFn(poly, ox, oy): renderer-provided function returning a poly's depth.
+function drawDrawableTree(drawable, ox, oy, projectAndDrawFn, depthFn) {
+    projectAndDrawFn(drawable.polys, ox, oy);
+
+    if (drawable.children.length > 0) {
+        // Sort children by average depth of their own polys (far-to-near)
+        const sorted = drawable.children.slice().sort((a, b) => {
+            const da = avgDrawableDepth(a, ox, oy, depthFn);
+            const db = avgDrawableDepth(b, ox, oy, depthFn);
+            return da - db;
+        });
+        for (const child of sorted) {
+            drawDrawableTree(child, ox, oy, projectAndDrawFn, depthFn);
         }
-        if (polys.length > 0) layers.push(polys);
-        current = next;
     }
-    return layers;
+}
+
+function avgDrawableDepth(drawable, ox, oy, depthFn) {
+    if (drawable.polys.length === 0) return -Infinity;
+    let sum = 0;
+    for (const poly of drawable.polys) {
+        sum += depthFn(poly, ox, oy);
+    }
+    return sum / drawable.polys.length;
+}
+
+// Generate window polys for all 4 walls of a prism.
+// exclusions: per-wall array of {start, end} zones to avoid (e.g. door).
+// Returns array of polygon objects.
+function generatePrismWindows(ox, oy, w, l, exclusions) {
+    const p = (x, y, z) => ({x, y, z});
+    const eps = 0.05;
+    const winTop = 7 + Math.random();            // 7-8ft (uniform per prism)
+    const winH = 3 + Math.random() * 2;          // 3-5ft (uniform per prism)
+    const winBottom = winTop - winH;
+    const stdW = 3 + Math.random() * 5;          // 3-8ft standard width
+    const gap = 4;                                // space between windows
+    const margin = 2;                             // min distance from wall edge
+
+    const walls = [
+        { lo: ox, hi: ox + w, excl: exclusions.north || [],
+          poly: (a, b) => ({ pts: [p(a,oy-eps,winBottom), p(b,oy-eps,winBottom), p(b,oy-eps,winTop), p(a,oy-eps,winTop)], color: WINDOW_COLOR }) },
+        { lo: ox, hi: ox + w, excl: exclusions.south || [],
+          poly: (a, b) => ({ pts: [p(b,oy+l+eps,winBottom), p(a,oy+l+eps,winBottom), p(a,oy+l+eps,winTop), p(b,oy+l+eps,winTop)], color: WINDOW_COLOR }) },
+        { lo: oy, hi: oy + l, excl: exclusions.west || [],
+          poly: (a, b) => ({ pts: [p(ox-eps,b,winBottom), p(ox-eps,a,winBottom), p(ox-eps,a,winTop), p(ox-eps,b,winTop)], color: WINDOW_COLOR }) },
+        { lo: oy, hi: oy + l, excl: exclusions.east || [],
+          poly: (a, b) => ({ pts: [p(ox+w+eps,a,winBottom), p(ox+w+eps,b,winBottom), p(ox+w+eps,b,winTop), p(ox+w+eps,a,winTop)], color: WINDOW_COLOR }) },
+    ];
+
+    const polys = [];
+    for (const wall of walls) {
+        let pos = wall.lo + margin;
+        while (pos + 3 <= wall.hi - margin) {
+            let winW = stdW;
+            if (Math.random() < 0.25) {
+                winW = Math.max(3, Math.min(8, stdW + (Math.random() - 0.5) * 4));
+            }
+            if (pos + winW > wall.hi - margin) break;
+
+            const blocked = wall.excl.find(e => pos < e.end && pos + winW > e.start);
+            if (blocked) {
+                pos = blocked.end + gap;
+                continue;
+            }
+
+            polys.push(wall.poly(pos, pos + winW));
+            pos += winW + gap;
+        }
+    }
+    return polys;
 }
 
 // Check if two axis-aligned rectangular prisms overlap (interiors intersect).
@@ -247,20 +307,23 @@ function generateHouse(facingAngle = 0) {
     const doorH = 7 + Math.random() * 2;    // 7-9ft
     const doorX = (w1 - doorW) / 2;         // centered on main prism
     const eps = 0.05;
-    const doorDrawable = {
-        polys: [{
-            pts: [
-                {x: doorX,         y: -eps, z: 0},
-                {x: doorX + doorW, y: -eps, z: 0},
-                {x: doorX + doorW, y: -eps, z: doorH},
-                {x: doorX,         y: -eps, z: doorH},
-            ],
-            color: ROOF_COLOR,
-        }],
-        children: [],
+    const doorPoly = {
+        pts: [
+            {x: doorX,         y: -eps, z: 0},
+            {x: doorX + doorW, y: -eps, z: 0},
+            {x: doorX + doorW, y: -eps, z: doorH},
+            {x: doorX,         y: -eps, z: doorH},
+        ],
+        color: ROOF_COLOR,
     };
 
-    children.push({ polys: mainPolys, children: [doorDrawable] });
+    // Windows for the main prism (door is an exclusion on the north wall)
+    const mainWindows = generatePrismWindows(0, 0, w1, l1, {
+        north: [{ start: doorX - 1, end: doorX + doorW + 1 }],
+    });
+
+    const mainDetails = { polys: [doorPoly, ...mainWindows], children: [] };
+    children.push({ polys: mainPolys, children: [mainDetails] });
 
     // Additional wing prisms, attached to a random side of the main prism
     // (not north — that's the front door side)
@@ -294,7 +357,9 @@ function generateHouse(facingAngle = 0) {
                     ...makeRectangularPrism(ox, oy, 0, w, l, h, color, false),
                     ...addRoof(ox, oy, 0, w, l, h, lengthwise, color),
                 ];
-                children.push({ polys: wingPolys, children: [] });
+                const wingWindows = generatePrismWindows(ox, oy, w, l, {});
+                const wingDetails = { polys: wingWindows, children: [] };
+                children.push({ polys: wingPolys, children: [wingDetails] });
                 bounds.push(candidate);
                 break;
             }

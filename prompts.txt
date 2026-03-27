@@ -131,4 +131,12 @@ Yes, sounds good.  Doors can be the same color as roofs for now, randomly 3 to 5
 
 ---
 
+[Discussion about vertex sharing strategy. Switched to duplicated vertices per face to eliminate shared-vertex mutation bugs. Indexed vertex buffer considered but rejected — adds complexity to geometry authoring for negligible memory savings at our scale.]
+
+---
+
+Now, let's add windows. For now they are all a fixed light blue color representing glass, just light blue rectangles. For now, the top edge of all windows will be randomly 7 to 8 ft above the ground (same for all windows in a wing/prism). Window height is randomly 3 to 5 ft (also uniform for each prism/wing). Window width is randomly 3 to 8 ft for a wing/prism's "standard window width," but each window has a 25% chance to randomly vary from the prism's standard (but still clamped to 3 to 8 ft). We also need to ensure windows don't go outside the bounds of the wall they're on. I'll let you decide the simplest way to do this, perhaps just reject a potential window if it's outside the wall bounds. Windows should also not overlap the front door (perhaps the front door could be treated as a subtype of "window", for the purposes of spacing, if that's easier?)
+
+---
+
 When we eventually add houses into the driving game (not yet), we'll need to rotate them to match the orientation of the street they're along (we have curved roads even, so this can be any angle).  Rather than performing this rotation every time we draw a frame, does it make sense to do it once when the house is generated?  So the house's polys come pre-rotated?  [Yes, pre-rotating at generation time.]  Ok, let's add that now. Perhaps have generateHouse() take a facing angle argument?  A new rotate helper function, perhaps?  I want to do it now, in part because I can't yet see the doors you've added.  I suspect the north side of the houses face away from me in the rendered view.  So to test this, let's draw all the houses with a 180 degree rotation, see if I can see the doors then
