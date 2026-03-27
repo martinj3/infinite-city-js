@@ -104,3 +104,19 @@ Ok, go ahead and add some basic lighting for buildings.html.  New lighting logic
 ---
 
 Go ahead and update context.txt with some new context on what we've added and changed
+
+---
+
+Looking at buildings.js, let's add roofs to our houses.  Thus, the top cap rectangle can be removed.  MakeRectangularPrism() can take a bool for whether to include it, since some future objects may reuse that function and want it.  But we don't need it for houses, since we'll add roofs.  For now, all roofs will be gable roofs.  And for now, each prism of a house gets its own gable roof, independent of the other prisms.  Gables can have two different orientations, of course, length-wise or width-wise, this should be 50/50 chance.  Gable height should range randomly from 25% to 60% of the width of the prism (for width-wise gables) or 25% to 60% of the length of the prism (for length-wise gables).  You may see GableRoof.png if your training isn't clear on what a gable roof is.  The top of the roof can be a fixed brown color, for now.  The "gable end" triangles should match the color of the house
+
+---
+
+If a house has a gable roof, let's have lengthwise chosen only once per house, and apply to all of the house's prisms.  And add a possibility of a Hip Roof.  See HipRoof.PNG and HipVsGableRoof.png, if needed.  If the prism happens to be perfectly square, it's basically a pyramid with a square base.  But in general the tip of the "pyramid" can be stretched out, to accomodate non-square prisms.  Which direction it's stretched gives this roof type a length-wise vs width-wise orientation also, which should be chosen 50/50 per house.
+
+---
+
+Now I want to add a front door to each house.  Can always be on the same side for all houses, for now.  This can probably just be a flat rectangle (no depth, not a prism) added to the Drawable's polys.  But open to your suggestions here, especially regarding how to make Z buffering/depth sorting work well.  We could offset the door rectangle slightly from the wall, but such an offset would need to be very small... and I'm not sure I trust our drawing code's depth sorting that much.  Alternatively, could we perhaps give Drawables a second "detailPolys" field, which contains polys that are always drawn last?  For little details like doors and windows?  But if they're always drawn last, then that may break depth sorting and occlusion in a different way, making it impossible for other things to properly oclude them?  Interested to here your ideas before we proceed, don't change code yet.  Is there any industry standard way of handling this sort of thing?
+
+---
+
+Yes, sounds good.  Doors can be the same color as roofs for now, randomly 3 to 5 feet in width, 7 to 9 feet height.  Should be on the "main" prism.  Always facing a standard "front" direction on all houses, for now.  We should perhaps block the creation of wing prisms on whichever direction/side this is, to avoid blocking the main door.

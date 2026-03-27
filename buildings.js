@@ -65,7 +65,7 @@ function pickHouseColor() {
 // color is a single CSS color string. All faces get the same color;
 // shading/lighting will be applied at draw time.
 // Each face: { pts: [{x,y,z}, ...], color: string }
-function makeRectangularPrism(ox, oy, oz, w, l, h, color) {
+function makeRectangularPrism(ox, oy, oz, w, l, h, color, includeTop = true) {
     const v = [
         {x: ox,     y: oy,     z: oz},       // 0: bottom-SW
         {x: ox + w, y: oy,     z: oz},       // 1: bottom-SE
@@ -77,9 +77,11 @@ function makeRectangularPrism(ox, oy, oz, w, l, h, color) {
         {x: ox,     y: oy + l, z: oz + h},   // 7: top-NW
     ];
 
-    return [
-        // Top face
-        { pts: [v[4], v[5], v[6], v[7]], color },
+    const faces = [];
+    if (includeTop) {
+        faces.push({ pts: [v[4], v[5], v[6], v[7]], color });
+    }
+    faces.push(
         // North face (y=oy, facing -y)
         { pts: [v[0], v[1], v[5], v[4]], color },
         // South face (y=oy+l, facing +y)
@@ -88,7 +90,126 @@ function makeRectangularPrism(ox, oy, oz, w, l, h, color) {
         { pts: [v[3], v[0], v[4], v[7]], color },
         // East face (x=ox+w, facing +x)
         { pts: [v[1], v[2], v[6], v[5]], color },
-    ];
+    );
+    return faces;
+}
+
+const ROOF_COLOR = 'hsl(20, 30%, 35%)';
+
+// Creates a gable roof on top of a rectangular prism.
+// ox, oy, oz: origin of the prism; w, l, h: prism dimensions.
+// lengthwise: if true, ridge runs along X; if false, ridge runs along Y.
+// houseColor: color for gable-end triangles; roof slopes are brown.
+function makeGableRoof(ox, oy, oz, w, l, h, lengthwise, houseColor) {
+    const topZ = oz + h;
+
+    if (lengthwise) {
+        // Ridge runs along X axis (width), gable ends on west and east
+        const gableH = (0.25 + Math.random() * 0.35) * l;
+        const r0 = {x: ox,     y: oy + l / 2, z: topZ + gableH};
+        const r1 = {x: ox + w, y: oy + l / 2, z: topZ + gableH};
+        const v4 = {x: ox,     y: oy,         z: topZ};
+        const v5 = {x: ox + w, y: oy,         z: topZ};
+        const v6 = {x: ox + w, y: oy + l,     z: topZ};
+        const v7 = {x: ox,     y: oy + l,     z: topZ};
+
+        return [
+            // North slope (facing -y)
+            { pts: [v4, v5, r1, r0], color: ROOF_COLOR },
+            // South slope (facing +y)
+            { pts: [v6, v7, r0, r1], color: ROOF_COLOR },
+            // West gable end (facing -x)
+            { pts: [v7, v4, r0], color: houseColor },
+            // East gable end (facing +x)
+            { pts: [v5, v6, r1], color: houseColor },
+        ];
+    } else {
+        // Ridge runs along Y axis (length), gable ends on north and south
+        const gableH = (0.25 + Math.random() * 0.35) * w;
+        const r0 = {x: ox + w / 2, y: oy,     z: topZ + gableH};
+        const r1 = {x: ox + w / 2, y: oy + l, z: topZ + gableH};
+        const v4 = {x: ox,         y: oy,     z: topZ};
+        const v5 = {x: ox + w,     y: oy,     z: topZ};
+        const v6 = {x: ox + w,     y: oy + l, z: topZ};
+        const v7 = {x: ox,         y: oy + l, z: topZ};
+
+        return [
+            // West slope (facing -x)
+            { pts: [v7, v4, r0, r1], color: ROOF_COLOR },
+            // East slope (facing +x)
+            { pts: [v5, v6, r1, r0], color: ROOF_COLOR },
+            // South gable end (y=oy, facing -y)
+            { pts: [v4, v5, r0], color: houseColor },
+            // North gable end (y=oy+l, facing +y)
+            { pts: [v6, v7, r1], color: houseColor },
+        ];
+    }
+}
+
+// Creates a hip roof on top of a rectangular prism.
+// All four faces are sloped (roof-colored). The ridge is inset from each end
+// so that the hip slope matches the main slope pitch. If the prism is square
+// (or the cross-dimension >= the along-dimension), it becomes a pyramid.
+function makeHipRoof(ox, oy, oz, w, l, h, lengthwise, houseColor) {
+    const topZ = oz + h;
+    const v4 = {x: ox,     y: oy,     z: topZ};
+    const v5 = {x: ox + w, y: oy,     z: topZ};
+    const v6 = {x: ox + w, y: oy + l, z: topZ};
+    const v7 = {x: ox,     y: oy + l, z: topZ};
+
+    if (lengthwise) {
+        // Ridge runs along X, cross-dimension is l, inset = l/2
+        const roofH = (0.25 + Math.random() * 0.35) * l;
+        const inset = l / 2;
+        if (w <= l) {
+            // Pyramid — ridge collapses to a point
+            const peak = {x: ox + w / 2, y: oy + l / 2, z: topZ + roofH};
+            return [
+                { pts: [v4, v5, peak], color: ROOF_COLOR },   // North
+                { pts: [v6, v7, peak], color: ROOF_COLOR },   // South
+                { pts: [v7, v4, peak], color: ROOF_COLOR },   // West
+                { pts: [v5, v6, peak], color: ROOF_COLOR },   // East
+            ];
+        }
+        const r0 = {x: ox + inset,     y: oy + l / 2, z: topZ + roofH};
+        const r1 = {x: ox + w - inset, y: oy + l / 2, z: topZ + roofH};
+        return [
+            // North slope (facing -y)
+            { pts: [v4, v5, r1, r0], color: ROOF_COLOR },
+            // South slope (facing +y)
+            { pts: [v6, v7, r0, r1], color: ROOF_COLOR },
+            // West hip triangle (facing -x)
+            { pts: [v7, v4, r0], color: ROOF_COLOR },
+            // East hip triangle (facing +x)
+            { pts: [v5, v6, r1], color: ROOF_COLOR },
+        ];
+    } else {
+        // Ridge runs along Y, cross-dimension is w, inset = w/2
+        const roofH = (0.25 + Math.random() * 0.35) * w;
+        const inset = w / 2;
+        if (l <= w) {
+            // Pyramid
+            const peak = {x: ox + w / 2, y: oy + l / 2, z: topZ + roofH};
+            return [
+                { pts: [v4, v5, peak], color: ROOF_COLOR },
+                { pts: [v6, v7, peak], color: ROOF_COLOR },
+                { pts: [v7, v4, peak], color: ROOF_COLOR },
+                { pts: [v5, v6, peak], color: ROOF_COLOR },
+            ];
+        }
+        const r0 = {x: ox + w / 2, y: oy + inset,     z: topZ + roofH};
+        const r1 = {x: ox + w / 2, y: oy + l - inset, z: topZ + roofH};
+        return [
+            // West slope (facing -x)
+            { pts: [v7, v4, r0, r1], color: ROOF_COLOR },
+            // East slope (facing +x)
+            { pts: [v5, v6, r1, r0], color: ROOF_COLOR },
+            // South hip triangle (facing -y)
+            { pts: [v4, v5, r0], color: ROOF_COLOR },
+            // North hip triangle (facing +y)
+            { pts: [v6, v7, r1], color: ROOF_COLOR },
+        ];
+    }
 }
 
 // Check if two axis-aligned rectangular prisms overlap (interiors intersect).
@@ -105,6 +226,9 @@ function prismsOverlap(a, b) {
 // Returns a Drawable: { polys: [ {pts, color}, ... ] }
 function generateHouse() {
     const color = pickHouseColor();
+    const lengthwise = Math.random() < 0.5;
+    const useHipRoof = Math.random() < 0.5;
+    const addRoof = useHipRoof ? makeHipRoof : makeGableRoof;
 
     const numPrisms = 1 + Math.floor(Math.random() * 3); // 1-3
     const polys = [];
@@ -114,10 +238,28 @@ function generateHouse() {
     const w1 = 20 + Math.random() * 20;  // 20-40ft
     const l1 = 25 + Math.random() * 20;  // 25-45ft
     const h1 = 8.5 + Math.random() * 1;  // ~9ft
-    polys.push(...makeRectangularPrism(0, 0, 0, w1, l1, h1, color));
+    polys.push(...makeRectangularPrism(0, 0, 0, w1, l1, h1, color, false));
+    polys.push(...addRoof(0, 0, 0, w1, l1, h1, lengthwise, color));
     bounds.push({ x: 0, y: 0, z: 0, w: w1, l: l1, h: h1 });
 
+    // Front door on the north face (y=0, facing -y) of the main prism
+    const doorW = 3 + Math.random() * 2;    // 3-5ft
+    const doorH = 7 + Math.random() * 2;    // 7-9ft
+    const doorX = (w1 - doorW) / 2;         // centered on main prism
+    const eps = 0.05;
+    polys.push({
+        pts: [
+            {x: doorX,         y: -eps, z: 0},
+            {x: doorX + doorW, y: -eps, z: 0},
+            {x: doorX + doorW, y: -eps, z: doorH},
+            {x: doorX,         y: -eps, z: doorH},
+        ],
+        color: ROOF_COLOR,
+        zBias: 0.01,
+    });
+
     // Additional wing prisms, attached to a random side of the main prism
+    // (not north — that's the front door side)
     for (let i = 1; i < numPrisms; i++) {
         const w = 12 + Math.random() * 15;   // 12-27ft
         const l = 12 + Math.random() * 15;
@@ -125,7 +267,7 @@ function generateHouse() {
 
         // Try up to 8 random placements to find one without overlap
         for (let attempt = 0; attempt < 8; attempt++) {
-            const side = Math.floor(Math.random() * 4);
+            const side = Math.floor(Math.random() * 3); // 0-2: east, west, south
             let ox, oy;
             switch (side) {
                 case 0: // East side
@@ -140,15 +282,12 @@ function generateHouse() {
                     ox = Math.random() * Math.max(0, w1 - w);
                     oy = l1;
                     break;
-                case 3: // North side
-                    ox = Math.random() * Math.max(0, w1 - w);
-                    oy = -l;
-                    break;
             }
 
             const candidate = { x: ox, y: oy, z: 0, w, l, h };
             if (!bounds.some(b => prismsOverlap(b, candidate))) {
-                polys.push(...makeRectangularPrism(ox, oy, 0, w, l, h, color));
+                polys.push(...makeRectangularPrism(ox, oy, 0, w, l, h, color, false));
+                polys.push(...addRoof(ox, oy, 0, w, l, h, lengthwise, color));
                 bounds.push(candidate);
                 break;
             }

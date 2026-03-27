@@ -79,12 +79,12 @@ function render() {
             // Apply lighting based on face normal
             const normal = computeNormal(poly.pts);
             const litColor = applyLighting(poly.color, normal);
-            projected.push({ sp, color: litColor, depth });
+            projected.push({ sp, color: litColor, depth, zBias: poly.zBias || 0 });
         }
     }
 
     // Painter's algorithm: draw far-to-near
-    projected.sort((a, b) => a.depth - b.depth);
+    projected.sort((a, b) => (a.depth - b.depth) || (a.zBias - b.zBias));
 
     for (const { sp, color } of projected) {
         ctx.beginPath();
