@@ -64,8 +64,7 @@ function draw() {
     ctx.fillStyle = '#2d8a2e';
     ctx.fillRect(0, 0, W, H);
 
-    // Rotated camera: 45-degree isometric view
-    const VIEW_ANGLE = -Math.PI / 4;
+    // Rotated camera: isometric view (VIEW_ANGLE, Y_SCALE from constants.js)
     const diagFt = Math.hypot(W, H) / PX_PER_FT / 2 + 200;
     const vl = player.x - diagFt, vr = player.x + diagFt;
     const vt = player.y - diagFt, vb = player.y + diagFt;

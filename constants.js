@@ -8,6 +8,12 @@ const PROXIMITY_THRESHOLD = 50;
 const RIGHT_OF_WAY = 170;
 const TWO_PI = Math.PI * 2;
 
+// --- Isometric view ---
+const VIEW_ANGLE = -Math.PI / 4;
+const COS_V = Math.cos(VIEW_ANGLE);
+const SIN_V = Math.sin(VIEW_ANGLE);
+const Y_SCALE = 0.5;
+
 const MAX_SPEED = 150;
 const REVERSE_MAX = 30;
 const ACCEL = 40;

@@ -13,30 +13,12 @@
 <script src="constants.js"></script>
 <script src="buildings.js"></script>
 <script src="lighting.js"></script>
+<script src="render3d.js"></script>
 <script>
 const canvas = document.getElementById('bldg-canvas');
 const ctx = canvas.getContext('2d');
 canvas.width = innerWidth;
 canvas.height = innerHeight;
-
-// Same isometric projection as the driving game
-const VIEW_ANGLE = -Math.PI / 4;
-const COS_V = Math.cos(VIEW_ANGLE);
-const SIN_V = Math.sin(VIEW_ANGLE);
-const Y_SCALE = 0.5;
-
-// Project a 3D world point to 2D screen coordinates.
-// Height (z) goes straight up on screen, independent of the isometric rotation.
-function project(wx, wy, wz, camX, camY) {
-    const dx = (wx - camX) * PX_PER_FT;
-    const dy = (wy - camY) * PX_PER_FT;
-    const rx = dx * COS_V - dy * SIN_V;
-    const ry = dx * SIN_V + dy * COS_V;
-    return [
-        rx + canvas.width / 2,
-        ry * Y_SCALE - wz * PX_PER_FT + canvas.height / 2
-    ];
-}
 
 // Generate a 5x5 grid of houses
 const GRID = 5;
@@ -54,46 +36,9 @@ for (let row = 0; row < GRID; row++) {
     }
 }
 
-// Compute depth for a single poly (used for sorting)
-function polyDepth(poly, ox, oy) {
-    const sp = poly.pts.map(p => project(p.x + ox, p.y + oy, p.z, camX, camY));
-    const avgScreenY = sp.reduce((s, p) => s + p[1], 0) / sp.length;
-    const avgZ = poly.pts.reduce((s, p) => s + p.z, 0) / poly.pts.length;
-    return avgScreenY + 2 * avgZ * PX_PER_FT;
-}
-
-// Project, backface-cull, depth-sort, and draw a batch of polys.
-function projectAndDraw(polys, ox, oy) {
-    const projected = [];
-    for (const poly of polys) {
-        const sp = poly.pts.map(p => project(p.x + ox, p.y + oy, p.z, camX, camY));
-
-        const cross = (sp[1][0] - sp[0][0]) * (sp[2][1] - sp[0][1])
-                    - (sp[1][1] - sp[0][1]) * (sp[2][0] - sp[0][0]);
-        if (cross <= 0) continue;
-
-        const normal = computeNormal(poly.pts);
-        const litColor = applyLighting(poly.color, normal);
-        const avgScreenY = sp.reduce((s, p) => s + p[1], 0) / sp.length;
-        const avgZ = poly.pts.reduce((s, p) => s + p.z, 0) / poly.pts.length;
-        const depth = avgScreenY + 2 * avgZ * PX_PER_FT;
-        projected.push({ sp, color: litColor, depth });
-    }
-
-    projected.sort((a, b) => a.depth - b.depth);
-
-    for (const { sp, color } of projected) {
-        ctx.beginPath();
-        ctx.moveTo(sp[0][0], sp[0][1]);
-        for (let i = 1; i < sp.length; i++) ctx.lineTo(sp[i][0], sp[i][1]);
-        ctx.closePath();
-        ctx.fillStyle = color;
-        ctx.fill();
-        ctx.strokeStyle = 'rgba(0,0,0,0.3)';
-        ctx.lineWidth = 1;
-        ctx.stroke();
-    }
-}
+// Bind camera position into the callbacks for drawDrawableTree
+const pAndD = (polys, ox, oy) => projectAndDraw(polys, ox, oy, camX, camY);
+const pDepth = (poly, ox, oy) => polyDepth(poly, ox, oy, camX, camY);
 
 function render() {
     ctx.fillStyle = '#2d8a2e';
@@ -106,13 +51,8 @@ function render() {
         return ay - by;
     });
 
-    // Draw each building as a depth-first drawable tree.
-    // Each node's own polys draw first, then children sorted by depth,
-    // each drawn completely before the next. This ensures:
-    // - Details (windows/doors) draw after their own prism's walls
-    // - A nearer sibling prism's walls occlude a farther sibling's details
     for (const bldg of sorted) {
-        drawDrawableTree(bldg, bldg.ox, bldg.oy, projectAndDraw, polyDepth);
+        drawDrawableTree(bldg, bldg.ox, bldg.oy, pAndD, pDepth);
     }
 }
 
