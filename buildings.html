@@ -47,7 +47,7 @@ const camY = CELL * (GRID - 1) / 2;
 
 for (let row = 0; row < GRID; row++) {
     for (let col = 0; col < GRID; col++) {
-        const house = generateHouse();
+        const house = generateHouse(Math.PI);
         house.ox = col * CELL;
         house.oy = row * CELL;
         buildings.push(house);

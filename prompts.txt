@@ -120,3 +120,7 @@ Now I want to add a front door to each house.  Can always be on the same side fo
 ---
 
 Yes, sounds good.  Doors can be the same color as roofs for now, randomly 3 to 5 feet in width, 7 to 9 feet height.  Should be on the "main" prism.  Always facing a standard "front" direction on all houses, for now.  We should perhaps block the creation of wing prisms on whichever direction/side this is, to avoid blocking the main door.
+
+---
+
+When we eventually add houses into the driving game (not yet), we'll need to rotate them to match the orientation of the street they're along (we have curved roads even, so this can be any angle).  Rather than performing this rotation every time we draw a frame, does it make sense to do it once when the house is generated?  So the house's polys come pre-rotated?  [Yes, pre-rotating at generation time.]  Ok, let's add that now. Perhaps have generateHouse() take a facing angle argument?  A new rotate helper function, perhaps?  I want to do it now, in part because I can't yet see the doors you've added.  I suspect the north side of the houses face away from me in the rendered view.  So to test this, let's draw all the houses with a 180 degree rotation, see if I can see the doors then

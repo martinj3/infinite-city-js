@@ -212,6 +212,24 @@ function makeHipRoof(ox, oy, oz, w, l, h, lengthwise, houseColor) {
     }
 }
 
+// Rotate all polygon vertices in-place around (cx, cy) in the x/y plane by angle (radians).
+// Uses a Set to avoid rotating shared vertex objects more than once.
+function rotatePolys(polys, angle, cx, cy) {
+    const cos = Math.cos(angle);
+    const sin = Math.sin(angle);
+    const visited = new Set();
+    for (const poly of polys) {
+        for (const p of poly.pts) {
+            if (visited.has(p)) continue;
+            visited.add(p);
+            const dx = p.x - cx;
+            const dy = p.y - cy;
+            p.x = cx + dx * cos - dy * sin;
+            p.y = cy + dx * sin + dy * cos;
+        }
+    }
+}
+
 // Check if two axis-aligned rectangular prisms overlap (interiors intersect).
 // Each prism: { x, y, z, w, l, h }
 // Touching along a face/edge is allowed; only interior overlap is rejected.
@@ -223,8 +241,9 @@ function prismsOverlap(a, b) {
 }
 
 // Generate a random house made of 1-3 rectangular prisms.
+// facingAngle: rotation in radians applied to all geometry (0 = front faces -y).
 // Returns a Drawable: { polys: [ {pts, color}, ... ] }
-function generateHouse() {
+function generateHouse(facingAngle = 0) {
     const color = pickHouseColor();
     const lengthwise = Math.random() < 0.5;
     const useHipRoof = Math.random() < 0.5;
@@ -292,6 +311,11 @@ function generateHouse() {
                 break;
             }
         }
+    }
+
+    // Rotate all geometry around the center of the main prism
+    if (facingAngle !== 0) {
+        rotatePolys(polys, facingAngle, w1 / 2, l1 / 2);
     }
 
     return { polys };
