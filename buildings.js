@@ -66,30 +66,21 @@ function pickHouseColor() {
 // shading/lighting will be applied at draw time.
 // Each face: { pts: [{x,y,z}, ...], color: string }
 function makeRectangularPrism(ox, oy, oz, w, l, h, color, includeTop = true) {
-    const v = [
-        {x: ox,     y: oy,     z: oz},       // 0: bottom-SW
-        {x: ox + w, y: oy,     z: oz},       // 1: bottom-SE
-        {x: ox + w, y: oy + l, z: oz},       // 2: bottom-NE
-        {x: ox,     y: oy + l, z: oz},       // 3: bottom-NW
-        {x: ox,     y: oy,     z: oz + h},   // 4: top-SW
-        {x: ox + w, y: oy,     z: oz + h},   // 5: top-SE
-        {x: ox + w, y: oy + l, z: oz + h},   // 6: top-NE
-        {x: ox,     y: oy + l, z: oz + h},   // 7: top-NW
-    ];
-
+    // Each face gets its own vertex objects (no sharing) so transforms are safe.
+    const p = (x, y, z) => ({x, y, z});
     const faces = [];
     if (includeTop) {
-        faces.push({ pts: [v[4], v[5], v[6], v[7]], color });
+        faces.push({ pts: [p(ox,oy,oz+h), p(ox+w,oy,oz+h), p(ox+w,oy+l,oz+h), p(ox,oy+l,oz+h)], color });
     }
     faces.push(
         // North face (y=oy, facing -y)
-        { pts: [v[0], v[1], v[5], v[4]], color },
+        { pts: [p(ox,oy,oz), p(ox+w,oy,oz), p(ox+w,oy,oz+h), p(ox,oy,oz+h)], color },
         // South face (y=oy+l, facing +y)
-        { pts: [v[2], v[3], v[7], v[6]], color },
+        { pts: [p(ox+w,oy+l,oz), p(ox,oy+l,oz), p(ox,oy+l,oz+h), p(ox+w,oy+l,oz+h)], color },
         // West face (x=ox, facing -x)
-        { pts: [v[3], v[0], v[4], v[7]], color },
+        { pts: [p(ox,oy+l,oz), p(ox,oy,oz), p(ox,oy,oz+h), p(ox,oy+l,oz+h)], color },
         // East face (x=ox+w, facing +x)
-        { pts: [v[1], v[2], v[6], v[5]], color },
+        { pts: [p(ox+w,oy,oz), p(ox+w,oy+l,oz), p(ox+w,oy+l,oz+h), p(ox+w,oy,oz+h)], color },
     );
     return faces;
 }
@@ -101,47 +92,28 @@ const ROOF_COLOR = 'hsl(20, 30%, 35%)';
 // lengthwise: if true, ridge runs along X; if false, ridge runs along Y.
 // houseColor: color for gable-end triangles; roof slopes are brown.
 function makeGableRoof(ox, oy, oz, w, l, h, lengthwise, houseColor) {
+    const p = (x, y, z) => ({x, y, z});
     const topZ = oz + h;
 
     if (lengthwise) {
         // Ridge runs along X axis (width), gable ends on west and east
         const gableH = (0.25 + Math.random() * 0.35) * l;
-        const r0 = {x: ox,     y: oy + l / 2, z: topZ + gableH};
-        const r1 = {x: ox + w, y: oy + l / 2, z: topZ + gableH};
-        const v4 = {x: ox,     y: oy,         z: topZ};
-        const v5 = {x: ox + w, y: oy,         z: topZ};
-        const v6 = {x: ox + w, y: oy + l,     z: topZ};
-        const v7 = {x: ox,     y: oy + l,     z: topZ};
-
+        const ry = oy + l / 2, rz = topZ + gableH;
         return [
-            // North slope (facing -y)
-            { pts: [v4, v5, r1, r0], color: ROOF_COLOR },
-            // South slope (facing +y)
-            { pts: [v6, v7, r0, r1], color: ROOF_COLOR },
-            // West gable end (facing -x)
-            { pts: [v7, v4, r0], color: houseColor },
-            // East gable end (facing +x)
-            { pts: [v5, v6, r1], color: houseColor },
+            { pts: [p(ox,oy,topZ), p(ox+w,oy,topZ), p(ox+w,ry,rz), p(ox,ry,rz)], color: ROOF_COLOR },
+            { pts: [p(ox+w,oy+l,topZ), p(ox,oy+l,topZ), p(ox,ry,rz), p(ox+w,ry,rz)], color: ROOF_COLOR },
+            { pts: [p(ox,oy+l,topZ), p(ox,oy,topZ), p(ox,ry,rz)], color: houseColor },
+            { pts: [p(ox+w,oy,topZ), p(ox+w,oy+l,topZ), p(ox+w,ry,rz)], color: houseColor },
         ];
     } else {
         // Ridge runs along Y axis (length), gable ends on north and south
         const gableH = (0.25 + Math.random() * 0.35) * w;
-        const r0 = {x: ox + w / 2, y: oy,     z: topZ + gableH};
-        const r1 = {x: ox + w / 2, y: oy + l, z: topZ + gableH};
-        const v4 = {x: ox,         y: oy,     z: topZ};
-        const v5 = {x: ox + w,     y: oy,     z: topZ};
-        const v6 = {x: ox + w,     y: oy + l, z: topZ};
-        const v7 = {x: ox,         y: oy + l, z: topZ};
-
+        const rx = ox + w / 2, rz = topZ + gableH;
         return [
-            // West slope (facing -x)
-            { pts: [v7, v4, r0, r1], color: ROOF_COLOR },
-            // East slope (facing +x)
-            { pts: [v5, v6, r1, r0], color: ROOF_COLOR },
-            // South gable end (y=oy, facing -y)
-            { pts: [v4, v5, r0], color: houseColor },
-            // North gable end (y=oy+l, facing +y)
-            { pts: [v6, v7, r1], color: houseColor },
+            { pts: [p(ox,oy+l,topZ), p(ox,oy,topZ), p(rx,oy,rz), p(rx,oy+l,rz)], color: ROOF_COLOR },
+            { pts: [p(ox+w,oy,topZ), p(ox+w,oy+l,topZ), p(rx,oy+l,rz), p(rx,oy,rz)], color: ROOF_COLOR },
+            { pts: [p(ox,oy,topZ), p(ox+w,oy,topZ), p(rx,oy,rz)], color: houseColor },
+            { pts: [p(ox+w,oy+l,topZ), p(ox,oy+l,topZ), p(rx,oy+l,rz)], color: houseColor },
         ];
     }
 }
@@ -151,77 +123,56 @@ function makeGableRoof(ox, oy, oz, w, l, h, lengthwise, houseColor) {
 // so that the hip slope matches the main slope pitch. If the prism is square
 // (or the cross-dimension >= the along-dimension), it becomes a pyramid.
 function makeHipRoof(ox, oy, oz, w, l, h, lengthwise, houseColor) {
+    const p = (x, y, z) => ({x, y, z});
     const topZ = oz + h;
-    const v4 = {x: ox,     y: oy,     z: topZ};
-    const v5 = {x: ox + w, y: oy,     z: topZ};
-    const v6 = {x: ox + w, y: oy + l, z: topZ};
-    const v7 = {x: ox,     y: oy + l, z: topZ};
 
     if (lengthwise) {
-        // Ridge runs along X, cross-dimension is l, inset = l/2
         const roofH = (0.25 + Math.random() * 0.35) * l;
         const inset = l / 2;
+        const ry = oy + l / 2, rz = topZ + roofH;
         if (w <= l) {
-            // Pyramid — ridge collapses to a point
-            const peak = {x: ox + w / 2, y: oy + l / 2, z: topZ + roofH};
+            // Pyramid
             return [
-                { pts: [v4, v5, peak], color: ROOF_COLOR },   // North
-                { pts: [v6, v7, peak], color: ROOF_COLOR },   // South
-                { pts: [v7, v4, peak], color: ROOF_COLOR },   // West
-                { pts: [v5, v6, peak], color: ROOF_COLOR },   // East
+                { pts: [p(ox,oy,topZ), p(ox+w,oy,topZ), p(ox+w/2,ry,rz)], color: ROOF_COLOR },
+                { pts: [p(ox+w,oy+l,topZ), p(ox,oy+l,topZ), p(ox+w/2,ry,rz)], color: ROOF_COLOR },
+                { pts: [p(ox,oy+l,topZ), p(ox,oy,topZ), p(ox+w/2,ry,rz)], color: ROOF_COLOR },
+                { pts: [p(ox+w,oy,topZ), p(ox+w,oy+l,topZ), p(ox+w/2,ry,rz)], color: ROOF_COLOR },
             ];
         }
-        const r0 = {x: ox + inset,     y: oy + l / 2, z: topZ + roofH};
-        const r1 = {x: ox + w - inset, y: oy + l / 2, z: topZ + roofH};
         return [
-            // North slope (facing -y)
-            { pts: [v4, v5, r1, r0], color: ROOF_COLOR },
-            // South slope (facing +y)
-            { pts: [v6, v7, r0, r1], color: ROOF_COLOR },
-            // West hip triangle (facing -x)
-            { pts: [v7, v4, r0], color: ROOF_COLOR },
-            // East hip triangle (facing +x)
-            { pts: [v5, v6, r1], color: ROOF_COLOR },
+            { pts: [p(ox,oy,topZ), p(ox+w,oy,topZ), p(ox+w-inset,ry,rz), p(ox+inset,ry,rz)], color: ROOF_COLOR },
+            { pts: [p(ox+w,oy+l,topZ), p(ox,oy+l,topZ), p(ox+inset,ry,rz), p(ox+w-inset,ry,rz)], color: ROOF_COLOR },
+            { pts: [p(ox,oy+l,topZ), p(ox,oy,topZ), p(ox+inset,ry,rz)], color: ROOF_COLOR },
+            { pts: [p(ox+w,oy,topZ), p(ox+w,oy+l,topZ), p(ox+w-inset,ry,rz)], color: ROOF_COLOR },
         ];
     } else {
-        // Ridge runs along Y, cross-dimension is w, inset = w/2
         const roofH = (0.25 + Math.random() * 0.35) * w;
         const inset = w / 2;
+        const rx = ox + w / 2, rz = topZ + roofH;
         if (l <= w) {
             // Pyramid
-            const peak = {x: ox + w / 2, y: oy + l / 2, z: topZ + roofH};
             return [
-                { pts: [v4, v5, peak], color: ROOF_COLOR },
-                { pts: [v6, v7, peak], color: ROOF_COLOR },
-                { pts: [v7, v4, peak], color: ROOF_COLOR },
-                { pts: [v5, v6, peak], color: ROOF_COLOR },
+                { pts: [p(ox,oy,topZ), p(ox+w,oy,topZ), p(rx,oy+l/2,rz)], color: ROOF_COLOR },
+                { pts: [p(ox+w,oy+l,topZ), p(ox,oy+l,topZ), p(rx,oy+l/2,rz)], color: ROOF_COLOR },
+                { pts: [p(ox,oy+l,topZ), p(ox,oy,topZ), p(rx,oy+l/2,rz)], color: ROOF_COLOR },
+                { pts: [p(ox+w,oy,topZ), p(ox+w,oy+l,topZ), p(rx,oy+l/2,rz)], color: ROOF_COLOR },
             ];
         }
-        const r0 = {x: ox + w / 2, y: oy + inset,     z: topZ + roofH};
-        const r1 = {x: ox + w / 2, y: oy + l - inset, z: topZ + roofH};
         return [
-            // West slope (facing -x)
-            { pts: [v7, v4, r0, r1], color: ROOF_COLOR },
-            // East slope (facing +x)
-            { pts: [v5, v6, r1, r0], color: ROOF_COLOR },
-            // South hip triangle (facing -y)
-            { pts: [v4, v5, r0], color: ROOF_COLOR },
-            // North hip triangle (facing +y)
-            { pts: [v6, v7, r1], color: ROOF_COLOR },
+            { pts: [p(ox,oy+l,topZ), p(ox,oy,topZ), p(rx,oy+inset,rz), p(rx,oy+l-inset,rz)], color: ROOF_COLOR },
+            { pts: [p(ox+w,oy,topZ), p(ox+w,oy+l,topZ), p(rx,oy+l-inset,rz), p(rx,oy+inset,rz)], color: ROOF_COLOR },
+            { pts: [p(ox,oy,topZ), p(ox+w,oy,topZ), p(rx,oy+inset,rz)], color: ROOF_COLOR },
+            { pts: [p(ox+w,oy+l,topZ), p(ox,oy+l,topZ), p(rx,oy+l-inset,rz)], color: ROOF_COLOR },
         ];
     }
 }
 
 // Rotate all polygon vertices in-place around (cx, cy) in the x/y plane by angle (radians).
-// Uses a Set to avoid rotating shared vertex objects more than once.
 function rotatePolys(polys, angle, cx, cy) {
     const cos = Math.cos(angle);
     const sin = Math.sin(angle);
-    const visited = new Set();
     for (const poly of polys) {
         for (const p of poly.pts) {
-            if (visited.has(p)) continue;
-            visited.add(p);
             const dx = p.x - cx;
             const dy = p.y - cy;
             p.x = cx + dx * cos - dy * sin;

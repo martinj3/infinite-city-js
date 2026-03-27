@@ -105,8 +105,8 @@ Key: "x,y" string -> { x, y, ori, roads: { fwd, right, back, left } }
 - Painter's algorithm: sort ascending, draw far-to-near
 - Thin dark outlines on faces (rgba(0,0,0,0.3))
 
-### IMPORTANT: Shared vertex bug (past bug, fixed)
-makeRectangularPrism shares vertex objects across faces. Do NOT mutate poly.pts vertices in-place to offset buildings — use position offsets at projection time instead (store ox/oy on the building object).
+### Vertex strategy
+All geometry functions create independent vertex objects per face (no sharing). This means in-place transforms (like rotatePolys) are safe without deduplication.
 
 ## Road Drawing (drawing.js, layered)
 1. Road surfaces + edge lines (straight: rotated rects; curved: arc bands)
