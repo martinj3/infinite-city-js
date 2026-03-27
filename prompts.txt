@@ -140,3 +140,35 @@ Now, let's add windows. For now they are all a fixed light blue color representi
 ---
 
 When we eventually add houses into the driving game (not yet), we'll need to rotate them to match the orientation of the street they're along (we have curved roads even, so this can be any angle).  Rather than performing this rotation every time we draw a frame, does it make sense to do it once when the house is generated?  So the house's polys come pre-rotated?  [Yes, pre-rotating at generation time.]  Ok, let's add that now. Perhaps have generateHouse() take a facing angle argument?  A new rotate helper function, perhaps?  I want to do it now, in part because I can't yet see the doors you've added.  I suspect the north side of the houses face away from me in the rendered view.  So to test this, let's draw all the houses with a 180 degree rotation, see if I can see the doors then
+
+---
+
+Hmm, something is very wrong with that rotation, particularly with the roof elements.  See RotationBug.PNG  [Fixed: shared vertex objects were being rotated multiple times. Added visited Set to rotatePolys.]
+
+---
+
+[Discussion about shared vertex strategy. Concluded that duplicating vertices is better than sharing — negligible memory cost, eliminates mutation bugs. Indexed vertex buffers considered but rejected as adding complexity for geometry authoring.]
+
+---
+
+Ok, let's switch our existing functions to a duplicated vertex strategy to simplify, and remove the visited set
+
+---
+
+[Discussion about door visibility — only ~40% showing due to depth sort average-Z differences between short door and taller wall. Threshold-based zBias tiebreaker is fragile.]
+
+---
+
+[Discussion about robust depth sorting for details. Proposed Drawable tree with children, breadth-first layer rendering. Then discovered BFS breaks inter-sibling occlusion (windows showing through wings). Switched to depth-first per-child recursive drawing: sort siblings by depth, draw each completely before the next.]
+
+---
+
+[Discussion about Drawable tree design: each Drawable has polys and children. Details (doors, windows) are children of their prism. Future detail-on-detail (doorknob on door) is just another nesting level.]
+
+---
+
+Hmm, there's a problem with window occlusion.  I think the normal vector culling is working fine.  But, wings and prisms don't seem to properly occlude each others windows.  [Fixed by switching from BFS to depth-first recursive drawing of drawable tree.]
+
+---
+
+I'd actually like buildings.html and the driving game (index.html) to share as much of both their projection logic and drawing logic as possible (and sorting logic, and lighting, and all that ideally).  Currently the driving game doesn't do much 3d drawing, but it will soon, once we eventually add houses to it.  So make sure this logic lives in a good, sharable place (if any of it is still inside the buildings.html file itself).  We already have drawing.js I see, maybe some of it can move there.  Or if it makes sense to create some new JS files, feel free to do that.  Whatever is the most sensible way to organize and share it (and not cause regressions)

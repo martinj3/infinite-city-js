@@ -2,18 +2,19 @@ COMPACT CONTEXT — Infinite City JS Driving Game
 ================================================
 
 ## Project
-Multi-file HTML canvas driving game. No external libraries. Player drives a car (red arrowhead) around procedurally generated streets (straight and curved) on a green grass background, rendered in isometric perspective.
+Multi-file HTML canvas driving game. No external libraries. Player drives a car (red arrowhead) around procedurally generated streets (straight and curved) on a green grass background, rendered in isometric perspective. Separate test page (buildings.html) for building generation.
 
 User wants prompts.txt updated each turn with their latest prompt.
 
 ## File Structure
-- `index.html` — minimal HTML shell, loads scripts
-- `constants.js` — all constants, angle/math helpers, slot system, arc math
+- `index.html` — driving game HTML shell, loads: constants.js, streets.js, drawing.js, game.js
+- `constants.js` — all constants, angle/math helpers, slot system, arc math, isometric view constants
 - `streets.js` — map data (nodes/streets), conflict detection, generation logic
-- `drawing.js` — all rendering (isometric camera, roads, intersections, player, HUD)
-- `buildings.js` — building generation (houses), works entirely in feet, no drawing logic
+- `drawing.js` — 2D road rendering (isometric camera, roads, intersections, player, HUD)
+- `buildings.js` — building generation (houses with roofs, doors, windows), drawable tree, rotation helpers
 - `lighting.js` — shared lighting system (light direction, normal computation, HSL shading)
-- `buildings.html` — standalone test page for buildings (5x5 grid, isometric renderer)
+- `render3d.js` — shared 3D isometric rendering (projection, backface culling, depth sorting, drawing)
+- `buildings.html` — standalone test page for buildings (5x5 grid), loads: constants, buildings, lighting, render3d
 - `prompts.txt` — running log of user prompts
 - `compact.txt` — this file
 
@@ -24,11 +25,13 @@ User wants prompts.txt updated each turn with their latest prompt.
 - Curved roads are circular arcs; straight roads connect intersections in any direction
 
 ## Isometric Rendering
-- View is rotated -45° (VIEW_ANGLE = -π/4) with Y-axis compressed by 0.5
-- Camera transform: translate(W/2, H/2) → scale(1, 0.5) → rotate(-π/4) → translate(-player*PX)
-- Culling bounds use screen diagonal / PX_PER_FT to account for rotated viewport
-- For 3D objects (buildings), height (z) goes straight up on screen: screen_y -= wz * PX_PER_FT
-- 3D projection function in buildings.html computes this manually per-vertex
+- View constants in constants.js: VIEW_ANGLE = -π/4, Y_SCALE = 0.5, COS_V, SIN_V
+- 2D roads (drawing.js): canvas transform — translate(W/2,H/2) → scale(1,0.5) → rotate(-π/4) → translate(-player*PX)
+- 3D objects (render3d.js): manual per-vertex projection, height (z) goes straight up on screen
+- project(wx, wy, wz, camX, camY): shared 3D→2D projection function
+- Backface culling via screen-space cross product (skip if cross <= 0)
+- Depth sorting: avgScreenY + 2*avgZ*PX_PER_FT (compensates for height, ensures tops draw after sides)
+- Thin dark outlines on faces (rgba(0,0,0,0.3))
 
 ## Key Constants
 - STREET_WIDTH = 20ft (10ft per lane)
@@ -50,10 +53,19 @@ Key: "x,y" string -> { x, y, ori, roads: { fwd, right, back, left } }
 - curve: null | { cx, cy, r, arcS, arcE, ccw }
 - bounds: cached { mnx, mxx, mny, mxy } for culling
 
-### Drawables (buildings.js)
-{ polys: [ { pts: [{x,y,z}, ...], color: 'hsl(...)' }, ... ] }
+### Drawable Tree (buildings.js)
+{ polys: [{pts, color}, ...], children: [Drawable, ...] }
+- Tree structure: root (no polys) → prism children (walls+roof) → detail grandchildren (door, windows)
 - Each polygon has 3-4 3D points and a single base HSL color string
 - Lighting/shading applied at draw time, not baked into the color
+- All geometry functions create independent vertex objects per face (no sharing), so in-place transforms are safe
+
+### Drawable Tree Rendering
+- drawDrawableTree(drawable, ox, oy, projectAndDrawFn, depthFn): recursive depth-first drawing
+- Each node's own polys are projected, culled, depth-sorted, and drawn first
+- Children are sorted by average depth (far-to-near), each drawn completely before the next
+- This ensures: details draw after their parent walls; nearer siblings occlude farther siblings' details
+- projectAndDrawFn and depthFn are callbacks so different pages can bind their own camera position
 
 ## Direction/Slot System
 - Slots: fwd, right, back, left (relative to intersection orientation)
@@ -78,35 +90,52 @@ Key: "x,y" string -> { x, y, ori, roads: { fwd, right, back, left } }
 - HOUSE_COLORS: weighted palette of 22 realistic American house colors
 - Categories: whites/off-whites (most common), beiges/tans, grays, browns, blues, brick reds, yellows/creams, dark greens (rare), pinks (rare)
 - pickHouseColor(): weighted random selection + small HSL jitter for variety
-- Each house gets a single flat color; shading done at draw time via lighting
+- ROOF_COLOR: fixed brown hsl(20, 30%, 35%) — also used for doors
+- WINDOW_COLOR: light blue hsl(210, 50%, 75%)
 
 ### House Generation
-- generateHouse() → Drawable with 1-3 rectangular prisms
+- generateHouse(facingAngle=0) → Drawable tree with 1-3 rectangular prisms
 - Main prism: 20-40ft wide, 25-45ft long, ~9ft tall
-- Wing prisms: 12-27ft, attached to random side of main prism
-- prismsOverlap(a, b): generic axis-aligned prism overlap check (allows touching, rejects interior overlap)
-- Wings retry up to 8 placements to avoid overlap; skipped if no valid position found
+- Wing prisms: 12-27ft, attached to east/west/south of main prism (north reserved for front door)
+- prismsOverlap(a, b): generic axis-aligned prism overlap check
+- Wings retry up to 8 placements to avoid overlap
 
-### makeRectangularPrism(ox, oy, oz, w, l, h, color)
-- Returns 5 face polygons (skip bottom): top, north, south, west, east
-- All faces get the same base color string
+### Roofs
+- 50/50 gable vs hip roof, chosen once per house
+- Lengthwise orientation (ridge direction) also chosen once per house, applied to all prisms
+- makeGableRoof(): two sloped rectangles (ROOF_COLOR) + two triangular gable ends (house color)
+- makeHipRoof(): four sloped faces (all ROOF_COLOR), ridge inset from ends; becomes pyramid when cross-dimension >= along-dimension
+- Gable/hip height: random 25-60% of cross-dimension
+
+### Doors
+- One front door per house, on north face of main prism (before rotation)
+- Centered horizontally, ROOF_COLOR, 3-5ft wide, 7-9ft tall
+- Tiny epsilon offset (0.05ft) from wall surface
+- Wing prisms blocked from north side to keep door unobstructed
+
+### Windows
+- generatePrismWindows(ox, oy, w, l, exclusions): generates windows on all 4 walls
+- Per-prism random params: window top (7-8ft), height (3-5ft), standard width (3-8ft)
+- 25% chance each window varies from standard width (clamped 3-8ft)
+- 2ft margin from wall edges, 4ft gap between windows
+- Door zone is an exclusion (with 1ft buffer) on the main prism's north wall
+- Correct winding per wall face for backface culling
+
+### Rotation
+- rotatePolys(polys, angle, cx, cy): rotates vertex x/y in-place around center point
+- rotateDrawable(drawable, angle, cx, cy): recursive rotation of entire drawable tree
+- generateHouse(facingAngle) rotates all geometry around main prism center after construction
+- Buildings test page currently uses Math.PI to face doors toward camera
+
+### makeRectangularPrism(ox, oy, oz, w, l, h, color, includeTop=true)
+- Returns 4-5 face polygons (skip bottom; top optional for houses with roofs)
+- Independent vertex objects per face (no sharing)
 - Vertex winding produces correct outward normals for backface culling and lighting
 
 ## Lighting System (lighting.js)
 - LIGHT_DIR = normalize(-2, 1, 3) — sun from bottom-left of screen, above
 - computeNormal(pts): unit outward normal from polygon vertices via cross product
 - applyLighting(hslStr, normal): adjusts HSL lightness by dot(normal, lightDir) * 12, clamped [10%, 95%]
-- Produces three distinct brightness levels on visible iso faces: top brightest, left wall medium, right wall darkest
-
-## 3D Rendering (buildings.html)
-- project(wx, wy, wz, camX, camY): manual isometric projection matching the driving game's canvas transform, with height going straight up on screen
-- Backface culling via screen-space cross product (skip if cross <= 0)
-- Depth sorting: avgScreenY + 2*avgZ*PX_PER_FT (compensates for height in screen_y, ensures tops draw after sides)
-- Painter's algorithm: sort ascending, draw far-to-near
-- Thin dark outlines on faces (rgba(0,0,0,0.3))
-
-### Vertex strategy
-All geometry functions create independent vertex objects per face (no sharing). This means in-place transforms (like rotatePolys) are safe without deduplication.
 
 ## Road Drawing (drawing.js, layered)
 1. Road surfaces + edge lines (straight: rotated rects; curved: arc bands)
@@ -125,11 +154,12 @@ All geometry functions create independent vertex objects per face (no sharing). 
 - Grid closure: false directions reset to null when new street connects to fully-resolved node
 - Generation is proximity-driven only, never cascading
 - Angle matching: findSlot enforces 90° multiples with ANGLE_TOL tolerance
-- Shared vertices: never mutate polygon vertex objects; offset at projection time
+- Vertex duplication: all geometry creates independent vertex objects per face (no sharing), so in-place transforms like rotatePolys are safe without deduplication
+- Depth sorting for coplanar details: solved via drawable tree (details as children, depth-first recursive rendering), NOT via zBias thresholds which proved fragile
+- BFS layer rendering breaks inter-sibling occlusion; depth-first per-child is correct
 
 ## Future Plans (not yet implemented)
 - Place buildings along streets in the driving game (within 170ft right-of-way)
-- Doors, windows, roofs on houses
 - Road collision / edge bouncing
 - World persistence
 - Large-cell spatial partitioning for performance
