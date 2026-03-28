@@ -1,11 +1,11 @@
 // --- Constants ---
 const STREET_WIDTH = 20;
 const HALF_STREET = STREET_WIDTH / 2;
-const DEFAULT_BLOCK_LEN = 400;
+const DEFAULT_BLOCK_LEN = 500;
 const PX_PER_FT = 2;
 const GENERATE_DIST = 30;
 const PROXIMITY_THRESHOLD = 50;
-const RIGHT_OF_WAY = 170;
+const RIGHT_OF_WAY = 150;
 const TWO_PI = Math.PI * 2;
 
 // --- Isometric view ---

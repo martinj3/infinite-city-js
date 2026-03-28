@@ -20,9 +20,9 @@ const HOUSE_COLORS = [
     [8,  200, 8,  72],   // light gray
     [6,  220, 6,  45],   // charcoal gray
     // Browns (fairly common)
-    [8,  25,  35, 40],   // chocolate brown
-    [7,  30,  30, 50],   // warm brown
-    [6,  20,  40, 35],   // dark brown
+    [6,  25,  35, 40],   // chocolate brown
+    [5,  30,  30, 50],   // warm brown
+    [4,  20,  40, 35],   // dark brown
     // Blues (fairly common)
     [6,  210, 30, 55],   // slate blue
     [5,  205, 40, 65],   // light blue
@@ -98,7 +98,7 @@ function makeGableRoof(ox, oy, oz, w, l, h, lengthwise, houseColor) {
 
     if (lengthwise) {
         // Ridge runs along X axis (width), gable ends on west and east
-        const gableH = (0.25 + Math.random() * 0.35) * l;
+        const gableH = (0.2 + Math.random() * 0.2) * l;
         const ry = oy + l / 2, rz = topZ + gableH;
         return [
             { pts: [p(ox,oy,topZ), p(ox+w,oy,topZ), p(ox+w,ry,rz), p(ox,ry,rz)], color: ROOF_COLOR },
@@ -108,7 +108,7 @@ function makeGableRoof(ox, oy, oz, w, l, h, lengthwise, houseColor) {
         ];
     } else {
         // Ridge runs along Y axis (length), gable ends on north and south
-        const gableH = (0.25 + Math.random() * 0.35) * w;
+        const gableH = (0.2 + Math.random() * 0.2) * w;
         const rx = ox + w / 2, rz = topZ + gableH;
         return [
             { pts: [p(ox,oy+l,topZ), p(ox,oy,topZ), p(rx,oy,rz), p(rx,oy+l,rz)], color: ROOF_COLOR },
@@ -128,7 +128,7 @@ function makeHipRoof(ox, oy, oz, w, l, h, lengthwise, houseColor) {
     const topZ = oz + h;
 
     if (lengthwise) {
-        const roofH = (0.25 + Math.random() * 0.35) * l;
+        const roofH = (0.25 + Math.random() * 0.25) * l;
         const inset = l / 2;
         const ry = oy + l / 2, rz = topZ + roofH;
         if (w <= l) {
@@ -147,7 +147,7 @@ function makeHipRoof(ox, oy, oz, w, l, h, lengthwise, houseColor) {
             { pts: [p(ox+w,oy,topZ), p(ox+w,oy+l,topZ), p(ox+w-inset,ry,rz)], color: ROOF_COLOR },
         ];
     } else {
-        const roofH = (0.25 + Math.random() * 0.35) * w;
+        const roofH = (0.25 + Math.random() * 0.25) * w;
         const inset = w / 2;
         const rx = ox + w / 2, rz = topZ + roofH;
         if (l <= w) {

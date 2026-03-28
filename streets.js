@@ -18,7 +18,7 @@ function addNode(x, y, ori) {
 }
 
 function blockLen() {
-    return Math.random() < 0.2 ? Math.round(200 + Math.random() * 400) : DEFAULT_BLOCK_LEN;
+    return Math.random() < 0.2 ? Math.round(200 + Math.random() * 500) : DEFAULT_BLOCK_LEN;
 }
 
 function pushStreet(x1, y1, x2, y2, curve) {

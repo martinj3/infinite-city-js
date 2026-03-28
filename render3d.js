@@ -51,8 +51,8 @@ function projectAndDraw(polys, ox, oy, camX, camY) {
         ctx.closePath();
         ctx.fillStyle = color;
         ctx.fill();
-        ctx.strokeStyle = 'rgba(0,0,0,0.3)';
-        ctx.lineWidth = 1;
-        ctx.stroke();
+        //ctx.strokeStyle = 'rgba(0,0,0,0.3)';
+        //ctx.lineWidth = 1;
+        //ctx.stroke();
     }
 }

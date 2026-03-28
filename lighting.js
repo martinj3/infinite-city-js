@@ -18,7 +18,7 @@ function computeNormal(pts) {
 }
 
 // Adjust an HSL color string based on how much the face normal aligns with the light.
-// Returns a new HSL string. Lightness is shifted by up to ±12%, clamped to [10, 95].
+// Returns a new HSL string. Lightness is shifted by up to ±18%, clamped to [10, 95].
 function applyLighting(hslStr, normal) {
     const m = hslStr.match(/hsl\(\s*(-?[\d.]+),\s*([\d.]+)%,\s*([\d.]+)%\s*\)/);
     if (!m) return hslStr;
@@ -27,7 +27,7 @@ function applyLighting(hslStr, normal) {
     const l = parseFloat(m[3]);
 
     const dot = normal.x * LIGHT_DIR[0] + normal.y * LIGHT_DIR[1] + normal.z * LIGHT_DIR[2];
-    const newL = Math.max(10, Math.min(95, l + dot * 12));
+    const newL = Math.max(10, Math.min(95, l + dot * 18));
 
     return `hsl(${Math.round(h)}, ${Math.round(s)}%, ${Math.round(newL)}%)`;
 }
