@@ -1,6 +1,8 @@
 // --- Constants ---
-const STREET_WIDTH = 20;
-const HALF_STREET = STREET_WIDTH / 2;
+const MIN_STREET_WIDTH = 18;
+const MAX_STREET_WIDTH = 24;
+const INTERSECTION_SIZE = MAX_STREET_WIDTH; // fixed size to accommodate widest streets
+const HALF_INTERSECTION = INTERSECTION_SIZE / 2;
 const DEFAULT_BLOCK_LEN = 500;
 const PX_PER_FT = 2;
 const GENERATE_DIST = 30;
@@ -25,7 +27,7 @@ const CAR_WIDTH = 7;
 
 const CURVE_PROB = 0.4;
 const CURVE_ANGLES = [30, 45, 60, 90].map(d => d * Math.PI / 180);
-const CURVE_RADII = [DEFAULT_BLOCK_LEN, DEFAULT_BLOCK_LEN * 2];
+const CURVE_RADII = [DEFAULT_BLOCK_LEN, DEFAULT_BLOCK_LEN * 1.5];
 const ANGLE_TOL = 0.02; // ~1 degree
 
 // --- Angle helpers ---

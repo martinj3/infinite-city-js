@@ -172,3 +172,15 @@ Hmm, there's a problem with window occlusion.  I think the normal vector culling
 ---
 
 I'd actually like buildings.html and the driving game (index.html) to share as much of both their projection logic and drawing logic as possible (and sorting logic, and lighting, and all that ideally).  Currently the driving game doesn't do much 3d drawing, but it will soon, once we eventually add houses to it.  So make sure this logic lives in a good, sharable place (if any of it is still inside the buildings.html file itself).  We already have drawing.js I see, maybe some of it can move there.  Or if it makes sense to create some new JS files, feel free to do that.  Whatever is the most sensible way to organize and share it (and not cause regressions)
+
+---
+
+Read compact.txt and/or prompts.txt to get some context. Now we want to let streets have some properties that can vary.  Primarily the street width, which was previously locked at 20ft for all streets.  It should now randomly vary between 18ft and 24ft.  We still want to keep a standard intersection size, so that streets can still easily, naturally form an even grid pattern, even if the streets widths vary, they will still line up.  So, increase intersection size to a fixed size to accomodate 24ft wide streets in all cases (all intersections are the same size.  Street's colors should now also be allowed to vary. Generally always some shade of grey, but let's apply some random shading to that base grey color.  A third new street property it has the dashed yellow lines in the center (70% have the yellow lines).  These new "street properties" should usually remain unchanged when going straight through an intersection, but with a 20% chance to re-roll all of them (either all are re-randomized, or all remain the same).  However, the left and right side streets each have a 40% chance of re-roll (60% chance to copy the properties of the street the user came from when entering the new intersection)
+
+---
+
+New intersections should generally maintain the color of the street the user came from when entering the new intersection, that way it will at least match one of the streets attached to it, and likely more.  I guess that means intersections get a color property too
+
+---
+
+Ok, now in addition to the dashed yellow lines in the center, I'd like to add white lines at the edges (these aren't dashed).  They should be set 1 foot in from the edge of the street.  Eg, an 18ft wide street would have its two white lines 16ft apart.  You can only have white lines if you have the existing yellow centerline.  If a street has the yellow line, then it has a 70% chance to also have the white lines.  None of the lines are drawn in intersections, as in real life.

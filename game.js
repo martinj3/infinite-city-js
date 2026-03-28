@@ -15,11 +15,14 @@ const player = { x: 200, y: 0, angle: 0, speed: 0 };
 
 // --- Init ---
 function init() {
+    const props = generateStreetProps();
     const a = addNode(0, 0, 0);   // orientation = east
     const b = addNode(400, 0, 0);
     a.roads.fwd = true;  a.roads.back = false;
     b.roads.back = true;
-    pushStreet(0, 0, 400, 0, null);
+    a.color = props.color;
+    b.color = props.color;
+    pushStreet(0, 0, 400, 0, null, props);
 }
 
 // --- Update ---
