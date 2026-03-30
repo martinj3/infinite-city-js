@@ -37,9 +37,9 @@ const MAX_TURN_RATE = 3;
 const CAR_LENGTH = 12;
 const CAR_WIDTH = 7;
 
-const CURVE_PROB = 0.4;
+const CURVE_PROB = 0.25;
 const CURVE_ANGLES = [30, 45, 60, 90].map(d => d * Math.PI / 180);
-const CURVE_RADII = [DEFAULT_BLOCK_LEN, DEFAULT_BLOCK_LEN * 1.5];
+const CURVE_RADII = [DEFAULT_BLOCK_LEN];
 const ANGLE_TOL = 0.02; // ~1 degree
 
 // --- Angle helpers ---

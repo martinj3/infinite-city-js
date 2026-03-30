@@ -18,7 +18,7 @@ function addNode(x, y, ori) {
 }
 
 function blockLen() {
-    return Math.random() < 0.2 ? Math.round(200 + Math.random() * 500) : DEFAULT_BLOCK_LEN;
+    return Math.random() < 0.15 ? Math.round(200 + Math.random() * 500) : DEFAULT_BLOCK_LEN;
 }
 
 // --- Street properties ---
@@ -36,7 +36,7 @@ function generateStreetProps() {
         width: Math.round(MIN_STREET_WIDTH + Math.random() * (MAX_STREET_WIDTH - MIN_STREET_WIDTH)),
         color: randomStreetColor(),
         hasYellowLines,
-        hasWhiteLines: hasYellowLines && Math.random() < 0.7
+        hasWhiteLines: hasYellowLines && Math.random() < 0.6
     };
 }
 
@@ -44,8 +44,10 @@ function propagateProps(sourceProps, slot) {
     // fwd: 20% re-roll, left/right: 40% re-roll
     const rerollChance = slot === 'fwd' ? 0.2 : 0.4;
     if (!sourceProps || Math.random() < rerollChance) return generateStreetProps();
-    return { width: sourceProps.width, color: sourceProps.color,
-             hasYellowLines: sourceProps.hasYellowLines, hasWhiteLines: sourceProps.hasWhiteLines };
+    return {
+        width: sourceProps.width, color: sourceProps.color,
+        hasYellowLines: sourceProps.hasYellowLines, hasWhiteLines: sourceProps.hasWhiteLines
+    };
 }
 
 function findSourceStreet(node) {
@@ -65,8 +67,10 @@ function pushStreet(x1, y1, x2, y2, curve, props) {
     const s = { x1, y1, x2, y2, curve, props };
     if (curve) {
         const b = arcBounds(curve);
-        s.bounds = { mnx: b.mnx - hw, mxx: b.mxx + hw,
-                     mny: b.mny - hw, mxy: b.mxy + hw };
+        s.bounds = {
+            mnx: b.mnx - hw, mxx: b.mxx + hw,
+            mny: b.mny - hw, mxy: b.mxy + hw
+        };
     } else {
         s.bounds = {
             mnx: Math.min(x1, x2) - hw, mxx: Math.max(x1, x2) + hw,
@@ -84,16 +88,16 @@ function ptInRotRect(px, py, cx, cy, hl, hw, angle) {
 }
 
 function segsCross(ax, ay, bx, by, cx, cy, dx, dy) {
-    const d1 = (dx-cx)*(ay-cy) - (dy-cy)*(ax-cx);
-    const d2 = (dx-cx)*(by-cy) - (dy-cy)*(bx-cx);
-    const d3 = (bx-ax)*(cy-ay) - (by-ay)*(cx-ax);
-    const d4 = (bx-ax)*(dy-ay) - (by-ay)*(dx-ax);
+    const d1 = (dx - cx) * (ay - cy) - (dy - cy) * (ax - cx);
+    const d2 = (dx - cx) * (by - cy) - (dy - cy) * (bx - cx);
+    const d3 = (bx - ax) * (cy - ay) - (by - ay) * (cx - ax);
+    const d4 = (bx - ax) * (dy - ay) - (by - ay) * (dx - ax);
     if (((d1 > 0 && d2 < 0) || (d1 < 0 && d2 > 0)) &&
         ((d3 > 0 && d4 < 0) || (d3 < 0 && d4 > 0))) {
-        const den = (bx-ax)*(dy-cy) - (by-ay)*(dx-cx);
+        const den = (bx - ax) * (dy - cy) - (by - ay) * (dx - cx);
         if (Math.abs(den) < 1e-10) return null;
-        const t = ((cx-ax)*(dy-cy) - (cy-ay)*(dx-cx)) / den;
-        return { x: ax + t * (bx-ax), y: ay + t * (by-ay) };
+        const t = ((cx - ax) * (dy - cy) - (cy - ay) * (dx - cx)) / den;
+        return { x: ax + t * (bx - ax), y: ay + t * (by - ay) };
     }
     return null;
 }
@@ -189,7 +193,7 @@ function resolveNode(node) {
 
     for (const slot of GEN_SLOTS) {
         if (node.roads[slot] !== null) continue;
-        const prob = slot === 'fwd' ? 0.8 : 0.6;
+        const prob = slot === 'fwd' ? 0.87 : 0.8;
         if (Math.random() >= prob) { node.roads[slot] = false; continue; }
 
         const props = propagateProps(sourceProps, slot);
