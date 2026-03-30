@@ -1,5 +1,5 @@
 // --- 3D isometric rendering utilities ---
-// Requires: constants.js (PX_PER_FT, COS_V, SIN_V, Y_SCALE), lighting.js (computeNormal, applyLighting)
+// Requires: constants.js (PX_PER_FT, getCosV, getSinV, Y_SCALE), lighting.js (computeNormal, applyLighting)
 // Requires globals: canvas, ctx
 
 // Project a 3D world point to 2D screen coordinates.
@@ -7,8 +7,9 @@
 function project(wx, wy, wz, camX, camY) {
     const dx = (wx - camX) * PX_PER_FT;
     const dy = (wy - camY) * PX_PER_FT;
-    const rx = dx * COS_V - dy * SIN_V;
-    const ry = dx * SIN_V + dy * COS_V;
+    const cosV = getCosV(), sinV = getSinV();
+    const rx = dx * cosV - dy * sinV;
+    const ry = dx * sinV + dy * cosV;
     return [
         rx + canvas.width / 2,
         ry * Y_SCALE - wz * PX_PER_FT + canvas.height / 2

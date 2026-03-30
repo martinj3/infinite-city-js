@@ -4,17 +4,29 @@ const MAX_STREET_WIDTH = 24;
 const INTERSECTION_SIZE = MAX_STREET_WIDTH; // fixed size to accommodate widest streets
 const HALF_INTERSECTION = INTERSECTION_SIZE / 2;
 const DEFAULT_BLOCK_LEN = 500;
-const PX_PER_FT = 2;
+let PX_PER_FT = 2;
+const PX_PER_FT_DEFAULT = 2;
+const PX_PER_FT_MIN = 0.1;
+const PX_PER_FT_MAX = 20;
+const ZOOM_SPEED = 1.5; // per second (multiplier) for held keys
+const ZOOM_WHEEL = 1.1; // per wheel tick
 const GENERATE_DIST = 30;
 const PROXIMITY_THRESHOLD = 50;
 const RIGHT_OF_WAY = 150;
 const TWO_PI = Math.PI * 2;
 
 // --- Isometric view ---
-const VIEW_ANGLE = -Math.PI / 4;
-const COS_V = Math.cos(VIEW_ANGLE);
-const SIN_V = Math.sin(VIEW_ANGLE);
-const Y_SCALE = 0.5;
+let VIEW_ANGLE = -Math.PI / 4;
+let Y_SCALE = 0.5;
+const Y_SCALE_DEFAULT = 0.5;
+const Y_SCALE_MIN = 0.25;
+const Y_SCALE_MAX = 0.75;
+const TILT_SPEED = 0.4; // per second when holding R/F
+const ROTATE_SPEED = 1.2; // radians per second when holding Q/E
+
+// Live-computed from current VIEW_ANGLE (changes when user rotates)
+function getCosV() { return Math.cos(VIEW_ANGLE); }
+function getSinV() { return Math.sin(VIEW_ANGLE); }
 
 const MAX_SPEED = 150;
 const REVERSE_MAX = 30;

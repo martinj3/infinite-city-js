@@ -9,6 +9,11 @@ addEventListener('resize', resize);
 const keys = {};
 addEventListener('keydown', e => { if (e.key.startsWith('Arrow')) e.preventDefault(); keys[e.key] = true; });
 addEventListener('keyup', e => { keys[e.key] = false; });
+addEventListener('wheel', e => {
+    e.preventDefault();
+    const factor = e.deltaY < 0 ? ZOOM_WHEEL : 1 / ZOOM_WHEEL;
+    PX_PER_FT = Math.max(PX_PER_FT_MIN, Math.min(PX_PER_FT_MAX, PX_PER_FT * factor));
+}, { passive: false });
 
 // --- Player ---
 const player = { x: 200, y: 0, angle: 0, speed: 0 };
@@ -44,6 +49,17 @@ function update(dt) {
 
     player.x += Math.cos(player.angle) * player.speed * dt;
     player.y += Math.sin(player.angle) * player.speed * dt;
+
+    if (keys['='] || keys['+']) PX_PER_FT = Math.min(PX_PER_FT_MAX, PX_PER_FT * Math.pow(ZOOM_SPEED, dt));
+    if (keys['-'] || keys['_']) PX_PER_FT = Math.max(PX_PER_FT_MIN, PX_PER_FT / Math.pow(ZOOM_SPEED, dt));
+
+    // View rotation (Q/E keys)
+    if (keys['q'] || keys['Q']) VIEW_ANGLE -= ROTATE_SPEED * dt;
+    if (keys['e'] || keys['E']) VIEW_ANGLE += ROTATE_SPEED * dt;
+
+    // View tilt (R/F keys)
+    if (keys['r'] || keys['R']) Y_SCALE = Math.min(Y_SCALE_MAX, Y_SCALE + TILT_SPEED * dt);
+    if (keys['f'] || keys['F']) Y_SCALE = Math.max(Y_SCALE_MIN, Y_SCALE - TILT_SPEED * dt);
 
     generate(player.x, player.y);
 }

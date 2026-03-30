@@ -184,3 +184,23 @@ New intersections should generally maintain the color of the street the user cam
 ---
 
 Ok, now in addition to the dashed yellow lines in the center, I'd like to add white lines at the edges (these aren't dashed).  They should be set 1 foot in from the edge of the street.  Eg, an 18ft wide street would have its two white lines 16ft apart.  You can only have white lines if you have the existing yellow centerline.  If a street has the yellow line, then it has a 70% chance to also have the white lines.  None of the lines are drawn in intersections, as in real life.
+
+---
+
+Read compact.txt and prompts.txt to get some context.  Modify buildings.html to add scrolling around using the arrow keys.
+
+---
+
+Cool, now can we add zooming to both buildings.html and also to index.html (hopefully sharing as much drawing code between the two as possible).  Eg, make the pixels-per-foot or feet-per-pixel thing adjustable.  Use the plus and minus keys on the keyboard
+
+---
+
+Ok cool, but not zooming in increments, make it smooth when I hold the buttons.  Also, expand the min/max zoom range, i want to be able to zoom more.  Also, can it use the mouse wheel too?
+
+---
+
+Read prompts.txt and compact.txt to get some context as needed.  In both the driving game (index.html) and buildings.html, add the ability to rotate the view.  Currently it's always rotate by a fixed 45 degrees, I believe, like most isometric RPGs.  Hopefully it's as simple as making that 45 degree constant variable, and tied to some keypresses?  Ideally smoothly rotating as you hold the key
+
+---
+
+Ok, I think we also have some kind of camera tilt, a scaling or compression of one axis or another, as is standard for many isometric RPGs, I think?  Can we also make this "tilt" adjustable, a bit.  Make it default to whatever value it uses now, but set some keypresses to adjust it (within a fairly narrow range, I think things start to look weird otherwise)

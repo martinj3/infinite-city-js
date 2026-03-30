@@ -97,7 +97,7 @@ function draw() {
 
     ctx.save();
     ctx.translate(W / 2, H / 2);
-    ctx.scale(1, 0.5);
+    ctx.scale(1, Y_SCALE);
     ctx.rotate(VIEW_ANGLE);
     ctx.translate(-player.x * PX_PER_FT, -player.y * PX_PER_FT);
 
@@ -169,9 +169,9 @@ function draw() {
     if (instructionAlpha > 0) {
         ctx.globalAlpha = instructionAlpha;
         ctx.fillStyle = 'rgba(0,0,0,0.6)';
-        ctx.fillRect(W / 2 - 130, H - 80, 260, 50);
+        ctx.fillRect(W / 2 - 200, H - 80, 400, 50);
         ctx.fillStyle = '#fff'; ctx.font = '14px monospace'; ctx.textAlign = 'center';
-        ctx.fillText('Arrow keys to drive', W / 2, H - 50);
+        ctx.fillText('Arrows: drive  Q/E: rotate  R/F: tilt', W / 2, H - 50);
         ctx.textAlign = 'left'; ctx.globalAlpha = 1;
     }
 }

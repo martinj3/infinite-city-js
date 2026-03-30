@@ -25,10 +25,12 @@ User wants prompts.txt updated each turn with their latest prompt.
 - Curved roads are circular arcs; straight roads connect intersections in any direction
 
 ## Isometric Rendering
-- View constants in constants.js: VIEW_ANGLE = -π/4, Y_SCALE = 0.5, COS_V, SIN_V
-- 2D roads (drawing.js): canvas transform — translate(W/2,H/2) → scale(1,0.5) → rotate(-π/4) → translate(-player*PX)
+- View constants in constants.js: VIEW_ANGLE = -π/4 (mutable), Y_SCALE = 0.5 (mutable), ROTATE_SPEED = 1.2 rad/s, TILT_SPEED = 0.4/s
+- COS_V/SIN_V replaced with getCosV()/getSinV() functions (recomputed each frame from current VIEW_ANGLE)
+- Q/E keys smoothly rotate the view; R/F keys smoothly adjust tilt (Y_SCALE clamped to 0.25–0.75)
+- Both controls work in index.html and buildings.html
+- 2D roads (drawing.js): canvas transform — translate(W/2,H/2) → scale(1,Y_SCALE) → rotate(VIEW_ANGLE) → translate(-player*PX)
 - 3D objects (render3d.js): manual per-vertex projection, height (z) goes straight up on screen
-- project(wx, wy, wz, camX, camY): shared 3D→2D projection function
 - Backface culling via screen-space cross product (skip if cross <= 0)
 - Depth sorting: avgScreenY + 2*avgZ*PX_PER_FT (compensates for height, ensures tops draw after sides)
 - Thin dark outlines on faces (rgba(0,0,0,0.3))
