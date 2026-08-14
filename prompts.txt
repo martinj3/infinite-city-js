@@ -1,3 +1,5 @@
+For this project, infinite-city-js, please add any prompts I send you to this text file, prompts.txt
+
 Using HTML canvas and no external libraries, create a driving game, where I can drive a car around using the arrow keys. Up arrow to accelerate down arrow to break and turn left and right. The car can be represented by a simple triangular arrow for now. The background should be green representing grass, with gray streets.
 
 The street app should be randomly generated as I drive around. Initially only one street/block is present, but when I drive off either end of that street an intersection is created. There's an 80% chance that if I keep driving straight, the road continues on straight (so 20% chance the street ends at that intersection).

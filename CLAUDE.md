@@ -1,0 +1,1 @@
+For this project, infinite-city-js, please add any prompts I send you to prompts.txt
