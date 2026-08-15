@@ -11,6 +11,7 @@
 <body>
 <canvas id="bldg-canvas"></canvas>
 <script src="constants.js"></script>
+<script src="drawUtils.js"></script>
 <script src="buildings.js"></script>
 <script src="lighting.js"></script>
 <script src="render3d.js"></script>
@@ -20,9 +21,12 @@ const ctx = canvas.getContext('2d');
 canvas.width = innerWidth;
 canvas.height = innerHeight;
 
-// Generate a 5x5 grid of houses
+// Generate a grid of houses, one per lot
 const GRID = 11;
-const CELL = 80; // feet between building centers
+const LOT_WIDTH = 70;   // feet along the street
+const LOT_DEPTH = 70;   // feet away from the street
+const SETBACK = 20;     // feet from the street edge of the lot to the house
+const CELL = 80;        // feet between lot origins (leaves a gap between lots)
 const buildings = [];
 let camX = CELL * (GRID - 1) / 2;
 let camY = CELL * (GRID - 1) / 2;
@@ -39,7 +43,7 @@ addEventListener('wheel', e => {
 
 for (let row = 0; row < GRID; row++) {
     for (let col = 0; col < GRID; col++) {
-        const house = generateHouse(Math.PI);
+        const house = generateHouse(Math.PI, LOT_WIDTH, LOT_DEPTH, SETBACK);
         house.ox = col * CELL;
         house.oy = row * CELL;
         buildings.push(house);

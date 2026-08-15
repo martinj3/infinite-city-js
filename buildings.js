@@ -61,30 +61,6 @@ function pickHouseColor() {
     return hsl(last[1], last[2], last[3]);
 }
 
-// Creates a rectangular prism at position (ox, oy, oz) with dimensions w x l x h.
-// color is a single CSS color string. All faces get the same color;
-// shading/lighting will be applied at draw time.
-// Each face: { pts: [{x,y,z}, ...], color: string }
-function makeRectangularPrism(ox, oy, oz, w, l, h, color, includeTop = true) {
-    // Each face gets its own vertex objects (no sharing) so transforms are safe.
-    const p = (x, y, z) => ({x, y, z});
-    const faces = [];
-    if (includeTop) {
-        faces.push({ pts: [p(ox,oy,oz+h), p(ox+w,oy,oz+h), p(ox+w,oy+l,oz+h), p(ox,oy+l,oz+h)], color });
-    }
-    faces.push(
-        // North face (y=oy, facing -y)
-        { pts: [p(ox,oy,oz), p(ox+w,oy,oz), p(ox+w,oy,oz+h), p(ox,oy,oz+h)], color },
-        // South face (y=oy+l, facing +y)
-        { pts: [p(ox+w,oy+l,oz), p(ox,oy+l,oz), p(ox,oy+l,oz+h), p(ox+w,oy+l,oz+h)], color },
-        // West face (x=ox, facing -x)
-        { pts: [p(ox,oy+l,oz), p(ox,oy,oz), p(ox,oy,oz+h), p(ox,oy+l,oz+h)], color },
-        // East face (x=ox+w, facing +x)
-        { pts: [p(ox+w,oy,oz), p(ox+w,oy+l,oz), p(ox+w,oy+l,oz+h), p(ox+w,oy,oz+h)], color },
-    );
-    return faces;
-}
-
 const ROOF_COLOR = 'hsl(20, 30%, 35%)';
 const WINDOW_COLOR = 'hsl(210, 50%, 75%)';
 
@@ -168,58 +144,6 @@ function makeHipRoof(ox, oy, oz, w, l, h, lengthwise, houseColor) {
     }
 }
 
-// Rotate all polygon vertices in-place around (cx, cy) in the x/y plane by angle (radians).
-function rotatePolys(polys, angle, cx, cy) {
-    const cos = Math.cos(angle);
-    const sin = Math.sin(angle);
-    for (const poly of polys) {
-        for (const p of poly.pts) {
-            const dx = p.x - cx;
-            const dy = p.y - cy;
-            p.x = cx + dx * cos - dy * sin;
-            p.y = cy + dx * sin + dy * cos;
-        }
-    }
-}
-
-// Recursively rotate all polys in a drawable tree.
-function rotateDrawable(drawable, angle, cx, cy) {
-    rotatePolys(drawable.polys, angle, cx, cy);
-    for (const child of drawable.children) {
-        rotateDrawable(child, angle, cx, cy);
-    }
-}
-
-// Draw a drawable tree recursively: own polys first, then children sorted
-// by depth (far-to-near), each drawn completely before the next.
-// projectAndDrawFn(polys, ox, oy): renderer-provided function to project,
-// backface-cull, depth-sort, and draw a batch of polys.
-// depthFn(poly, ox, oy): renderer-provided function returning a poly's depth.
-function drawDrawableTree(drawable, ox, oy, projectAndDrawFn, depthFn) {
-    projectAndDrawFn(drawable.polys, ox, oy);
-
-    if (drawable.children.length > 0) {
-        // Sort children by average depth of their own polys (far-to-near)
-        const sorted = drawable.children.slice().sort((a, b) => {
-            const da = avgDrawableDepth(a, ox, oy, depthFn);
-            const db = avgDrawableDepth(b, ox, oy, depthFn);
-            return da - db;
-        });
-        for (const child of sorted) {
-            drawDrawableTree(child, ox, oy, projectAndDrawFn, depthFn);
-        }
-    }
-}
-
-function avgDrawableDepth(drawable, ox, oy, depthFn) {
-    if (drawable.polys.length === 0) return -Infinity;
-    let sum = 0;
-    for (const poly of drawable.polys) {
-        sum += depthFn(poly, ox, oy);
-    }
-    return sum / drawable.polys.length;
-}
-
 // Generate window polys for all 4 walls of a prism.
 // exclusions: per-wall array of {start, end} zones to avoid (e.g. door).
 // Returns array of polygon objects.
@@ -267,22 +191,35 @@ function generatePrismWindows(ox, oy, w, l, exclusions) {
     return polys;
 }
 
-// Check if two axis-aligned rectangular prisms overlap (interiors intersect).
-// Each prism: { x, y, z, w, l, h }
-// Touching along a face/edge is allowed; only interior overlap is rejected.
-function prismsOverlap(a, b) {
-    const eps = 0.1;
-    return a.x < b.x + b.w - eps && b.x < a.x + a.w - eps &&
-           a.y < b.y + b.l - eps && b.y < a.y + a.l - eps &&
-           a.z < b.z + b.h - eps && b.z < a.z + a.h - eps;
+// Main prism size, as a fraction of its lot, with a hard floor in feet.
+// On a 70x70 lot this gives roughly 20-60ft of street frontage by 20-50ft deep.
+const HOUSE_MIN_DIM = 20;
+const HOUSE_WIDTH_FRAC = [0.28, 0.85];  // along the street
+const HOUSE_DEPTH_FRAC = [0.28, 0.71];  // away from the street
+
+function lotFraction(lotDim, [minFrac, maxFrac], limit) {
+    const size = lotDim * (minFrac + Math.random() * (maxFrac - minFrac));
+    return Math.min(limit, Math.max(HOUSE_MIN_DIM, size));
 }
 
-// Generate a random house made of 1-3 rectangular prisms.
-// facingAngle: rotation in radians applied to all geometry (0 = front faces -y).
+// Is this prism entirely inside the lot footprint?
+function prismInLot(p, lotWidth, lotDepth) {
+    const eps = 0.1;
+    return p.x >= -eps && p.y >= -eps &&
+           p.x + p.w <= lotWidth + eps && p.y + p.l <= lotDepth + eps;
+}
+
+// Generate a random house made of 1-3 rectangular prisms, placed within a lot.
+// Lot coordinates: x runs 0..lotWidth along the street, y runs 0..lotDepth away
+// from it, so y=0 is the street-facing edge of the lot.
+// setbackDist: distance from the street edge of the lot to the front of the house;
+// usually the same for every house along a given street.
+// facingAngle: rotation in radians applied to all geometry, about the lot center
+// (0 = the street lies toward -y).
 // Returns a Drawable tree: { polys, children: [child Drawables...] }
 // The root has no polys; children are the main prism and wings.
 // Details (doors) are grandchildren of their prism.
-function generateHouse(facingAngle = 0) {
+function generateHouse(facingAngle = 0, lotWidth = 70, lotDepth = 70, setbackDist = 20) {
     const color = pickHouseColor();
     const lengthwise = Math.random() < 0.5;
     const useHipRoof = Math.random() < 0.5;
@@ -292,33 +229,35 @@ function generateHouse(facingAngle = 0) {
     const children = [];
     const bounds = []; // track prism bounds for overlap checks
 
-    // Main prism
-    const w1 = 20 + Math.random() * 20;  // 20-40ft
-    const l1 = 25 + Math.random() * 20;  // 25-45ft
+    // Main prism: centered along the lot width, its front face at the setback
+    const w1 = lotFraction(lotWidth, HOUSE_WIDTH_FRAC, lotWidth);
+    const l1 = lotFraction(lotDepth, HOUSE_DEPTH_FRAC, Math.max(0, lotDepth - setbackDist));
     const h1 = 8.5 + Math.random() * 1;  // ~9ft
+    const x1 = (lotWidth - w1) / 2;
+    const y1 = setbackDist;
     const mainPolys = [
-        ...makeRectangularPrism(0, 0, 0, w1, l1, h1, color, false),
-        ...addRoof(0, 0, 0, w1, l1, h1, lengthwise, color),
+        ...makeRectangularPrism(x1, y1, 0, w1, l1, h1, color, false),
+        ...addRoof(x1, y1, 0, w1, l1, h1, lengthwise, color),
     ];
-    bounds.push({ x: 0, y: 0, z: 0, w: w1, l: l1, h: h1 });
+    bounds.push({ x: x1, y: y1, z: 0, w: w1, l: l1, h: h1 });
 
-    // Front door on the north face (y=0, facing -y) of the main prism
+    // Front door on the north face (facing -y, toward the street) of the main prism
     const doorW = 3 + Math.random() * 2;    // 3-5ft
     const doorH = 7 + Math.random() * 2;    // 7-9ft
-    const doorX = (w1 - doorW) / 2;         // centered on main prism
+    const doorX = x1 + (w1 - doorW) / 2;    // centered on main prism
     const eps = 0.05;
     const doorPoly = {
         pts: [
-            {x: doorX,         y: -eps, z: 0},
-            {x: doorX + doorW, y: -eps, z: 0},
-            {x: doorX + doorW, y: -eps, z: doorH},
-            {x: doorX,         y: -eps, z: doorH},
+            {x: doorX,         y: y1 - eps, z: 0},
+            {x: doorX + doorW, y: y1 - eps, z: 0},
+            {x: doorX + doorW, y: y1 - eps, z: doorH},
+            {x: doorX,         y: y1 - eps, z: doorH},
         ],
         color: ROOF_COLOR,
     };
 
     // Windows for the main prism (door is an exclusion on the north wall)
-    const mainWindows = generatePrismWindows(0, 0, w1, l1, {
+    const mainWindows = generatePrismWindows(x1, y1, w1, l1, {
         north: [{ start: doorX - 1, end: doorX + doorW + 1 }],
     });
 
@@ -332,26 +271,27 @@ function generateHouse(facingAngle = 0) {
         const l = 12 + Math.random() * 15;
         const h = 8.5 + Math.random() * 1;
 
-        // Try up to 8 random placements to find one without overlap
+        // Try up to 8 random placements to find one that fits the lot without overlap
         for (let attempt = 0; attempt < 8; attempt++) {
             const side = Math.floor(Math.random() * 3); // 0-2: east, west, south
             let ox, oy;
             switch (side) {
                 case 0: // East side
-                    ox = w1;
-                    oy = Math.random() * Math.max(0, l1 - l);
+                    ox = x1 + w1;
+                    oy = y1 + Math.random() * Math.max(0, l1 - l);
                     break;
                 case 1: // West side
-                    ox = -w;
-                    oy = Math.random() * Math.max(0, l1 - l);
+                    ox = x1 - w;
+                    oy = y1 + Math.random() * Math.max(0, l1 - l);
                     break;
                 case 2: // South side
-                    ox = Math.random() * Math.max(0, w1 - w);
-                    oy = l1;
+                    ox = x1 + Math.random() * Math.max(0, w1 - w);
+                    oy = y1 + l1;
                     break;
             }
 
             const candidate = { x: ox, y: oy, z: 0, w, l, h };
+            if (!prismInLot(candidate, lotWidth, lotDepth)) continue;
             if (!bounds.some(b => prismsOverlap(b, candidate))) {
                 const wingPolys = [
                     ...makeRectangularPrism(ox, oy, 0, w, l, h, color, false),
@@ -368,9 +308,9 @@ function generateHouse(facingAngle = 0) {
 
     const house = { polys: [], children };
 
-    // Rotate all geometry around the center of the main prism
+    // Rotate all geometry around the center of the lot, so the lot itself stays put
     if (facingAngle !== 0) {
-        rotateDrawable(house, facingAngle, w1 / 2, l1 / 2);
+        rotateDrawable(house, facingAngle, lotWidth / 2, lotDepth / 2);
     }
 
     return house;

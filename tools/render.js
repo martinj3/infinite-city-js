@@ -47,6 +47,14 @@ function parseColor(c) {
         if (h.length === 3) h = h.split('').map(ch => ch + ch).join('');
         return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16), 1];
     }
+    m = /^hsla?\(\s*(-?[\d.]+)(?:deg)?[\s,]+([\d.]+)%[\s,]+([\d.]+)%\s*(?:[,/]\s*([\d.]+))?\)$/i.exec(c.trim());
+    if (m) {
+        const h = ((parseFloat(m[1]) % 360) + 360) % 360, s = parseFloat(m[2]) / 100, l = parseFloat(m[3]) / 100;
+        const k = n => (n + h / 30) % 12;
+        const a = s * Math.min(l, 1 - l);
+        const f = n => l - a * Math.max(-1, Math.min(k(n) - 3, Math.min(9 - k(n), 1)));
+        return [f(0) * 255, f(8) * 255, f(4) * 255, m[4] === undefined ? 1 : parseFloat(m[4])];
+    }
     return [255, 0, 255, 1]; // magenta: unparsed color
 }
 

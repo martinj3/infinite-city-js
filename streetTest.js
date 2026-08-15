@@ -74,7 +74,6 @@ function grow(extra) {
 function regenerate() {
     seed = (sysRandom() * 0x7FFFFFFF) | 0; // a fresh but still reportable seed
     build();
-    fitToCity();
 }
 
 // Center on the whole city and pick the zoom that just fits it on screen, taking

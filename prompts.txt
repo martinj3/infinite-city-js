@@ -243,3 +243,18 @@ Add a brief mention to the CLAUDE.md in this folder, briefly explaining to other
 ---
 
 Sure, go ahead and check that in, and update CLAUDE.md to mention it exists.
+
+---
+
+Ok, a few updates to the buildings.js code now:
+Looks like there's quite a few generic functions in buildings.js which are not specific to buildings or houses, that we'll eventually use to draw other stuff (makeRectangularPrism, rotateDrawable, rotatePolys, avgDrawableDepth).  These can be moved out, maybe to a drawUtils.js or something, for later sharing.
+
+Second, and the main ask, is that we're eventually going to have "lots" of various sizes along streets, and generate buildings to put in a lot of a certain size (not yet).
+In preparation for that, modify generateHouse() to accept a "lot width" (along the street), "lot depth", and a "setbackDist" (all houses along a street will usually be set back from the street by the same distance).
+The initial main prism should always be centered along the lot width, for now.  And the front, street-facing face of the main prism should be at the setbackDist from the front of the lot.
+
+We'll probably have lot sizes around 70ft x 70ft or so, and this should result in houses with main prisms of roughly 20 to 60ft wide along the street, by 20 to 50ft depth.   I guess that's roughly a range of 28% to 71% or 85% of the lot width/depth (with a hard minimum of 20ft for each)
+
+Then, the placement of additional wing prisms should be as before, but with the additonal possibility of rejecting a wing prism placement if it would exceed the lot bounds (still 8 attempts, as before)
+
+The buildings.html test code should test with all 70ft x 70ft lots, for now.
