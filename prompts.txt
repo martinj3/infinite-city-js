@@ -206,3 +206,16 @@ Read prompts.txt and compact.txt to get some context as needed.  In both the dri
 ---
 
 Ok, I think we also have some kind of camera tilt, a scaling or compression of one axis or another, as is standard for many isometric RPGs, I think?  Can we also make this "tilt" adjustable, a bit.  Make it default to whatever value it uses now, but set some keypresses to adjust it (within a fairly narrow range, I think things start to look weird otherwise)
+
+---
+
+Ok, now modify the streets to add sidewalks.  These will live within the "right of way" on the side of the street.  Random sidewalk width between 3 and 5 feet.  Random space between the sidewalk and road between 0 and 5 feet.  Sidewalks have a random shade of grey color, similar to streets, but can be different from their parent street (especially important when the gap between street and sidewalk happens to be zero, as is sometime true in real life).
+This is all probably part of generateStreetProps(), I'd assume.
+
+Where streets meet at intersections, try to join the sidwalks where they should intersect, if we have a drawIntersection() function somewhere.  But don't spend too much time getting this part perfect
+
+---
+
+Ah, one thing I forgot.  This should be a simple change, don't spend too many tokens testing it.
+Not all streets have sidewalks!  A few have them only on one side.  Let's say, 60% chance of sidwalks on both sides, 20% chance of no sidewalks, 10% right sidwalk only, 10% left sidwalk only.
+Also let's raise the max gap to 6ft

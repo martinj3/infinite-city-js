@@ -27,7 +27,9 @@ function init() {
     b.roads.back = true;
     a.color = props.color;
     b.color = props.color;
-    pushStreet(0, 0, 400, 0, null, props);
+    const s = pushStreet(0, 0, 400, 0, null, props);
+    a.streets.fwd = s;
+    b.streets.back = s;
 }
 
 // --- Update ---

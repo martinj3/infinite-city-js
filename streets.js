@@ -11,7 +11,9 @@ function addNode(x, y, ori) {
     const n = {
         x: Math.round(x), y: Math.round(y),
         ori: normA(ori),
-        roads: { fwd: null, right: null, back: null, left: null }
+        roads: { fwd: null, right: null, back: null, left: null },
+        // The street object in each slot, so sidewalks can be joined at this intersection
+        streets: { fwd: null, right: null, back: null, left: null }
     };
     nodes.set(k, n);
     return n;
@@ -22,21 +24,46 @@ function blockLen() {
 }
 
 // --- Street properties ---
-function randomStreetColor() {
-    // Base grey with random shading variation
-    const base = 102; // ~#666
-    const vary = Math.floor(Math.random() * 30 - 15); // -15 to +14
-    const v = Math.max(70, Math.min(130, base + vary));
-    return `rgb(${v},${v},${v})`;
+function randomGreyValue(base, spread, min, max) {
+    return Math.max(min, Math.min(max, base + Math.floor(Math.random() * spread - spread / 2)));
+}
+function greyColor(v) { return `rgb(${v},${v},${v})`; }
+
+function randomStreetGrey() { return randomGreyValue(102, 30, 70, 130); } // ~#666
+function randomStreetColor() { return greyColor(randomStreetGrey()); }
+
+function generateSidewalkProps(streetWidth, streetGrey) {
+    const width = MIN_SIDEWALK_WIDTH + Math.random() * (MAX_SIDEWALK_WIDTH - MIN_SIDEWALK_WIDTH);
+    const gap = MIN_SIDEWALK_GAP + Math.random() * (MAX_SIDEWALK_GAP - MIN_SIDEWALK_GAP);
+    // Same family of greys as streets, biased lighter (concrete vs asphalt), and always
+    // kept a step apart from the parent street so it still reads as separate at gap 0.
+    let grey = randomGreyValue(130, 40, 105, 160);
+    if (Math.abs(grey - streetGrey) < SIDEWALK_CONTRAST) grey = streetGrey + SIDEWALK_CONTRAST;
+    // Sides are relative to the street's own direction (x1 -> x2): right = local +y
+    const r = Math.random();
+    const both = r < SIDEWALK_BOTH_PROB;
+    const none = !both && r < SIDEWALK_BOTH_PROB + SIDEWALK_NONE_PROB;
+    const rightOnly = !both && !none && r < SIDEWALK_BOTH_PROB + SIDEWALK_NONE_PROB + (1 - SIDEWALK_BOTH_PROB - SIDEWALK_NONE_PROB) / 2;
+    return {
+        width, gap,
+        right: both || rightOnly,
+        left: both || (!none && !rightOnly),
+        color: greyColor(grey),
+        inner: streetWidth / 2 + gap,         // ft from centerline to near (curb) edge
+        outer: streetWidth / 2 + gap + width  // ft from centerline to far edge
+    };
 }
 
 function generateStreetProps() {
     const hasYellowLines = Math.random() < 0.7;
+    const width = Math.round(MIN_STREET_WIDTH + Math.random() * (MAX_STREET_WIDTH - MIN_STREET_WIDTH));
+    const grey = randomStreetGrey();
     return {
-        width: Math.round(MIN_STREET_WIDTH + Math.random() * (MAX_STREET_WIDTH - MIN_STREET_WIDTH)),
-        color: randomStreetColor(),
+        width,
+        color: greyColor(grey),
         hasYellowLines,
-        hasWhiteLines: hasYellowLines && Math.random() < 0.6
+        hasWhiteLines: hasYellowLines && Math.random() < 0.6,
+        sidewalk: generateSidewalkProps(width, grey)
     };
 }
 
@@ -46,7 +73,8 @@ function propagateProps(sourceProps, slot) {
     if (!sourceProps || Math.random() < rerollChance) return generateStreetProps();
     return {
         width: sourceProps.width, color: sourceProps.color,
-        hasYellowLines: sourceProps.hasYellowLines, hasWhiteLines: sourceProps.hasWhiteLines
+        hasYellowLines: sourceProps.hasYellowLines, hasWhiteLines: sourceProps.hasWhiteLines,
+        sidewalk: sourceProps.sidewalk
     };
 }
 
@@ -63,7 +91,8 @@ function findSourceStreet(node) {
 
 function pushStreet(x1, y1, x2, y2, curve, props) {
     props = props || generateStreetProps();
-    const hw = props.width / 2;
+    const sw = props.sidewalk;
+    const hw = Math.max(props.width / 2, (sw.left || sw.right) ? sw.outer : 0); // cull bounds include sidewalks
     const s = { x1, y1, x2, y2, curve, props };
     if (curve) {
         const b = arcBounds(curve);
@@ -78,6 +107,7 @@ function pushStreet(x1, y1, x2, y2, curve, props) {
         };
     }
     streets.push(s);
+    return s;
 }
 
 // --- Conflict detection ---
@@ -148,18 +178,22 @@ function tryAddRoad(node, slot, nx, ny, endH, curve, props) {
     }
     if (tooClose) return false;
 
+    let targetSlot = 'back';
     if (!target) {
         target = addNode(nx, ny, endH);
         target.roads.back = true;
         target.color = props.color;
     } else {
         const arr = normA(endH + Math.PI);
-        target.roads[findSlot(target.ori, arr)] = true;
+        targetSlot = findSlot(target.ori, arr);
+        target.roads[targetSlot] = true;
         if (!target.color) target.color = props.color;
     }
 
     node.roads[slot] = true;
-    pushStreet(node.x, node.y, target.x, target.y, curve, props);
+    const street = pushStreet(node.x, node.y, target.x, target.y, curve, props);
+    node.streets[slot] = street;
+    if (targetSlot) target.streets[targetSlot] = street;
 
     // If target is now fully resolved, re-open false directions for future generation
     if (!Object.values(target.roads).some(v => v === null)) {

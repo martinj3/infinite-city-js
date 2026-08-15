@@ -12,8 +12,20 @@ const ZOOM_SPEED = 1.5; // per second (multiplier) for held keys
 const ZOOM_WHEEL = 1.1; // per wheel tick
 const GENERATE_DIST = 30;
 const PROXIMITY_THRESHOLD = 50;
+// The "right of way" is the space on each side of a street reserved for sidewalks, buildings, houses, etc. At intersections, this will naturally overlap for the intersecting streets.  
+// It's measured from the centerline of the street, I believe?  RIGHT_OF_WAY is for one side, so 2*RIGHT_OF_WAY for the whole street with buildings on both sides.  
 const RIGHT_OF_WAY = 150;
 const TWO_PI = Math.PI * 2;
+
+// --- Sidewalks (live inside the right of way, alongside each street) ---
+const MIN_SIDEWALK_WIDTH = 3;
+const MAX_SIDEWALK_WIDTH = 5;
+const MIN_SIDEWALK_GAP = 0; // ft of space between road edge and sidewalk (0 happens in real life)
+const MAX_SIDEWALK_GAP = 6;
+const SIDEWALK_CONTRAST = 12; // min grey-level difference from the parent street's color
+// Which sides of a street get a sidewalk: 60% both, 20% none, 10% right only, 10% left only
+const SIDEWALK_BOTH_PROB = 0.6;
+const SIDEWALK_NONE_PROB = 0.2;
 
 // --- Isometric view ---
 let VIEW_ANGLE = -Math.PI / 4;

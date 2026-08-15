@@ -30,6 +30,110 @@ function drawCurve(s) {
     ctx.fill();
 }
 
+// --- Sidewalks ---
+// A sidewalk on one side of a street runs until it reaches the near (curb-side) edge
+// of the crossing street's sidewalk on that side; the node then fills the corner
+// square between the two. Nothing crossing on that side means no trim at all, so the
+// sidewalk runs straight through (T-intersections, dead ends).
+// Does street s carry a sidewalk on the side facing the given world direction?
+function swOnSide(s, worldAngle) {
+    const sw = s.props.sidewalk;
+    const a = Math.atan2(s.y2 - s.y1, s.x2 - s.x1); // chord is close enough for our arcs
+    return Math.cos(worldAngle - a - Math.PI / 2) > 0 ? sw.right : sw.left;
+}
+
+// awayAngle: direction our street leaves the node. sideAngle: which side our band is on.
+function crossTrim(x, y, awayAngle, sideAngle) {
+    const n = getNode(x, y);
+    if (!n) return HALF_INTERSECTION;
+    const slot = findSlot(n.ori, sideAngle);
+    const cross = slot ? n.streets[slot] : null;
+    if (!cross) return 0;
+    // Stop at the crossing sidewalk's curb edge, or at its roadway if it has no sidewalk here
+    return swOnSide(cross, awayAngle) ? cross.props.sidewalk.inner : cross.props.width / 2;
+}
+
+function drawStraightSW(s) {
+    const sw = s.props.sidewalk;
+    const a = Math.atan2(s.y2 - s.y1, s.x2 - s.x1);
+    const len = Math.hypot(s.x2 - s.x1, s.y2 - s.y1);
+    const mx = (s.x1 + s.x2) / 2, my = (s.y1 + s.y2) / 2;
+    ctx.save();
+    ctx.translate(mx * PX_PER_FT, my * PX_PER_FT);
+    ctx.rotate(a);
+    ctx.fillStyle = sw.color;
+    for (const side of [1, -1]) { // +1 = local +y (right) side, -1 = local -y (left) side
+        if (!(side > 0 ? sw.right : sw.left)) continue;
+        const sideAngle = a + side * Math.PI / 2;
+        const t1 = crossTrim(s.x1, s.y1, a, sideAngle);
+        const t2 = crossTrim(s.x2, s.y2, a + Math.PI, sideAngle);
+        if (t1 + t2 >= len) continue;
+        const y = side > 0 ? sw.inner : -sw.outer;
+        ctx.fillRect((-len / 2 + t1) * PX_PER_FT, y * PX_PER_FT,
+            (len - t1 - t2) * PX_PER_FT, sw.width * PX_PER_FT);
+    }
+    ctx.restore();
+}
+
+function drawCurveSW(s) {
+    const sw = s.props.sidewalk;
+    const { cx, cy, r, arcS, arcE, ccw } = s.curve;
+    const pcx = cx * PX_PER_FT, pcy = cy * PX_PER_FT;
+    // Tangent headings at the two ends (arc angles lead/lag the heading by 90 deg)
+    const q = ccw ? -Math.PI / 2 : Math.PI / 2;
+    const h1 = arcS + q, h2 = arcE + q;
+    ctx.fillStyle = sw.color;
+    for (const side of [1, -1]) { // +1 = outside of the curve, -1 = inside
+        // Outside of the curve is to the left of travel for a right-hand bend, and vice versa
+        const sideSign = ccw ? side : -side;
+        if (!(sideSign > 0 ? sw.right : sw.left)) continue;
+        const t1 = crossTrim(s.x1, s.y1, h1, h1 + sideSign * Math.PI / 2) / r;
+        const t2 = crossTrim(s.x2, s.y2, h2 + Math.PI, h2 + sideSign * Math.PI / 2) / r;
+        const sweep = normA(ccw ? arcS - arcE : arcE - arcS);
+        if (t1 + t2 >= sweep) continue;
+        const ds = ccw ? arcS - t1 : arcS + t1;
+        const de = ccw ? arcE + t2 : arcE - t2;
+        const lo = Math.max(0, r + side * (side > 0 ? sw.inner : sw.outer));
+        const hi = Math.max(0, r + side * (side > 0 ? sw.outer : sw.inner));
+        ctx.beginPath();
+        ctx.arc(pcx, pcy, hi * PX_PER_FT, ds, de, ccw);
+        ctx.arc(pcx, pcy, lo * PX_PER_FT, de, ds, !ccw);
+        ctx.closePath();
+        ctx.fill();
+    }
+}
+
+// Local-frame unit direction of each slot at a node (x = fwd, y = right)
+const SLOT_VEC = { fwd: [1, 0], right: [0, 1], back: [-1, 0], left: [0, -1] };
+const SLOT_CORNERS = [['fwd', 'right'], ['right', 'back'], ['back', 'left'], ['left', 'fwd']];
+
+// The corner pieces joining the sidewalks of the streets that meet here. Each corner
+// spans the crossing street's sidewalk band along one axis and this street's along the
+// other, so both strips butt into it.
+function drawNodeSW(n) {
+    let drew = false;
+    for (const [sa, sb] of SLOT_CORNERS) {
+        const a = n.streets[sa], b = n.streets[sb];
+        if (!a || !b) continue;
+        // Only join if both streets actually have a sidewalk facing this corner
+        if (!swOnSide(a, slotAngle(n.ori, sb)) || !swOnSide(b, slotAngle(n.ori, sa))) continue;
+        if (!drew) {
+            ctx.save();
+            ctx.translate(n.x * PX_PER_FT, n.y * PX_PER_FT);
+            ctx.rotate(n.ori);
+            drew = true;
+        }
+        const swA = a.props.sidewalk, swB = b.props.sidewalk;
+        const ua = SLOT_VEC[sa], ub = SLOT_VEC[sb];
+        const p1x = swB.inner * ua[0] + swA.inner * ub[0], p1y = swB.inner * ua[1] + swA.inner * ub[1];
+        const p2x = swB.outer * ua[0] + swA.outer * ub[0], p2y = swB.outer * ua[1] + swA.outer * ub[1];
+        ctx.fillStyle = swA.color;
+        ctx.fillRect(Math.min(p1x, p2x) * PX_PER_FT, Math.min(p1y, p2y) * PX_PER_FT,
+            Math.abs(p2x - p1x) * PX_PER_FT, Math.abs(p2y - p1y) * PX_PER_FT);
+    }
+    if (drew) ctx.restore();
+}
+
 function drawStraightCL(s) {
     if (!s.props.hasYellowLines) return;
     const a = Math.atan2(s.y2 - s.y1, s.x2 - s.x1);
@@ -120,7 +224,18 @@ function draw() {
         ctx.restore();
     }
 
-    // 3) Center lane markings
+    // 3) Sidewalks (strips along each street, plus corner joins at intersections)
+    for (const s of streets) {
+        const b = s.bounds;
+        if (b.mxx < vl || b.mnx > vr || b.mxy < vt || b.mny > vb) continue;
+        s.curve ? drawCurveSW(s) : drawStraightSW(s);
+    }
+    for (const [, n] of nodes) {
+        if (n.x < vl || n.x > vr || n.y < vt || n.y > vb) continue;
+        drawNodeSW(n);
+    }
+
+    // 4) Center lane markings
     ctx.strokeStyle = '#FFD700';
     ctx.lineWidth = 1;
     ctx.setLineDash([10 * PX_PER_FT, 10 * PX_PER_FT]);
@@ -131,7 +246,7 @@ function draw() {
     }
     ctx.setLineDash([]);
 
-    // 4) White edge lines (solid, 1ft inset from street edges)
+    // 5) White edge lines (solid, 1ft inset from street edges)
     ctx.strokeStyle = '#fff';
     ctx.lineWidth = 1;
     for (const s of streets) {
@@ -140,7 +255,7 @@ function draw() {
         s.curve ? drawCurveWL(s) : drawStraightWL(s);
     }
 
-    // 5) Player
+    // 6) Player
     const px = player.x * PX_PER_FT, py = player.y * PX_PER_FT;
     const hl = (CAR_LENGTH / 2) * PX_PER_FT, hw = (CAR_WIDTH / 2) * PX_PER_FT;
     const notch = (CAR_LENGTH / 4) * PX_PER_FT;
