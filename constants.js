@@ -18,6 +18,9 @@ const PROXIMITY_THRESHOLD = 50;
 // The "right of way" is the space on each side of a street reserved for sidewalks, buildings, houses, etc. At intersections, this will naturally overlap for the intersecting streets.  
 // It's measured from the centerline of the street, I believe?  RIGHT_OF_WAY is for one side, so 2*RIGHT_OF_WAY for the whole street with buildings on both sides.  
 const RIGHT_OF_WAY = 150;
+// Spacing of sample points when testing a proposed street's path against the
+// right of way of existing streets
+const CONFLICT_SAMPLE_STEP = 50;
 const TWO_PI = Math.PI * 2;
 
 // --- Sidewalks (live inside the right of way, alongside each street) ---

@@ -63,6 +63,22 @@ function rotateDrawable(drawable, angle, cx, cy) {
     }
 }
 
+// Translate all polygon vertices in-place in the x/y plane.
+function translatePolys(polys, dx, dy) {
+    for (const poly of polys) {
+        for (const p of poly.pts) { p.x += dx; p.y += dy; }
+    }
+}
+
+// Recursively translate all polys in a drawable tree. Used to bake a drawable
+// generated in local coordinates into world coordinates.
+function translateDrawable(drawable, dx, dy) {
+    translatePolys(drawable.polys, dx, dy);
+    for (const child of drawable.children) {
+        translateDrawable(child, dx, dy);
+    }
+}
+
 // Draw a drawable tree recursively: own polys first, then children sorted
 // by depth (far-to-near), each drawn completely before the next.
 // projectAndDrawFn(polys, ox, oy): renderer-provided function to project,

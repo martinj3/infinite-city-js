@@ -22,7 +22,11 @@ const vm = require('vm');
 const zlib = require('zlib');
 
 const ROOT = path.join(__dirname, '..');
-const DEFAULT_SCRIPTS = ['constants.js', 'streets.js', 'drawing.js', 'streetTest.js'];
+// Mirrors the script tags in streetTest.html
+const DEFAULT_SCRIPTS = [
+    'constants.js', 'drawUtils.js', 'lighting.js', 'render3d.js', 'buildings.js',
+    'streets.js', 'lots.js', 'drawing.js', 'streetTest.js',
+];
 
 // --- Matrix helpers (canvas transforms are 2x3: [a, b, c, d, e, f]) ---
 function mul(m, n) { // apply n in m's local space

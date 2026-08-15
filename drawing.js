@@ -242,29 +242,33 @@ function drawScene(camX, camY) {
         drawNodeSW(n);
     }
 
-    if (PX_PER_FT < MARKINGS_MIN_ZOOM) { ctx.restore(); return; }
+    if (PX_PER_FT >= MARKINGS_MIN_ZOOM) {
+        // 4) Center lane markings
+        ctx.strokeStyle = '#FFD700';
+        ctx.lineWidth = 1;
+        ctx.setLineDash([10 * PX_PER_FT, 10 * PX_PER_FT]);
+        for (const s of streets) {
+            const b = s.bounds;
+            if (b.mxx < vl || b.mnx > vr || b.mxy < vt || b.mny > vb) continue;
+            s.curve ? drawCurveCL(s) : drawStraightCL(s);
+        }
+        ctx.setLineDash([]);
 
-    // 4) Center lane markings
-    ctx.strokeStyle = '#FFD700';
-    ctx.lineWidth = 1;
-    ctx.setLineDash([10 * PX_PER_FT, 10 * PX_PER_FT]);
-    for (const s of streets) {
-        const b = s.bounds;
-        if (b.mxx < vl || b.mnx > vr || b.mxy < vt || b.mny > vb) continue;
-        s.curve ? drawCurveCL(s) : drawStraightCL(s);
-    }
-    ctx.setLineDash([]);
-
-    // 5) White edge lines (solid, 1ft inset from street edges)
-    ctx.strokeStyle = '#fff';
-    ctx.lineWidth = 1;
-    for (const s of streets) {
-        const b = s.bounds;
-        if (b.mxx < vl || b.mnx > vr || b.mxy < vt || b.mny > vb) continue;
-        s.curve ? drawCurveWL(s) : drawStraightWL(s);
+        // 5) White edge lines (solid, 1ft inset from street edges)
+        ctx.strokeStyle = '#fff';
+        ctx.lineWidth = 1;
+        for (const s of streets) {
+            const b = s.bounds;
+            if (b.mxx < vl || b.mnx > vr || b.mxy < vt || b.mny > vb) continue;
+            s.curve ? drawCurveWL(s) : drawStraightWL(s);
+        }
     }
 
     ctx.restore();
+
+    // 6) Buildings on their lots. These are 3D and project themselves, so they are
+    // drawn in screen space once the ground layers are done.
+    if (typeof drawLots === 'function') drawLots(camX, camY, vl, vr, vt, vb);
 }
 
 // The driving game: the world, plus the car and its HUD.

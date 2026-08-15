@@ -258,3 +258,32 @@ We'll probably have lot sizes around 70ft x 70ft or so, and this should result i
 Then, the placement of additional wing prisms should be as before, but with the additonal possibility of rejecting a wing prism placement if it would exceed the lot bounds (still 8 attempts, as before)
 
 The buildings.html test code should test with all 70ft x 70ft lots, for now.
+
+---
+
+Ok, now the fun part.  Add lots along streets, and generate houses in them.
+Lot width along the street ranges from 40 to 90 feet, and lot depth from 45 to 70 feet.  SetbadkDist varies from 0 to 25ft.
+
+Lot width and setbackDist are a common property of the street segment, but lot depth can vary randomly from lot to lot.
+Lots start from the edge of the sidewalk, so a setbackDist of 0 (happens sometimes in urban areas) means there's no grass at all between the sidewalk and the front of the house.
+
+The will be specifically "house lots," since we only have houses for now.  But eventually anticipate different types of lots (churches, police stations, etc) which may be larger.
+
+Placement along straight street segments should be fairly straightforward.  at intersection, need to check if the neighboring street already have houses there, and not overwrite them if so (whichever street put a house there first "wins").  Some sort of collision management.
+
+Curves will be a bit trickier, obviously.  Don't spend too much time on curve-specific issues.  Just put a, I don't know, 15ft buffer between lots on curves, and assume that will be sufficient to (roughly) prevent significant overlap.  A little overlap is fine, for now.
+
+Houses should show up both in the driving game (index.html) and the streetTest.html test tool, hopefully sharing logic as much as possible.
+
+Naturally houses are persisted as part of the street segment once generated.  Don't want to re-randomize houses each time I drive the same street segment.
+
+---
+
+Two things:
+Existing houses should never be demolished.  Nothing should ever be demolished.  What exists is canon, any new generation needs to work around it.  So no clearLotsUnder().
+
+The existing code was supposed to already handle this in street generation, where street.js's checkConflict() was supposed to reject any potential new street segment, if it landed in the "RIGHT_OF_WAY" of another street (RIGHT_OF_WAY currently set to 150ft, I believe, leaving room for lots).
+
+I also think I saw somewhere you were brute forcing against all other streets?  That same reserved RIGHT_OF_WAY check was also intended to make that unnecessary, requiring only a check of neighboring streets connecting at the same intersection, to check if there's space for a lot, or if the intersecting street already put a lot there.
+
+But perhaps the RIGHT_OF_WAY and conflictCheck() in streets.js isn't working as it was intended?

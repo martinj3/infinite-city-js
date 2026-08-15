@@ -79,13 +79,10 @@ function propagateProps(sourceProps, slot) {
 }
 
 function findSourceStreet(node) {
-    // Find the street that connects to this node's back slot
-    for (const s of streets) {
-        if ((Math.hypot(node.x - s.x1, node.y - s.y1) < 1) ||
-            (Math.hypot(node.x - s.x2, node.y - s.y2) < 1)) {
-            return s;
-        }
-    }
+    // The street that created this node sits in its back slot; merged nodes may
+    // hold it elsewhere, so fall back to any connected street.
+    if (node.streets.back) return node.streets.back;
+    for (const slot of SLOTS) if (node.streets[slot]) return node.streets[slot];
     return null;
 }
 
@@ -107,53 +104,75 @@ function pushStreet(x1, y1, x2, y2, curve, props) {
         };
     }
     streets.push(s);
+    // Lots (and their buildings) are generated once, here, and persist on the street.
+    // Optional so pages and test harnesses can load streets.js without lots.js.
+    if (typeof generateStreetLots === 'function') generateStreetLots(s);
     return s;
 }
 
 // --- Conflict detection ---
-function ptInRotRect(px, py, cx, cy, hl, hw, angle) {
-    const dx = px - cx, dy = py - cy;
-    const c = Math.cos(-angle), s = Math.sin(-angle);
-    return Math.abs(dx * c - dy * s) < hl && Math.abs(dx * s + dy * c) < hw;
-}
-
-function segsCross(ax, ay, bx, by, cx, cy, dx, dy) {
-    const d1 = (dx - cx) * (ay - cy) - (dy - cy) * (ax - cx);
-    const d2 = (dx - cx) * (by - cy) - (dy - cy) * (bx - cx);
-    const d3 = (bx - ax) * (cy - ay) - (by - ay) * (cx - ax);
-    const d4 = (bx - ax) * (dy - ay) - (by - ay) * (dx - ax);
-    if (((d1 > 0 && d2 < 0) || (d1 < 0 && d2 > 0)) &&
-        ((d3 > 0 && d4 < 0) || (d3 < 0 && d4 > 0))) {
-        const den = (bx - ax) * (dy - cy) - (by - ay) * (dx - cx);
-        if (Math.abs(den) < 1e-10) return null;
-        const t = ((cx - ax) * (dy - cy) - (cy - ay) * (dx - cx)) / den;
-        return { x: ax + t * (bx - ax), y: ay + t * (by - ay) };
+// Distance from a point to a street's centerline (segment, or the true arc).
+function distToStreetPath(px, py, s) {
+    if (s.curve) {
+        const { cx, cy, r, arcS, arcE, ccw } = s.curve;
+        const dx = px - cx, dy = py - cy;
+        if (angleInArc(Math.atan2(dy, dx), arcS, arcE, ccw)) {
+            return Math.abs(Math.hypot(dx, dy) - r);
+        }
+        return Math.min(Math.hypot(px - s.x1, py - s.y1), Math.hypot(px - s.x2, py - s.y2));
     }
-    return null;
+    const vx = s.x2 - s.x1, vy = s.y2 - s.y1;
+    const t = Math.max(0, Math.min(1, ((px - s.x1) * vx + (py - s.y1) * vy) / (vx * vx + vy * vy)));
+    return Math.hypot(px - (s.x1 + t * vx), py - (s.y1 + t * vy));
 }
 
-function checkConflict(ax, ay, bx, by) {
+// Points along a proposed street's path -- the chord a->b, or the real arc when
+// curving -- spaced at most CONFLICT_SAMPLE_STEP apart.
+function samplePath(ax, ay, bx, by, curve) {
+    const pts = [];
+    if (curve) {
+        const { cx, cy, r, arcS, arcE, ccw } = curve;
+        const sweep = normA(ccw ? arcS - arcE : arcE - arcS);
+        const steps = Math.max(2, Math.ceil(sweep * r / CONFLICT_SAMPLE_STEP));
+        for (let i = 0; i <= steps; i++) {
+            const a = arcS + (ccw ? -1 : 1) * (sweep * i / steps);
+            pts.push([cx + r * Math.cos(a), cy + r * Math.sin(a)]);
+        }
+    } else {
+        const steps = Math.max(1, Math.ceil(Math.hypot(bx - ax, by - ay) / CONFLICT_SAMPLE_STEP));
+        for (let i = 0; i <= steps; i++) {
+            pts.push([ax + (bx - ax) * i / steps, ay + (by - ay) * i / steps]);
+        }
+    }
+    return pts;
+}
+
+// Reject a proposed street if any point of its path lies within RIGHT_OF_WAY of a
+// street it would not share an intersection with. Streets meeting either end of
+// the proposal are exempt -- connecting to them is the point -- and conflicts
+// around those shared intersections are resolved at lot-placement time.
+// This is the one global geometric gate: because it holds, everything downstream
+// (lots, buildings) only ever needs to look at the streets meeting its own two
+// intersections, never at the whole map.
+function checkConflict(ax, ay, bx, by, curve) {
+    const samples = samplePath(ax, ay, bx, by, curve);
+    let mnx = Infinity, mxx = -Infinity, mny = Infinity, mxy = -Infinity;
+    for (const [x, y] of samples) {
+        if (x < mnx) mnx = x; if (x > mxx) mxx = x;
+        if (y < mny) mny = y; if (y > mxy) mxy = y;
+    }
     for (const s of streets) {
-        // Skip streets connected to our starting intersection
-        if (Math.hypot(ax - s.x1, ay - s.y1) < 1 || Math.hypot(ax - s.x2, ay - s.y2) < 1) continue;
+        // Skip neighbors: streets sharing either endpoint of the proposal
+        if (Math.hypot(ax - s.x1, ay - s.y1) < 1 || Math.hypot(ax - s.x2, ay - s.y2) < 1 ||
+            Math.hypot(bx - s.x1, by - s.y1) < 1 || Math.hypot(bx - s.x2, by - s.y2) < 1) continue;
 
-        if (s.curve) {
-            // Simplified bounding box of curve endpoints + ROW padding
-            const mnx = Math.min(s.x1, s.x2) - RIGHT_OF_WAY;
-            const mxx = Math.max(s.x1, s.x2) + RIGHT_OF_WAY;
-            const mny = Math.min(s.y1, s.y2) - RIGHT_OF_WAY;
-            const mxy = Math.max(s.y1, s.y2) + RIGHT_OF_WAY;
-            if (bx > mnx && bx < mxx && by > mny && by < mxy) return true;
-        } else {
-            // Right-of-way: rotated rectangle along existing street
-            const a = Math.atan2(s.y2 - s.y1, s.x2 - s.x1);
-            const len = Math.hypot(s.x2 - s.x1, s.y2 - s.y1);
-            const mx = (s.x1 + s.x2) / 2, my = (s.y1 + s.y2) / 2;
-            if (ptInRotRect(bx, by, mx, my, len / 2 - HALF_INTERSECTION, RIGHT_OF_WAY, a)) return true;
+        // Cheap reject: street bounds vs the path's bbox, padded by the ROW
+        const b = s.bounds;
+        if (b.mxx + RIGHT_OF_WAY < mnx || b.mnx - RIGHT_OF_WAY > mxx ||
+            b.mxy + RIGHT_OF_WAY < mny || b.mny - RIGHT_OF_WAY > mxy) continue;
 
-            // Crossing check: new chord vs existing straight
-            const cr = segsCross(ax, ay, bx, by, s.x1, s.y1, s.x2, s.y2);
-            if (cr && !getNode(cr.x, cr.y)) return true;
+        for (const [px, py] of samples) {
+            if (distToStreetPath(px, py, s) < RIGHT_OF_WAY) return true;
         }
     }
     return false;
@@ -161,7 +180,7 @@ function checkConflict(ax, ay, bx, by) {
 
 // --- Generation ---
 function tryAddRoad(node, slot, nx, ny, endH, curve, props) {
-    if (checkConflict(node.x, node.y, nx, ny)) return false;
+    if (checkConflict(node.x, node.y, nx, ny, curve)) return false;
 
     let target = null, tooClose = false;
     for (const [, other] of nodes) {
