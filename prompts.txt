@@ -239,3 +239,7 @@ That's awesome!  For your testing, are you reading in actual images, with your m
 Not saying either way is right or wrong, just curious.
 
 Add a brief mention to the CLAUDE.md in this folder, briefly explaining to other agents how you have been testing
+
+---
+
+Sure, go ahead and check that in, and update CLAUDE.md to mention it exists.

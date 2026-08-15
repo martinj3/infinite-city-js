@@ -6,15 +6,19 @@ For this project, infinite-city-js, please add any prompts I send you to prompts
 city up front (no car, camera flies around) via the same `initMap()`/`generate()`
 path the driving game uses. `?seed=123` makes it deterministic, and `S` saves a PNG.
 
-Agents without a browser can test headlessly with Node. Load `constants.js`,
-`streets.js`, `drawing.js` (and optionally `game.js` or `streetTest.js`) into a `vm`
-context with a stub `document`/`canvas`, then call `initMap()`, `growCity(n)` and
-`drawScene(x, y)`. Two complementary techniques:
+Agents without a browser can test headlessly with `tools/render.js`, which runs the
+real page scripts in a Node `vm` with a stub DOM. No dependencies, no build step.
+Two complementary techniques, both provided by that file:
 
-- **Look at it.** Give the sandbox a software canvas that implements enough of the
-  2D context to rasterize into a PNG, then read the image. Layout and geometry bugs
-  (sidewalk corner joins, for one) are far easier to see than to assert. Beware that
-  a naive rasterizer drops sub-pixel-thin features, so don't trust it on hairlines.
-- **Count the calls.** Give the sandbox a Proxy context that tallies `fillRect`/`fill`
-  or throws on non-finite arguments. Better than pixels for "does every street draw
-  exactly two sidewalk bands" and "does any NaN reach the canvas".
+- **Look at it.** `node tools/render.js out.png "?seed=42&streets=500"` paints the
+  frame with a software canvas and writes a real PNG, so an agent can read the image
+  and see the result. Layout and geometry bugs (sidewalk corner joins, for one) are
+  far easier to see than to assert. The rasterizer has no antialiasing and drops
+  sub-pixel-thin features, so don't trust it on hairlines -- verify those by counting.
+- **Count the calls.** `probeCtx(cb)` returns a context that draws nothing and reports
+  every call, for assertions pixels answer badly: "does every street draw exactly two
+  sidewalk bands", "does any NaN reach the canvas". Pass it to `renderPage({ ctx })`.
+
+`renderPage({ search, width, height, scripts })` is also exported for custom harnesses;
+it returns `{ ctx, sandbox, run }`, where `run('expr')` evaluates inside the page, e.g.
+`run('initMap(); growCity(500)')`.
