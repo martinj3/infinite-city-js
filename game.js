@@ -18,20 +18,6 @@ addEventListener('wheel', e => {
 // --- Player ---
 const player = { x: 200, y: 0, angle: 0, speed: 0 };
 
-// --- Init ---
-function init() {
-    const props = generateStreetProps();
-    const a = addNode(0, 0, 0);   // orientation = east
-    const b = addNode(400, 0, 0);
-    a.roads.fwd = true;  a.roads.back = false;
-    b.roads.back = true;
-    a.color = props.color;
-    b.color = props.color;
-    const s = pushStreet(0, 0, 400, 0, null, props);
-    a.streets.fwd = s;
-    b.streets.back = s;
-}
-
 // --- Update ---
 function update(dt) {
     if (keys['ArrowUp']) player.speed += ACCEL * dt;
@@ -76,5 +62,5 @@ function loop(t) {
     draw();
     requestAnimationFrame(loop);
 }
-init();
+initMap();
 requestAnimationFrame(loop);

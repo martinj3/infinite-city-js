@@ -187,23 +187,30 @@ function drawCurveWL(s) {
     ctx.stroke();
 }
 
+// Set up the rotated isometric camera (VIEW_ANGLE, Y_SCALE from constants.js).
+// Leaves the transform on the stack -- callers must ctx.restore().
+function applyCamera(camX, camY) {
+    ctx.save();
+    ctx.translate(canvas.width / 2, canvas.height / 2);
+    ctx.scale(1, Y_SCALE);
+    ctx.rotate(VIEW_ANGLE);
+    ctx.translate(-camX * PX_PER_FT, -camY * PX_PER_FT);
+}
+
 // --- Main draw ---
-function draw() {
+// The world as seen from (camX, camY): grass, streets, intersections, sidewalks,
+// markings. No car and no HUD, so any page can use it (see streetTest.html).
+function drawScene(camX, camY) {
     const W = canvas.width, H = canvas.height;
     ctx.clearRect(0, 0, W, H);
     ctx.fillStyle = '#2d8a2e';
     ctx.fillRect(0, 0, W, H);
 
-    // Rotated camera: isometric view (VIEW_ANGLE, Y_SCALE from constants.js)
     const diagFt = Math.hypot(W, H) / PX_PER_FT / 2 + 200;
-    const vl = player.x - diagFt, vr = player.x + diagFt;
-    const vt = player.y - diagFt, vb = player.y + diagFt;
+    const vl = camX - diagFt, vr = camX + diagFt;
+    const vt = camY - diagFt, vb = camY + diagFt;
 
-    ctx.save();
-    ctx.translate(W / 2, H / 2);
-    ctx.scale(1, Y_SCALE);
-    ctx.rotate(VIEW_ANGLE);
-    ctx.translate(-player.x * PX_PER_FT, -player.y * PX_PER_FT);
+    applyCamera(camX, camY);
 
     // 1) Road surfaces + edge lines
     for (const s of streets) {
@@ -235,6 +242,8 @@ function draw() {
         drawNodeSW(n);
     }
 
+    if (PX_PER_FT < MARKINGS_MIN_ZOOM) { ctx.restore(); return; }
+
     // 4) Center lane markings
     ctx.strokeStyle = '#FFD700';
     ctx.lineWidth = 1;
@@ -255,7 +264,16 @@ function draw() {
         s.curve ? drawCurveWL(s) : drawStraightWL(s);
     }
 
-    // 6) Player
+    ctx.restore();
+}
+
+// The driving game: the world, plus the car and its HUD.
+function draw() {
+    const W = canvas.width, H = canvas.height;
+    drawScene(player.x, player.y);
+
+    // Player
+    applyCamera(player.x, player.y);
     const px = player.x * PX_PER_FT, py = player.y * PX_PER_FT;
     const hl = (CAR_LENGTH / 2) * PX_PER_FT, hw = (CAR_WIDTH / 2) * PX_PER_FT;
     const notch = (CAR_LENGTH / 4) * PX_PER_FT;

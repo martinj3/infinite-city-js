@@ -10,6 +10,9 @@ const PX_PER_FT_MIN = 0.1;
 const PX_PER_FT_MAX = 20;
 const ZOOM_SPEED = 1.5; // per second (multiplier) for held keys
 const ZOOM_WHEEL = 1.1; // per wheel tick
+// Below this zoom the 1px lane markings would be wider than the roads themselves,
+// so they are skipped and only the road surfaces are drawn
+const MARKINGS_MIN_ZOOM = 0.5;
 const GENERATE_DIST = 30;
 const PROXIMITY_THRESHOLD = 50;
 // The "right of way" is the space on each side of a street reserved for sidewalks, buildings, houses, etc. At intersections, this will naturally overlap for the intersecting streets.  

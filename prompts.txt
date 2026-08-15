@@ -219,3 +219,23 @@ Where streets meet at intersections, try to join the sidwalks where they should 
 Ah, one thing I forgot.  This should be a simple change, don't spend too many tokens testing it.
 Not all streets have sidewalks!  A few have them only on one side.  Let's say, 60% chance of sidwalks on both sides, 20% chance of no sidewalks, 10% right sidwalk only, 10% left sidwalk only.
 Also let's raise the max gap to 6ft
+
+---
+
+Ok, now testing has been slightly inconvenient for me, needing to drive the car around with the arrow keys for awhile to get a representative sample of streets.
+I see that you've done some testing in your scratchpad previously, outputing to a screenshot, generating a whole bunch of streets at once.
+
+Inspired by that, create for me a streetTest.html.
+Loading this, instead of index.html, it won't have the "car" or the driving controls (arrow keys will just scroll around the map, rather than control the player car).  Camera controls should work just as they do in index.html and buildings.html (zoom with +/- key and rotate with Q and E).
+
+It should generate a large number of connected streets, in the same manner that the driving game does, sharing as much of the logic as possible, so it's an accurate test.
+Probably it should just "visit" every "unvisisted" intersection (whatever happens when I drive through an intersection and it adds more streets), one intersection at a time, and just keep doing that as long as there's at least one unvisited, capped at maybe 500 or so.
+
+You can add any parameters to this code that you want, any that would be useful for your own testing.  Including code to save a screenshot or something, if that's useful to you.  Then you won't need to continue rewriting that in your scratchpad each time
+
+---
+
+That's awesome!  For your testing, are you reading in actual images, with your multimodal vision encoder? Or the headless software canvas rasterizer in your scratchpad is maybe intercepting calls to canvas draw functions, which you then verify are correct?
+Not saying either way is right or wrong, just curious.
+
+Add a brief mention to the CLAUDE.md in this folder, briefly explaining to other agents how you have been testing

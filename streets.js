@@ -246,3 +246,44 @@ function generate(px, py) {
         }
     }
 }
+
+// --- Map lifecycle ---
+function nodeUnresolved(n) { return SLOTS.some(s => n.roads[s] === null); }
+
+function resetMap() {
+    nodes.clear();
+    streets.length = 0;
+}
+
+// Seed the map: two intersections joined by one east-west street.
+function initMap() {
+    const props = generateStreetProps();
+    const a = addNode(0, 0, 0);   // orientation = east
+    const b = addNode(400, 0, 0);
+    a.roads.fwd = true;  a.roads.back = false;
+    b.roads.back = true;
+    a.color = props.color;
+    b.color = props.color;
+    const s = pushStreet(0, 0, 400, 0, null, props);
+    a.streets.fwd = s;
+    b.streets.back = s;
+}
+
+// Grow the map by repeatedly visiting the unresolved intersection nearest the
+// origin, exactly as driving through one does, until the street cap is reached or
+// nothing is left unresolved. Returns the number of intersections visited.
+function growCity(maxStreets) {
+    let visited = 0;
+    while (streets.length < maxStreets) {
+        let best = null, bd = Infinity;
+        for (const [, n] of nodes) {
+            if (!nodeUnresolved(n)) continue;
+            const d = Math.hypot(n.x, n.y);
+            if (d < bd) { bd = d; best = n; }
+        }
+        if (!best) break;
+        generate(best.x, best.y); // same path the car triggers when it drives through
+        visited++;
+    }
+    return visited;
+}
