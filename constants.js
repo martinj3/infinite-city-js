@@ -59,6 +59,10 @@ const ACCEL = 40;
 const BRAKE = 60;
 const DRAG = 3;
 const MAX_TURN_RATE = 3;
+// The touch slider reports the same -1..1 range a held arrow key does, but a
+// thumb pushed to the edge of a small on-screen track doesn't feel as sharp as
+// a key doing the same job, so it gets a gain the keyboard doesn't.
+const TOUCH_STEER_GAIN = 2;
 const CAR_LENGTH = 12;
 const CAR_WIDTH = 7;
 

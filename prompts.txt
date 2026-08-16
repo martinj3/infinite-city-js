@@ -358,3 +358,5 @@ Again, push this straight to origin main
 Cool.  Not sure where you got the gear/settings icon for the camera controls, but if there's a "camera" icon of some sort, let's use that instead.  Push to main again.
 
 Actually you can add that to Claude.md for this repo: if I'm talking to you from the Claude mobile app, not desktop, then always push each change directly to origin main, so I can test on the GitHub Pages hosted site
+
+Steering in the mobile page with the slider definitely needs to be more sensitive.  Probably about double what it is now, when the slider is maxed

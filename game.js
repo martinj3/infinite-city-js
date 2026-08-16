@@ -30,7 +30,7 @@ function update(dt) {
     const gas = keys['ArrowUp'] || touchDrive.gas;
     const brake = keys['ArrowDown'] || touchDrive.brake;
     let steer = (keys['ArrowRight'] ? 1 : 0) - (keys['ArrowLeft'] ? 1 : 0);
-    if (steer === 0) steer = touchDrive.steer;
+    if (steer === 0) steer = touchDrive.steer * TOUCH_STEER_GAIN;
 
     if (gas) player.speed += ACCEL * dt;
     if (brake) {
