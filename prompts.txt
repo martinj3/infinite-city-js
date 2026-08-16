@@ -332,3 +332,11 @@ Our lot size is somewhat limited, up to 120 x 130ft, I think?  Which is a little
 Sample pictures of some churches (jpg/png) can be found in the churchPics folder, if that's helpful to you to look at.  But you should have some good knowledge from your massive training data, how churches are typically structured.  
 
 Following what we did with houses, the various dimensions, colors, and other aspects should be allowed to vary within ranges that produce reasonable results.
+
+Rename the current index.html to driving.HTML.
+
+Then create a new index at HTML, which will serve as a very simple bare-bones landing page for this app. It should be pure HTML, no styling or CSS. Just some plain hyperlinks to the other pages for example houses.HTML, churches.HTML, and the new driving.HTML.
+
+Ignore that I capitalized HTML, it should probably be lowercase, of course.
+
+push this change to origin main, rather than opening a PR I’d have to merge.
