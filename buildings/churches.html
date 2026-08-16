@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Church Lots Test</title>
+    <style>
+        * { margin: 0; padding: 0; overflow: hidden; }
+        canvas { display: block; }
+    </style>
+</head>
+<body>
+<canvas id="bldg-canvas"></canvas>
+<script src="../constants.js"></script>
+<script src="../drawUtils.js"></script>
+<script src="buildingUtils.js"></script>
+<!-- churches are drawn as houses for now, so houses.js has to be here too -->
+<script src="houses.js"></script>
+<script src="churches.js"></script>
+<script src="../lots.js"></script>
+<script src="../lighting.js"></script>
+<script src="../render3d.js"></script>
+<script>const GRID_TYPE = 'church';</script>
+<script src="lotGrid.js"></script>
+</body>
+</html>

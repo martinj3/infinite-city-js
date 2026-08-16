@@ -287,3 +287,48 @@ The existing code was supposed to already handle this in street generation, wher
 I also think I saw somewhere you were brute forcing against all other streets?  That same reserved RIGHT_OF_WAY check was also intended to make that unnecessary, requiring only a check of neighboring streets connecting at the same intersection, to check if there's space for a lot, or if the intersecting street already put a lot there.
 
 But perhaps the RIGHT_OF_WAY and conflictCheck() in streets.js isn't working as it was intended?
+
+Ok, now lets add a new type of lot, for churches, which are larger.  lots.js should probably define this as a new LOT_TYPE.
+And now with multiple types, each LOT_TYPE probably needs an asociated probability.  Houses are vastly more common than churches, so probably to start with, 95% chance of a house, 5% of a church.
+The larger church lots are probably more likely to be rejected by the placement logic in lots.js, if they don't fit the remaining space along a street, and that's fine, expected.
+
+Church lots are, let's say, between 70 and 120 feet wide, and between 90 and 130 feet depth.
+
+Also, to accomodate this, let's rename the existing buildings.html and buildings.js to houses.js and houses.html.  We won't create churches.js or churches.html just yet.  For now, they can just be draw as houses (in a larger lot).
+We can have a "buildings" folder, which for now can contain house.js and houses.html, and later we may add churches.js there.
+
+Anything else currently in buildings.js that's obviously generic can probably be moved to drawUtils.js, or, if it's specific to buildings but not one type of building, maybe to a "buildings/buildingUtils.js," or something.
+
+Now modify my houses.html test page.  It should be similar, creating a large grid of sample houses, but now they should be actual lots of varying sizes.
+Along one axis, width increase from whatever the range is in lots.js.  40 to 90ft I think, in increments of 2ft, let's say.
+Along the other axis, depth increases from 45 to 70ft in increments of 2ft.
+So one corner of the grid will have the smallest possible house lot, and the other (diagonally opposite) corner the largest.
+
+Also "stub out" the churches.js and churches.html, which should work simlarly.  For now, churches.js can just import and call generateHouse() from houses.js, as a placeholder, with a TODO to write actual custom church drawing code later.
+
+Actually, maybe we should rename generateHouse()?  Make a generic generate(), some kind of interface that all future building types will implement?
+
+Ok, in houses.js, useHipRoof needs to be decided after we've calculated w1 and l1.  Some additional restrictions:
+No hip roof if either dimension of the main prism exceeds 50ft.
+Further, for gable roofs, the orientation (I believe it's called lengthwise) must be set so as to minimize the roof height.  That is, the gable-ends should be on the smaller ends of the main prism (child/wing prisms still match the main prism's lengthwise roof property)
+
+This avoids ridiculously tall, giant "pyramids of egypt" on large houses with hip roofs, and absurdly tall triangles when gable roofs are oriented the wrong way.
+
+Now add the ability for houses to have more than one floor.  Single story houses are still the most common, say 60% of houses.  Then 30% with two stories, and 10% with 3.
+
+Side/wing prisms can be fewer floors than the main prism, but never more.  The main prism's number of floors sets a cap on the number of floors of auxiliary side/wing prisms.
+
+---
+
+Ok, we're setup to add churches now.  Currently they just draw as houses, as a placeholder.  Update churches.js to create real churches.  
+Use some artistic creativity.  
+Churches can have complex 3d geometry, so, I'm using you, Fable, the largest smartest model to do this part.  
+
+Some churches have a single steeple front and center, some have two matching belltowers, or two belltowers that don't quite match.  Some have a single steeple or belltower off to the side, rather than centered.  Some large cathedrals have multiple stories of windows (clerestory), some don't.  
+Windows are generally taller than windows in houses, often rounded at the top.
+
+Our lot size is somewhat limited, up to 120 x 130ft, I think?  Which is a little tight for the biggest cathedrals.  But you can still inlcude some with the style of those grand cathedrals, even if the dimensions have to be compressed a bit more than would be realistic.  
+
+Sample pictures of some churches (jpg/png) can be found in the churchPics folder, if that's helpful to you to look at.  But you should have some good knowledge from your massive training data, how churches are typically structured.  
+
+Following what we did with houses, the various dimensions, colors, and other aspects should be allowed to vary within ranges that produce reasonable results.

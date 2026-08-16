@@ -147,8 +147,9 @@ function samplePath(ax, ay, bx, by, curve) {
     return pts;
 }
 
-// Reject a proposed street if any point of its path lies within RIGHT_OF_WAY of a
-// street it would not share an intersection with. Streets meeting either end of
+// Reject a proposed street if any point of its path lies within
+// MIN_STREET_SEPARATION of a street it would not share an intersection with, so
+// that the two rights of way stay disjoint. Streets meeting either end of
 // the proposal are exempt -- connecting to them is the point -- and conflicts
 // around those shared intersections are resolved at lot-placement time.
 // This is the one global geometric gate: because it holds, everything downstream
@@ -166,13 +167,13 @@ function checkConflict(ax, ay, bx, by, curve) {
         if (Math.hypot(ax - s.x1, ay - s.y1) < 1 || Math.hypot(ax - s.x2, ay - s.y2) < 1 ||
             Math.hypot(bx - s.x1, by - s.y1) < 1 || Math.hypot(bx - s.x2, by - s.y2) < 1) continue;
 
-        // Cheap reject: street bounds vs the path's bbox, padded by the ROW
+        // Cheap reject: street bounds vs the path's bbox, padded by the separation
         const b = s.bounds;
-        if (b.mxx + RIGHT_OF_WAY < mnx || b.mnx - RIGHT_OF_WAY > mxx ||
-            b.mxy + RIGHT_OF_WAY < mny || b.mny - RIGHT_OF_WAY > mxy) continue;
+        if (b.mxx + MIN_STREET_SEPARATION < mnx || b.mnx - MIN_STREET_SEPARATION > mxx ||
+            b.mxy + MIN_STREET_SEPARATION < mny || b.mny - MIN_STREET_SEPARATION > mxy) continue;
 
         for (const [px, py] of samples) {
-            if (distToStreetPath(px, py, s) < RIGHT_OF_WAY) return true;
+            if (distToStreetPath(px, py, s) < MIN_STREET_SEPARATION) return true;
         }
     }
     return false;

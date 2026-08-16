@@ -21,4 +21,12 @@ Two complementary techniques, both provided by that file:
 
 `renderPage({ search, width, height, scripts })` is also exported for custom harnesses;
 it returns `{ ctx, sandbox, run }`, where `run('expr')` evaluates inside the page, e.g.
-`run('initMap(); growCity(500)')`.
+`run('initMap(); growCity(500)')`. A `scripts` entry may be `{ code }` instead of a
+filename, standing in for an inline `<script>` tag.
+
+Buildings have their own pages, one per type: `buildings/houses.html` and
+`buildings/churches.html` lay out one building on every lot size that type is ever
+asked for (lot width across, depth back), so the extremes are always on screen. Both
+are `buildings/lotGrid.js` with a different `GRID_TYPE`, and take `?seed`, `?step`,
+`?setback`, `?zoom`. Loading them headlessly needs the inline `{ code: "const
+GRID_TYPE = 'house';" }` script before `lotGrid.js`.

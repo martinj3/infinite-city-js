@@ -24,7 +24,8 @@ const zlib = require('zlib');
 const ROOT = path.join(__dirname, '..');
 // Mirrors the script tags in streetTest.html
 const DEFAULT_SCRIPTS = [
-    'constants.js', 'drawUtils.js', 'lighting.js', 'render3d.js', 'buildings.js',
+    'constants.js', 'drawUtils.js', 'lighting.js', 'render3d.js',
+    'buildings/buildingUtils.js', 'buildings/houses.js', 'buildings/churches.js',
     'streets.js', 'lots.js', 'drawing.js', 'streetTest.js',
 ];
 
@@ -230,7 +231,12 @@ function renderPage({ search = '', width = 900, height = 700, scripts = DEFAULT_
     };
     vm.createContext(sandbox);
     for (const f of scripts) {
-        vm.runInContext(fs.readFileSync(path.join(ROOT, f), 'utf8'), sandbox, { filename: f });
+        // A { code } entry stands in for an inline <script> tag, which is how the
+        // lot grid pages pick which building type they are showing.
+        const [src, name] = typeof f === 'string'
+            ? [fs.readFileSync(path.join(ROOT, f), 'utf8'), f]
+            : [f.code, f.name || '<inline>'];
+        vm.runInContext(src, sandbox, { filename: name });
     }
     return { ctx, sandbox, run: expr => vm.runInContext(expr, sandbox) };
 }

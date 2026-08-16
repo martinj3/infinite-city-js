@@ -18,6 +18,12 @@ const PROXIMITY_THRESHOLD = 50;
 // The "right of way" is the space on each side of a street reserved for sidewalks, buildings, houses, etc. At intersections, this will naturally overlap for the intersecting streets.  
 // It's measured from the centerline of the street, I believe?  RIGHT_OF_WAY is for one side, so 2*RIGHT_OF_WAY for the whole street with buildings on both sides.  
 const RIGHT_OF_WAY = 150;
+// Two streets that don't meet at an intersection must not have overlapping rights
+// of way: each owns RIGHT_OF_WAY to either side, so their centerlines have to stay
+// twice that apart. Keeping the two corridors disjoint is what lets a lot check
+// only the streets at its own two intersections -- anything else is too far away
+// to reach it, however deep the lot (see lots.js).
+const MIN_STREET_SEPARATION = 2 * RIGHT_OF_WAY;
 // Spacing of sample points when testing a proposed street's path against the
 // right of way of existing streets
 const CONFLICT_SAMPLE_STEP = 50;

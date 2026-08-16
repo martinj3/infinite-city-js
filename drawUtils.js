@@ -7,6 +7,12 @@
 // A Drawable is a tree: { polys: [...], children: [Drawable...] }
 // A poly is { pts: [{x,y,z}, ...], color: string }
 
+// CSS hsl() color string, with the components clamped to legal ranges so callers
+// can jitter a palette entry without worrying about running off either end.
+function hsl(h, s, l) {
+    return `hsl(${Math.round(h)}, ${Math.round(Math.max(0, Math.min(100, s)))}%, ${Math.round(Math.max(0, Math.min(100, l)))}%)`;
+}
+
 // Creates a rectangular prism at position (ox, oy, oz) with dimensions w x l x h.
 // color is a single CSS color string. All faces get the same color;
 // shading/lighting will be applied at draw time.
@@ -28,6 +34,26 @@ function makeRectangularPrism(ox, oy, oz, w, l, h, color, includeTop = true) {
         // East face (x=ox+w, facing +x)
         { pts: [p(ox+w,oy,oz), p(ox+w,oy+l,oz), p(ox+w,oy+l,oz+h), p(ox+w,oy,oz+h)], color },
     );
+    return faces;
+}
+
+// Side walls of an extruded footprint: one quad per edge of pts, from z0 up by h.
+// pts run in the same winding order makeRectangularPrism's footprint does
+// ((0,0) -> (w,0) -> (w,l) -> (0,l)), i.e. with the outside on the right walking
+// A -> B. closeLoop=false leaves the last-to-first edge open, for a shape whose
+// open side butts against another wall. No top or bottom faces.
+function makeWalls(pts, z0, h, color, closeLoop = true) {
+    const faces = [];
+    const n = closeLoop ? pts.length : pts.length - 1;
+    for (let i = 0; i < n; i++) {
+        const a = pts[i], b = pts[(i + 1) % pts.length];
+        faces.push({ pts: [
+            { x: a.x, y: a.y, z: z0 },
+            { x: b.x, y: b.y, z: z0 },
+            { x: b.x, y: b.y, z: z0 + h },
+            { x: a.x, y: a.y, z: z0 + h },
+        ], color });
+    }
     return faces;
 }
 
