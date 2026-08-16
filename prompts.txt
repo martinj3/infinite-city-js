@@ -360,3 +360,18 @@ Cool.  Not sure where you got the gear/settings icon for the camera controls, bu
 Actually you can add that to Claude.md for this repo: if I'm talking to you from the Claude mobile app, not desktop, then always push each change directly to origin main, so I can test on the GitHub Pages hosted site
 
 Steering in the mobile page with the slider definitely needs to be more sensitive.  Probably about double what it is now, when the slider is maxed
+
+Actually, probably needs to be halfway in between the old and new value, steering is a little too sensitive now.
+
+Next major task, add a proper, 3d car model for the player's car (and eventually for other simulated traffic, so keep the model fairly simple and fast to draw, but player car only for now).
+
+Should have randomly varying dimensions, colors, etc, like houses do.
+Start with "vehicles/sedan.js."  You can also create "vehicles/vehicleUtils.js" for anything likely to be shared with other, future vehicle types.
+
+A typical sedan might have an overall width between 5 and 7 ft, roughly, and overall length between 13 and 17ft or so.
+Can have a simple body with hood, roof, and then trunk.  Possibly a sloping hood and/or sloping trunk.
+Simple wheels which can be squares or diamonds, possibly hidden when zoomed way out.  When the wheels are visible when zoomed in, the front wheels should turn to reflect player steering angle, of course.
+
+Maybe surface/detail polygons (like houses have) for the windows, but probably only drawn when zoomed in quite a bit.
+
+Actually at very wide zoom levels, the whole vehicle could become a rectangle matching the overall width, length, and color.  That logic could be shared across all vehicle types.

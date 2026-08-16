@@ -276,22 +276,10 @@ function draw() {
     const W = canvas.width, H = canvas.height;
     drawScene(player.x, player.y);
 
-    // Player
-    applyCamera(player.x, player.y);
-    const px = player.x * PX_PER_FT, py = player.y * PX_PER_FT;
-    const hl = (CAR_LENGTH / 2) * PX_PER_FT, hw = (CAR_WIDTH / 2) * PX_PER_FT;
-    const notch = (CAR_LENGTH / 4) * PX_PER_FT;
-    ctx.save();
-    ctx.translate(px, py);
-    ctx.rotate(player.angle);
-    ctx.beginPath();
-    ctx.moveTo(hl, 0); ctx.lineTo(-hl, -hw); ctx.lineTo(-notch, 0); ctx.lineTo(-hl, hw);
-    ctx.closePath();
-    ctx.fillStyle = '#e33'; ctx.fill();
-    ctx.strokeStyle = '#a00'; ctx.lineWidth = 2; ctx.stroke();
-    ctx.restore();
-
-    ctx.restore();
+    // Player's car. Like the buildings it is 3D and projects itself, so it goes on
+    // in screen space after the ground layers rather than under the 2D camera.
+    drawVehicle(player.vehicle, player.x, player.y, player.angle, player.steer,
+                player.x, player.y);
 
     // HUD
     const mph = Math.abs(player.speed * 3600 / 5280);

@@ -18,6 +18,30 @@ camera already follows the car. The pedals appear only on a coarse pointer --
 With no real DOM every entry point turns into a no-op, which is what keeps
 `tools/render.js` working.
 
+## Vehicles
+
+`vehicles/` mirrors `buildings/`: `vehicleUtils.js` holds what every vehicle type
+shares -- the type registry (`registerVehicle` / `generateVehicle`), the palette,
+the wheels, and `drawVehicle()` -- and one file per body style holds the rest.
+`sedan.js` is the only one so far.
+
+Models are built in vehicle-local feet: **+x forward, +y the car's right, z up**,
+origin on the ground at the centre of the footprint. `drawVehicle()` rotates and
+places them, so a model never knows where it is; that is what will let the same
+code draw traffic later.
+
+A sedan is two extruded side profiles -- a full-width lower body and a narrower
+cabin -- plus four box wheels: ~38 polys. `makeExtrudedProfile()` is what gives a
+sloping hood or a raked windscreen without special cases; they are just edges of
+the profile.
+
+Detail is chosen by `PX_PER_FT` alone (`VEHICLE_SOLID_MIN_ZOOM`,
+`VEHICLE_WHEELS_MIN_ZOOM`, `VEHICLE_GLASS_MIN_ZOOM`), down to a single flat
+rectangle of the right size and colour when zoomed way out. Wheels, body and glass
+are painted as three separate passes, because depth sorting compares whole polygons
+and cannot resolve the wheels tucked inside the body -- the same reason buildings
+hang their windows off a child drawable.
+
 ## Testing
 
 `streetTest.html` is the fastest way to check street generation: it grows a whole

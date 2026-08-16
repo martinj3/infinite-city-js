@@ -21,7 +21,9 @@ initPanZoom({ pan: false });
 initDriveControls();
 
 // --- Player ---
-const player = { x: 200, y: 0, angle: 0, speed: 0 };
+// steer is kept on the player because the car is drawn from it too: the front
+// wheels turn to match whatever is steering the car.
+const player = { x: 200, y: 0, angle: 0, speed: 0, steer: 0, vehicle: generateVehicle('sedan') };
 
 // --- Update ---
 function update(dt) {
@@ -31,6 +33,7 @@ function update(dt) {
     const brake = keys['ArrowDown'] || touchDrive.brake;
     let steer = (keys['ArrowRight'] ? 1 : 0) - (keys['ArrowLeft'] ? 1 : 0);
     if (steer === 0) steer = touchDrive.steer * TOUCH_STEER_GAIN;
+    player.steer = Math.max(-1, Math.min(1, steer));
 
     if (gas) player.speed += ACCEL * dt;
     if (brake) {
