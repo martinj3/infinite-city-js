@@ -404,3 +404,7 @@ The more common passenger vans have windows and a wider variety of colors (same 
 Most rear passenger windows can probably be merged into a single large window strip, if that saves on polygons/resources
 
 Better add SUVs, also, since they are among the most popular vehicles on US roads today, slightly more popular than sedans.  Not sure how to describe how they really differ from minivans.  I guess they ride slightly higher ground clearance, and have slightly longer hoods.  Can vary from compact (eg kia sorrento) to full size SUV (eg suburban)
+
+Hmm, the SUVs still look just slightly too much like minivans or station wagons.  Make the hoods just slightly longer to distinguish more from minivans (the overall lengths are fine, I think, so this extra hood length can be taken from the passenger cabin area).
+
+Another thing I think distinguishes modern SUVs and crossovers from older minivans is a higher "beltline".  The overall roof heights look fine, but the hood and bottom of the passenger windows can be a bit higher up, giving that sportier, higher beltline look, if that makes sense?

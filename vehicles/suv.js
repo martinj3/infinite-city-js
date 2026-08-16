@@ -7,15 +7,17 @@
 // What makes it an SUV and not a van, given both are a tall box on wheels, comes
 // down to four things, and they are all in the numbers below:
 //
-//   a real bonnet     20-25% of the length in front of the windscreen, against a
+//   a real bonnet     24-29% of the length in front of the windscreen, against a
 //                     van's 13-20%, and it barely drops -- an SUV's nose is a
-//                     blunt slab, a minivan's slopes away
+//                     blunt slab, a minivan's slopes away. That length comes out
+//                     of the cabin, not the overall length
 //   it rides high     the sill sits 1.30-1.70ft up on bigger wheels, where a van
 //                     is 1.05-1.45ft on car-sized ones. That gap is most of what
 //                     you actually see from above
-//   shallower glass   the beltline is 54-58% of the way up, so a bit over 40% of
-//                     the body is window; a van is nearer half. High door, low
-//                     roof reads as truck
+//   a high beltline   the window line is 59-63% of the way up, so under 40% of the
+//                     body is glass where a van is nearer half. Deep doors and a
+//                     shallow band of window is the whole modern-crossover look,
+//                     and it is what most separates one from an old minivan
 //   the top end is lower  6.5ft at most, where a full-size van reaches 7ft. Only
 //                     the top end: a compact crossover and a minivan really are
 //                     the same height for their length, so the small ends overlap
@@ -30,9 +32,9 @@ const SUV_RANGES = {
     width: [6.2, 6.9],
     height: [5.6, 6.5],          // lower than a van of the same length
     clearance: [1.30, 1.70],     // the ride height, and the main tell
-    beltFrac: [0.54, 0.58],
-    hoodFrac: [0.25, 0.20],      // long for the class, but a smaller share of a big body
-    hoodDrop: [0.30, 0.12],      // blunter as it gets bigger
+    beltFrac: [0.59, 0.63],      // high: the window line is nearly two thirds up
+    hoodFrac: [0.29, 0.24],      // long for the class, but a smaller share of a big body
+    hoodDrop: [0.25, 0.10],      // and barely falls away from that line
     windscreenRake: [0.50, 0.35],
     wheelRadius: [1.20, 1.50],
     tireWidth: [0.75, 0.95],

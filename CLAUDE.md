@@ -62,8 +62,10 @@ The van's two subtypes differ only in glass and paint: a work van gets `sideGlas
 cut to the cab, `rearGlass: false` and a mostly-white palette, and records which it
 is in `v.subtype`. What tells an SUV from a van, both being a tall box, is ride
 height above all -- 1.30-1.70ft of sill on bigger wheels against 1.05-1.45ft --
-then a bonnet a fifth to a quarter of the length, and a beltline high enough that
-only about 44% of the body is glass where a van is nearer half. Height is *not* a
+then a bonnet a quarter to three-tenths of the length, sitting up at the window
+line rather than sloping away below it, and a beltline high enough that under 40%
+of the body is glass where a van is nearer half. The extra bonnet comes out of the
+cabin, not the overall length. Height is *not* a
 tell at the small end: a compact crossover and a minivan are the same height for
 their length, and only the top of the axis diverges.
 
