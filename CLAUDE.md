@@ -1,5 +1,9 @@
 For this project, infinite-city-js, please add any prompts I send you to prompts.txt
 
+If I'm talking to you from the Claude mobile app (not desktop), always push each
+change directly to origin main, rather than opening a PR -- that's how I load the
+GitHub Pages site on my phone to test it.
+
 ## Controls
 
 `controls.js` holds the pointer and touch UI every page shares: drag to scroll,

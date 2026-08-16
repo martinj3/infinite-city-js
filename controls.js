@@ -142,7 +142,7 @@ function buildCameraToolbar() {
     reset.addEventListener('click', resetCamera);
 
     // The opener sits above the panel so it stays put as the panel opens/closes.
-    const toggle = ctlEl('button', 'ic-btn ic-cam-toggle', wrap, '⚙');
+    const toggle = ctlEl('button', 'ic-btn ic-cam-toggle', wrap, '📷');
     toggle.title = 'Camera controls';
     toggle.setAttribute('aria-label', 'Camera controls');
     toggle.addEventListener('click', () => {
