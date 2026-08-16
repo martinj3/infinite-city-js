@@ -15,25 +15,36 @@ addEventListener('wheel', e => {
     PX_PER_FT = Math.max(PX_PER_FT_MIN, Math.min(PX_PER_FT_MAX, PX_PER_FT * factor));
 }, { passive: false });
 
+// Touch: pinch to zoom, and the on-screen wheel and pedals. There is no
+// drag-to-scroll here -- the camera is already following the car.
+initPanZoom({ pan: false });
+initDriveControls();
+
 // --- Player ---
 const player = { x: 200, y: 0, angle: 0, speed: 0 };
 
 // --- Update ---
 function update(dt) {
-    if (keys['ArrowUp']) player.speed += ACCEL * dt;
-    if (keys['ArrowDown']) {
+    // Keys and the touch controls feed the same three inputs. Steering is analog:
+    // a key is simply the slider pushed all the way over.
+    const gas = keys['ArrowUp'] || touchDrive.gas;
+    const brake = keys['ArrowDown'] || touchDrive.brake;
+    let steer = (keys['ArrowRight'] ? 1 : 0) - (keys['ArrowLeft'] ? 1 : 0);
+    if (steer === 0) steer = touchDrive.steer;
+
+    if (gas) player.speed += ACCEL * dt;
+    if (brake) {
         if (player.speed > 0) { player.speed -= BRAKE * dt; if (player.speed < 0) player.speed = 0; }
         else player.speed -= ACCEL * 0.5 * dt;
     }
-    if (!keys['ArrowUp'] && !keys['ArrowDown']) {
+    if (!gas && !brake) {
         if (player.speed > 0) player.speed = Math.max(0, player.speed - DRAG * dt);
         else if (player.speed < 0) player.speed = Math.min(0, player.speed + DRAG * dt);
     }
     player.speed = Math.max(-REVERSE_MAX, Math.min(MAX_SPEED, player.speed));
 
     const tf = Math.min(Math.abs(player.speed) / 20, 1);
-    if (keys['ArrowLeft'])  player.angle -= MAX_TURN_RATE * tf * dt;
-    if (keys['ArrowRight']) player.angle += MAX_TURN_RATE * tf * dt;
+    player.angle += MAX_TURN_RATE * tf * steer * dt;
 
     player.x += Math.cos(player.angle) * player.speed * dt;
     player.y += Math.sin(player.angle) * player.speed * dt;

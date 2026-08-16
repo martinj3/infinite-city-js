@@ -24,7 +24,7 @@ const zlib = require('zlib');
 const ROOT = path.join(__dirname, '..');
 // Mirrors the script tags in streetTest.html
 const DEFAULT_SCRIPTS = [
-    'constants.js', 'drawUtils.js', 'lighting.js', 'render3d.js',
+    'constants.js', 'controls.js', 'drawUtils.js', 'lighting.js', 'render3d.js',
     'buildings/buildingUtils.js', 'buildings/houses.js', 'buildings/churches.js',
     'streets.js', 'lots.js', 'drawing.js', 'streetTest.js',
 ];

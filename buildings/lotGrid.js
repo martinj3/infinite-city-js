@@ -152,6 +152,13 @@ addEventListener('wheel', e => {
     PX_PER_FT = Math.max(PX_PER_FT_MIN, Math.min(PX_PER_FT_MAX, PX_PER_FT * factor));
 }, { passive: false });
 
+// Drag to scroll (mouse or one finger), pinch to zoom. "Reset view" refits the
+// whole grid, which is the useful thing here and matches the 0 key.
+initPanZoom({
+    onPan: (dx, dy) => { camX += dx; camY += dy; },
+    onReset: fitToGrid,
+});
+
 function saveScreenshot() {
     canvas.toBlob(blob => {
         const a = document.createElement('a');

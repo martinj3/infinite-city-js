@@ -1,5 +1,19 @@
 For this project, infinite-city-js, please add any prompts I send you to prompts.txt
 
+## Controls
+
+`controls.js` holds the pointer and touch UI every page shares: drag to scroll,
+pinch to zoom, the camera toolbar in the top right corner, and the driving game's
+on-screen steering slider and pedals. It is loaded right after `constants.js` and
+drives the same globals the keyboard does (`PX_PER_FT`, `VIEW_ANGLE`, `Y_SCALE`),
+so drawing code never has to know it exists. A page opts in by calling
+`initPanZoom({ onPan, onReset })`; the driving game passes `pan: false` because its
+camera already follows the car. The pedals appear only on a coarse pointer --
+`?touch=1` forces them on to try them on a desktop, `?touch=0` off.
+
+With no real DOM every entry point turns into a no-op, which is what keeps
+`tools/render.js` working.
+
 ## Testing
 
 `streetTest.html` is the fastest way to check street generation: it grows a whole

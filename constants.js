@@ -40,7 +40,8 @@ const SIDEWALK_BOTH_PROB = 0.6;
 const SIDEWALK_NONE_PROB = 0.2;
 
 // --- Isometric view ---
-let VIEW_ANGLE = -Math.PI / 4;
+const VIEW_ANGLE_DEFAULT = -Math.PI / 4;
+let VIEW_ANGLE = VIEW_ANGLE_DEFAULT;
 let Y_SCALE = 0.5;
 const Y_SCALE_DEFAULT = 0.5;
 const Y_SCALE_MIN = 0.25;

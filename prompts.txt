@@ -340,3 +340,17 @@ Then create a new index at HTML, which will serve as a very simple bare-bones la
 Ignore that I capitalized HTML, it should probably be lowercase, of course.
 
 push this change to origin main, rather than opening a PR I’d have to merge.
+
+OK, now the purpose of this is so that I can view it using GitHub Pages, so that I can see it on my phone, and do development on my phone with the Claude iOS app. But to support that, we need to make it more mobile friendly.
+
+For the test pages like houses.HTML, we need to add drag to scroll and pinch to zoom.  If this drag to scroll can also enable drag to scroll in desktop browsers as well with the mouse, hopefully using the same logic, that would be great.
+
+Then in driving.html, we need some basic driving controls that will work on a touchscreen.  If we can detect when we're in a mobile browser, then put a controls bar at the bottom.  Roughly the left half of this control bar should be a left-right slider used for steering.
+The right half of the control bar should be divided between a gas button and a brake button. The brake button may not do anything at this point, because I can't remember if we even have braking implemented.  That's fine, it can just be a placeholder for now if that's the case.
+
+Driving.HTML can also support pinch to zoom, but obviously not drag to scroll, since it scrolls to follow the player car's position already.
+
+All of the pages can have a camera controls button, maybe in the top right corner, which opens a camera controls toolbar, with buttons for rotate tilt and zoom. Actually, this camera control toolbar button can show on desktop browsers as well.
+Put it somewhere where all the html pages can share it.
+
+Again, push this straight to origin main

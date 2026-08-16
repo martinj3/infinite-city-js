@@ -303,7 +303,8 @@ function draw() {
     ctx.font = '13px monospace';
     ctx.fillText(`Streets: ${streets.length}`, 16, 52);
 
-    if (instructionAlpha > 0) {
+    // Nothing to tell someone with no keyboard, and it would sit under the pedals
+    if (instructionAlpha > 0 && !touchDrive.shown) {
         ctx.globalAlpha = instructionAlpha;
         ctx.fillStyle = 'rgba(0,0,0,0.6)';
         ctx.fillRect(W / 2 - 200, H - 80, 400, 50);
