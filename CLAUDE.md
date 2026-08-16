@@ -24,7 +24,8 @@ With no real DOM every entry point turns into a no-op, which is what keeps
 shares -- the type registry (`registerVehicle` / `generateVehicle` /
 `generateRandomVehicle`), the palette, the wheels, `makeCarLike()` and
 `drawVehicle()` -- and one file per body style holds the rest: `sedan.js`,
-`pickupTruck.js`, `policeCar.js`, `cityBus.js`, `schoolBus.js`, `deliveryVan.js`.
+`pickupTruck.js`, `van.js`, `policeCar.js`, `cityBus.js`, `schoolBus.js`,
+`deliveryVan.js`.
 The player gets one at random, weighted by the `weight` each type registers, so
 cars are the common case and buses the rare one.
 
@@ -48,12 +49,26 @@ roof, a pickup's bed is longer than both. `spec.bed` lays one dark quad into the
 rear deck for the bed floor -- a real box would need interior walls, and the far
 one of those is a backface, so it would be culled and leave a hole to see through.
 
+A spec is normally a fixed table, but nothing says it has to be: `van.js` builds
+its own per vehicle. A van runs from a compact minivan to a full-size
+eight-seater, and those dimensions are not independent -- a 19ft van that is 5.5ft
+tall is not a vehicle anyone has seen -- so one `t` picks a point on that axis and
+every size field is read off it. The jitter is applied to `t`, not to the value it
+produces, so a dimension can never leave the range it declares. Proportions that
+go with size ride along by being written big-end-first (a minivan's raked
+windscreen against an Econoline's upright one). Its two subtypes differ only in
+glass and paint: a work van gets `sideGlass` cut to the cab, `rearGlass: false`
+and a mostly-white palette, and records which it is in `v.subtype`.
+
 Glass is per-flank, and `spec.sideGlass` (a [from, to] pair measured back from the
 front of the cabin) with `spec.bayFt` says which part of it is glazed and how
 finely: a car takes the default single pane per flank (no B-pillar -- at this size
 it would be a sub-pixel line), a bus asks for a bay every few feet, a van glazes
 only the front fifth, which is all the cab it has. Gaps between panes come for
-free, from the same inset that leaves a pillar around a car's window.
+free, from the same inset that leaves a pillar around a car's window. Leaving the
+default is also what merges a passenger van's rear side windows into one strip:
+the pillars between them would be sub-pixel, so a pane per row of seats would cost
+polygons and show nothing.
 
 The right-hand flank is wound in reverse: mirroring a polygon flips its normal, so
 without that both faces point the same way and you get two windows from one side of

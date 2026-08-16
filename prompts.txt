@@ -394,3 +394,11 @@ And another type of vehicle is delivery cans, food trucks, small freight trucks,
 They're 20 to 25ft long overall, with a short hood.
 
 Then police cars, which are sedans, but with the red/blue light bar on top, and colored shades of blue, white, or black.
+
+Go ahead and add vans.  The van vehicle type will encompass mini-vans (eg Dodge Caravan) which are quite compact, no wider than a sedan, up to full-size 8-passenger vans (eg older Ford Econoline) which are very slightly wider, taller, and longer.  (But still smaller than the delivery vans, of course).
+
+The less common work-van subtype has no rear passenger windows and is almost always white, or rarely shades of grey or black.
+
+The more common passenger vans have windows and a wider variety of colors (same as general sedan colors probably)
+
+Most rear passenger windows can probably be merged into a single large window strip, if that saves on polygons/resources
