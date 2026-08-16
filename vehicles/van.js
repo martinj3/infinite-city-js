@@ -3,14 +3,13 @@
 // a full-size eight-seater (the old Econoline): the small end is no wider than a
 // sedan and only a little taller, the big end is longer, taller and slightly wider,
 // and even that stays well under a delivery van. So the size is not three
-// independent draws -- a 19ft van that is 5.5ft tall is not a vehicle anyone has
-// seen. One `t` picks a point on the minivan-to-Econoline axis and every dimension
-// is read off it, with a little jitter so two vans of the same length still differ.
+// independent draws: it is one point on the minivan-to-Econoline axis, which is
+// what specOnSizeAxis() in vehicleUtils.js is for.
 //
 // The proportions that go with that axis ride along: a minivan has a sloping,
 // dropped nose and a steeply raked windscreen, an Econoline a stubby flat one and
 // glass that is nearly upright. Those ranges are written big-end-first below where
-// they run the other way to `t`.
+// they run the other way to size.
 //
 // Two subtypes, differing only in glass and paint:
 //
@@ -64,17 +63,7 @@ const VAN_FIXED = {
 };
 
 function generateVan() {
-    const t = Math.random();
-    // Jitter `t` rather than the value it produces, so a dimension can never leave
-    // the range it declares however far it strays off the size axis.
-    const near = ([lo, hi]) => {
-        const u = Math.min(1, Math.max(0, t + (Math.random() - 0.5) * 2 * VAN_SIZE_JITTER));
-        const v = lo + (hi - lo) * u;
-        return [v, v];
-    };
-
-    const spec = Object.assign({}, VAN_FIXED);
-    for (const field in VAN_RANGES) spec[field] = near(VAN_RANGES[field]);
+    const spec = Object.assign({}, VAN_FIXED, specOnSizeAxis(VAN_RANGES, VAN_SIZE_JITTER));
 
     const work = Math.random() < WORK_VAN_SHARE;
     if (work) {

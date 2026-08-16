@@ -402,3 +402,5 @@ The less common work-van subtype has no rear passenger windows and is almost alw
 The more common passenger vans have windows and a wider variety of colors (same as general sedan colors probably)
 
 Most rear passenger windows can probably be merged into a single large window strip, if that saves on polygons/resources
+
+Better add SUVs, also, since they are among the most popular vehicles on US roads today, slightly more popular than sedans.  Not sure how to describe how they really differ from minivans.  I guess they ride slightly higher ground clearance, and have slightly longer hoods.  Can vary from compact (eg kia sorrento) to full size SUV (eg suburban)

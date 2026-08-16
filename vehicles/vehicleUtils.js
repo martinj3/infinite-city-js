@@ -108,6 +108,28 @@ const BED_LINER_COLOR = 'hsl(30, 6%, 24%)';   // the open floor of a pickup bed
 
 const vehRand = ([lo, hi]) => lo + Math.random() * (hi - lo);
 
+// Some families are one size axis rather than a set of independent dimensions: a
+// van runs from a compact minivan to a full-size eight-seater and an SUV from a
+// Sorento to a Suburban, and a 19ft van that is 5.5ft tall is not a vehicle anyone
+// has seen. So a type can pick one point `t` on that axis and read every field off
+// it -- pass the ranges written small-end-first, or the other way round for a field
+// that shrinks as the vehicle grows, and get back spec entries to merge with the
+// fixed ones.
+//
+// The jitter is applied to `t`, not to the value it produces, so a field can wander
+// off the axis without ever leaving the range it declares -- no clamping needed.
+function specOnSizeAxis(ranges, jitter = 0.18) {
+    const t = Math.random();
+    const out = {};
+    for (const field in ranges) {
+        const [lo, hi] = ranges[field];
+        const u = Math.min(1, Math.max(0, t + (Math.random() - 0.5) * 2 * jitter));
+        const v = lo + (hi - lo) * u;
+        out[field] = [v, v];
+    }
+    return out;
+}
+
 // --- Geometry ----------------------------------------------------------------
 
 // Extrude a side-view profile across the car's width. The profile is a closed

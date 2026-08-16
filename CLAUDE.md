@@ -24,10 +24,10 @@ With no real DOM every entry point turns into a no-op, which is what keeps
 shares -- the type registry (`registerVehicle` / `generateVehicle` /
 `generateRandomVehicle`), the palette, the wheels, `makeCarLike()` and
 `drawVehicle()` -- and one file per body style holds the rest: `sedan.js`,
-`pickupTruck.js`, `van.js`, `policeCar.js`, `cityBus.js`, `schoolBus.js`,
-`deliveryVan.js`.
+`pickupTruck.js`, `suv.js`, `van.js`, `policeCar.js`, `cityBus.js`,
+`schoolBus.js`, `deliveryVan.js`.
 The player gets one at random, weighted by the `weight` each type registers, so
-cars are the common case and buses the rare one.
+SUVs and cars are the common case and buses the rare one.
 
 Models are built in vehicle-local feet: **+x forward, +y the car's right, z up**,
 origin on the ground at the centre of the footprint. `drawVehicle()` rotates and
@@ -49,16 +49,23 @@ roof, a pickup's bed is longer than both. `spec.bed` lays one dark quad into the
 rear deck for the bed floor -- a real box would need interior walls, and the far
 one of those is a backface, so it would be culled and leave a hole to see through.
 
-A spec is normally a fixed table, but nothing says it has to be: `van.js` builds
-its own per vehicle. A van runs from a compact minivan to a full-size
-eight-seater, and those dimensions are not independent -- a 19ft van that is 5.5ft
-tall is not a vehicle anyone has seen -- so one `t` picks a point on that axis and
-every size field is read off it. The jitter is applied to `t`, not to the value it
-produces, so a dimension can never leave the range it declares. Proportions that
-go with size ride along by being written big-end-first (a minivan's raked
-windscreen against an Econoline's upright one). Its two subtypes differ only in
-glass and paint: a work van gets `sideGlass` cut to the cab, `rearGlass: false`
-and a mostly-white palette, and records which it is in `v.subtype`.
+A spec is normally a fixed table, but nothing says it has to be: `van.js` and
+`suv.js` build their own per vehicle with `specOnSizeAxis()`. Each runs from a
+compact to a full-size version of itself, and those dimensions are not independent
+-- a 19ft van that is 5.5ft tall is not a vehicle anyone has seen -- so one `t`
+picks a point on that axis and every size field is read off it. The jitter is
+applied to `t`, not to the value it produces, so a dimension can never leave the
+range it declares. Proportions that go with size ride along by being written
+big-end-first (a minivan's raked windscreen against an Econoline's upright one).
+
+The van's two subtypes differ only in glass and paint: a work van gets `sideGlass`
+cut to the cab, `rearGlass: false` and a mostly-white palette, and records which it
+is in `v.subtype`. What tells an SUV from a van, both being a tall box, is ride
+height above all -- 1.30-1.70ft of sill on bigger wheels against 1.05-1.45ft --
+then a bonnet a fifth to a quarter of the length, and a beltline high enough that
+only about 44% of the body is glass where a van is nearer half. Height is *not* a
+tell at the small end: a compact crossover and a minivan are the same height for
+their length, and only the top of the axis diverges.
 
 Glass is per-flank, and `spec.sideGlass` (a [from, to] pair measured back from the
 front of the cabin) with `spec.bayFt` says which part of it is glazed and how
