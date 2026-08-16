@@ -408,3 +408,8 @@ Better add SUVs, also, since they are among the most popular vehicles on US road
 Hmm, the SUVs still look just slightly too much like minivans or station wagons.  Make the hoods just slightly longer to distinguish more from minivans (the overall lengths are fine, I think, so this extra hood length can be taken from the passenger cabin area).
 
 Another thing I think distinguishes modern SUVs and crossovers from older minivans is a higher "beltline".  The overall roof heights look fine, but the hood and bottom of the passenger windows can be a bit higher up, giving that sportier, higher beltline look, if that makes sense?
+
+Now add skeleton, placeholder files for several new types of vehicles:
+Firetruck. Trash truck. Cement truck. vwBeetle. vwMinibus. Corvette. CraneTruck.  BoxTruck. And SemiTruck.
+
+For now, these are just placeholders and should import logic from sedan.js to just draw as sedans for now.  They should also have probability zero of being chosen as the player's car, for now.

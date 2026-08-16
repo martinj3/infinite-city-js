@@ -51,6 +51,20 @@ function generateRandomVehicle() {
     return generateVehicle(randomVehicleType());
 }
 
+// A type with no body style of its own yet: it draws as a sedan (borrowing
+// generateSedan() wholesale, the same way policeCar.js does) and registers at
+// weight 0, so `r -= 0` in randomVehicleType() above can never cross zero on it --
+// it can only ever come up once every other type has already been exhausted, which
+// never happens while any real type is still registered. That is what keeps a
+// placeholder out of both the player's car and, later, traffic, without a special
+// case anywhere that picks a vehicle.
+function registerPlaceholderVehicle(name) {
+    registerVehicle(name, {
+        generate: () => Object.assign(generateSedan(), { type: name }),
+        weight: 0,
+    });
+}
+
 // --- Level of detail ---------------------------------------------------------
 // A car is only about 15ft long, an order of magnitude smaller than a house, so
 // its parts hit sub-pixel sizes at zoom levels where buildings are still fine.

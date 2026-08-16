@@ -29,6 +29,14 @@ shares -- the type registry (`registerVehicle` / `generateVehicle` /
 The player gets one at random, weighted by the `weight` each type registers, so
 SUVs and cars are the common case and buses the rare one.
 
+Nine more are registered but have no body style yet -- `fireTruck.js`,
+`trashTruck.js`, `cementTruck.js`, `vwBeetle.js`, `vwMinibus.js`, `corvette.js`,
+`craneTruck.js`, `boxTruck.js`, `semiTruck.js` -- each a one-liner calling
+`registerPlaceholderVehicle(name)`, which draws it as a sedan at weight 0.
+`r -= 0` in `randomVehicleType()` can never cross zero on its own, so a
+weight-0 type can only come up once every real type is exhausted, which never
+happens: no special case anywhere has to know a placeholder is one.
+
 Models are built in vehicle-local feet: **+x forward, +y the car's right, z up**,
 origin on the ground at the centre of the footprint. `drawVehicle()` rotates and
 places them, so a model never knows where it is; that is what will let the same
