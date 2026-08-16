@@ -23,7 +23,7 @@ initDriveControls();
 // --- Player ---
 // steer is kept on the player because the car is drawn from it too: the front
 // wheels turn to match whatever is steering the car.
-const player = { x: 200, y: 0, angle: 0, speed: 0, steer: 0, vehicle: generateVehicle('sedan') };
+const player = { x: 200, y: 0, angle: 0, speed: 0, steer: 0, vehicle: generateRandomVehicle() };
 
 // --- Update ---
 function update(dt) {

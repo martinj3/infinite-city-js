@@ -21,19 +21,33 @@ With no real DOM every entry point turns into a no-op, which is what keeps
 ## Vehicles
 
 `vehicles/` mirrors `buildings/`: `vehicleUtils.js` holds what every vehicle type
-shares -- the type registry (`registerVehicle` / `generateVehicle`), the palette,
-the wheels, and `drawVehicle()` -- and one file per body style holds the rest.
-`sedan.js` is the only one so far.
+shares -- the type registry (`registerVehicle` / `generateVehicle` /
+`generateRandomVehicle`), the palette, the wheels, `makeCarLike()` and
+`drawVehicle()` -- and one file per body style holds the rest. `sedan.js` and
+`pickupTruck.js` so far; the player gets one at random, weighted by the `weight`
+each type registers.
 
 Models are built in vehicle-local feet: **+x forward, +y the car's right, z up**,
 origin on the ground at the centre of the footprint. `drawVehicle()` rotates and
 places them, so a model never knows where it is; that is what will let the same
 code draw traffic later.
 
-A sedan is two extruded side profiles -- a full-width lower body and a narrower
-cabin -- plus four box wheels: ~38 polys. `makeExtrudedProfile()` is what gives a
-sloping hood or a raked windscreen without special cases; they are just edges of
-the profile.
+Every type so far is the same shape in different proportions -- a full-width lower
+body, a narrower cabin, four box wheels, ~38 polys -- so that shape is
+`makeCarLike(type, spec)` in vehicleUtils.js and a body style file is little more
+than a table of ranges. `makeExtrudedProfile()` is what gives a sloping hood or a
+raked windscreen without special cases; they are just edges of the profile.
+
+What separates a sedan from a pickup is mostly `rearFrac` against `minRoofFrac`: a
+sedan's boot is always shorter than its bonnet and always shorter than its flat
+roof, a pickup's bed is longer than both. `spec.bed` lays one dark quad into the
+rear deck for the bed floor -- a real box would need interior walls, and the far
+one of those is a backface, so it would be culled and leave a hole to see through.
+
+Both flanks' side windows are one pane each (no B-pillar at this size), and the
+right-hand one is wound in reverse: mirroring a polygon flips its normal, so
+without that both faces point the same way and you get two windows from one side of
+the car and none from the other.
 
 Detail is chosen by `PX_PER_FT` alone (`VEHICLE_SOLID_MIN_ZOOM`,
 `VEHICLE_WHEELS_MIN_ZOOM`, `VEHICLE_GLASS_MIN_ZOOM`), down to a single flat
@@ -72,3 +86,9 @@ asked for (lot width across, depth back), so the extremes are always on screen. 
 are `buildings/lotGrid.js` with a different `GRID_TYPE`, and take `?seed`, `?step`,
 `?setback`, `?zoom`. Loading them headlessly needs the inline `{ code: "const
 GRID_TYPE = 'house';" }` script before `lotGrid.js`.
+
+`vehicles/vehicles.html` is the same idea for vehicles: a 6x6 block of every
+registered type, all facing the same way so proportions line up, with the steering
+angle sweeping full left to full right across the columns. `?seed`, `?n`, `?type`,
+`?zoom`, `?angle`, `?tilt`, and the same keys as the building pages. It loads
+headlessly with no inline script -- `vehicles/vehicleGrid.js` finds its own canvas.

@@ -165,6 +165,7 @@ class RasterCtx {
         }
     }
     fillText() { }              // HUD text is not rendered
+    strokeText() { }
     measureText() { return { width: 0 }; }
 
     toPNG() {

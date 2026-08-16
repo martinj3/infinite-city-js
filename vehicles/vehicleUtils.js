@@ -15,19 +15,40 @@
 //
 //     generate() -> vehicle, in vehicle-local coordinates
 //
-// mirroring the building registry in buildings/buildingUtils.js, and for the same
-// reason: these are plain global scripts, so a bare generate() per file would
-// collide. A new body style is added by writing its file and loading it.
+// and may declare a `weight`, how common it is meant to be on the road relative to
+// the other types. This mirrors the building registry in
+// buildings/buildingUtils.js, and for the same reason: these are plain global
+// scripts, so a bare generate() per file would collide. A new body style is added
+// by writing its file and loading it.
 const VEHICLE_TYPES = {};
 
 function registerVehicle(name, impl) {
-    VEHICLE_TYPES[name] = impl;
+    VEHICLE_TYPES[name] = Object.assign({ weight: 1 }, impl);
 }
 
 function generateVehicle(name) {
     const type = VEHICLE_TYPES[name];
     if (!type) throw new Error(`no vehicle type registered as "${name}" -- is its script loaded?`);
     return type.generate();
+}
+
+// Pick a body style at random, in proportion to the registered weights. Traffic
+// will want this too, which is why the mix lives here rather than in the game.
+function randomVehicleType() {
+    const names = Object.keys(VEHICLE_TYPES);
+    if (!names.length) throw new Error('no vehicle types registered -- are their scripts loaded?');
+    let total = 0;
+    for (const n of names) total += VEHICLE_TYPES[n].weight;
+    let r = Math.random() * total;
+    for (const n of names) {
+        r -= VEHICLE_TYPES[n].weight;
+        if (r <= 0) return n;
+    }
+    return names[names.length - 1];
+}
+
+function generateRandomVehicle() {
+    return generateVehicle(randomVehicleType());
 }
 
 // --- Level of detail ---------------------------------------------------------
@@ -77,6 +98,7 @@ function pickVehicleColor() {
 
 const TIRE_COLOR = 'hsl(0, 0%, 13%)';
 const GLASS_COLOR = 'hsl(205, 22%, 38%)';
+const BED_LINER_COLOR = 'hsl(30, 6%, 24%)';   // the open floor of a pickup bed
 
 const vehRand = ([lo, hi]) => lo + Math.random() * (hi - lo);
 
@@ -142,6 +164,184 @@ function insetQuad(pts, frac) {
         y: c.y + (p.y - c.y) * (1 - frac),
         z: c.z + (p.z - c.z) * (1 - frac),
     }));
+}
+
+// --- The car-like chassis ----------------------------------------------------
+// Sedans, pickups and (later) wagons and vans are the same animal in different
+// proportions: a full-width lower body whose top edge slopes down over the nose
+// and the tail, a narrower cabin sitting on it with raked glass front and back,
+// and four wheels. So the shape lives here once and a body style is a table of
+// proportions -- see sedan.js for the smallest possible example.
+//
+// Every field is a [lo, hi] range in feet, or a fraction of the overall length or
+// height where noted. `bed` turns the rear deck into an open pickup bed.
+//
+//   width, length        overall, bumper to bumper and kerb to kerb
+//   height               overall, ground to roof
+//   clearance            the sill: the underside of the body, not the axle. At
+//                        roughly half wheel height it leaves the bottom of each
+//                        tyre showing below the door, which is what makes the
+//                        front wheels visibly turn
+//   beltFrac             the beltline (top of the lower body, where the glass
+//                        starts) as a fraction of overall height
+//   hoodFrac, rearFrac   how much of the length the nose and tail take, measured
+//                        from the bumper to where the cabin starts. What is left
+//                        between them is the cabin, so these two set how much room
+//                        there is for seats
+//   hoodDrop, rearDrop   how far the top edge of the lower body falls at each end:
+//                        0 is a flat, boxy hood or boot lid, the top of the range
+//                        a pronounced wedge
+//   windscreenRake,      how far the glass leans in, as multiples of the cabin's
+//   backlightRake        own height -- that ratio is the rake angle, so it stays
+//                        sane on a tall body and a low one alike. 0.5 is about 27
+//                        degrees off vertical, 0.9 about 42
+//   minRoofFrac          fraction of the length that must stay flat roof, however
+//                        the rakes come out (a number, not a range)
+//   cabinInset           how far the cabin sits inboard of the flanks
+//   wheelRadius, tireWidth
+//   frontOverhang,       bumper to axle, as a fraction of length
+//   rearOverhang
+//   wheelInset           how far the tyres tuck inside the flanks
+//   bed, bedRail         open bed on the rear deck, and how wide its rails are
+function makeCarLike(type, spec) {
+    const color = pickVehicleColor();
+    const width = vehRand(spec.width);
+    const length = vehRand(spec.length);
+    const roofZ = vehRand(spec.height);
+    const groundZ = vehRand(spec.clearance);
+    const beltZ = roofZ * vehRand(spec.beltFrac);
+
+    const hl = length / 2, hw = width / 2;
+    const cabinFront = hl - length * vehRand(spec.hoodFrac);
+    const cabinRear = -hl + length * vehRand(spec.rearFrac);
+    const hoodDrop = vehRand(spec.hoodDrop);
+    const rearDrop = vehRand(spec.rearDrop);
+
+    // The lower body, seen from the side and swept across the full width. Read
+    // counter-clockwise: along the floor to the nose, up the front bumper, back
+    // over the hood and the rear deck, then down the tail.
+    const body = makeExtrudedProfile([
+        { x: -hl,         z: groundZ },
+        { x:  hl,         z: groundZ },
+        { x:  hl,         z: beltZ - hoodDrop },
+        { x:  cabinFront, z: beltZ },
+        { x:  cabinRear,  z: beltZ },
+        { x: -hl,         z: beltZ - rearDrop },
+    ], -hw, hw, color);
+
+    // The cabin. Its rake is clamped so the two slopes can never cross and leave
+    // the roof inside out, and so that a real roof is always left between them --
+    // otherwise a short cabin with steep glass comes out as a fastback wedge.
+    const cabinLen = cabinFront - cabinRear;
+    const cabinH = roofZ - beltZ;
+    const maxRake = Math.max(0, cabinLen - length * spec.minRoofFrac);
+    let wsRake = cabinH * vehRand(spec.windscreenRake);
+    let blRake = cabinH * vehRand(spec.backlightRake);
+    const rakeTotal = wsRake + blRake;
+    if (rakeTotal > maxRake) {
+        const shrink = maxRake / rakeTotal;
+        wsRake *= shrink;
+        blRake *= shrink;
+    }
+    const roofFront = cabinFront - wsRake;
+    const roofRear = cabinRear + blRake;
+
+    const cabinHw = Math.max(0.5, hw - vehRand(spec.cabinInset));
+    body.push(...makeExtrudedProfile([
+        { x: cabinRear,  z: beltZ },
+        { x: cabinFront, z: beltZ },
+        { x: roofFront,  z: roofZ },
+        { x: roofRear,   z: roofZ },
+    ], -cabinHw, cabinHw, color));
+
+    // A pickup bed: the floor of it, inset from the rails, lying on the rear deck.
+    // It is one dark quad rather than a real box because a box would need interior
+    // walls, and the far one of those is a backface -- it would be culled, leaving
+    // a hole to see through. It goes in the body batch, not a pass of its own, so
+    // that depth sorting still hides it behind the cab from the front.
+    if (spec.bed) {
+        const rail = vehRand(spec.bedRail);
+        const deckZ = x => beltZ - rearDrop * (cabinRear - x) / (cabinRear + hl);
+        const xBack = -hl + rail, xFront = cabinRear - rail;
+        const yw = Math.max(0.3, hw - rail);
+        const lift = 0.06;   // clear of the deck it sits on, so it sorts in front
+        body.push({ pts: [
+            { x: xBack,  y: -yw, z: deckZ(xBack) + lift },
+            { x: xFront, y: -yw, z: deckZ(xFront) + lift },
+            { x: xFront, y:  yw, z: deckZ(xFront) + lift },
+            { x: xBack,  y:  yw, z: deckZ(xBack) + lift },
+        ], color: BED_LINER_COLOR });
+    }
+
+    // Glass, drawn only when zoomed in far enough to see it (VEHICLE_GLASS_MIN_ZOOM).
+    // Each pane is the cabin face it covers, shrunk to leave a pillar of body colour
+    // around it and pushed a hair outward so it lands in front of that face. One
+    // pane per flank covers both rows of side windows: at this size the B-pillar
+    // between them would be a sub-pixel line.
+    const eps = 0.03;
+    const glass = [];
+    const pane = (pts, nx, ny, nz) => glass.push({
+        pts: insetQuad(pts, 0.18).map(p => ({ x: p.x + nx * eps, y: p.y + ny * eps, z: p.z + nz * eps })),
+        color: GLASS_COLOR,
+    });
+
+    // Windscreen and backlight: the sloping end faces of the cabin. The outward
+    // normal of a raked edge (dx, dz) is (dz, -dx), normalised.
+    const faceNormal = (ax, az, bx, bz) => {
+        const dx = bx - ax, dz = bz - az;
+        const len = Math.hypot(dx, dz) || 1;
+        return [dz / len, -dx / len];
+    };
+    const [wsNx, wsNz] = faceNormal(cabinFront, beltZ, roofFront, roofZ);
+    pane([
+        { x: cabinFront, y: -cabinHw, z: beltZ },
+        { x: cabinFront, y:  cabinHw, z: beltZ },
+        { x: roofFront,  y:  cabinHw, z: roofZ },
+        { x: roofFront,  y: -cabinHw, z: roofZ },
+    ], wsNx, 0, wsNz);
+
+    const [blNx, blNz] = faceNormal(roofRear, roofZ, cabinRear, beltZ);
+    pane([
+        { x: cabinRear, y:  cabinHw, z: beltZ },
+        { x: cabinRear, y: -cabinHw, z: beltZ },
+        { x: roofRear,  y: -cabinHw, z: roofZ },
+        { x: roofRear,  y:  cabinHw, z: roofZ },
+    ], blNx, 0, blNz);
+
+    // The flanks are mirror images, so the right-hand one has to be wound the other
+    // way round or its outward normal points into the car -- which leaves it facing
+    // the same way as the left window: both would be drawn from one side of the car
+    // and neither from the other.
+    for (const side of [-1, 1]) {
+        const pts = [
+            { x: cabinRear,  y: cabinHw * side, z: beltZ },
+            { x: cabinFront, y: cabinHw * side, z: beltZ },
+            { x: roofFront,  y: cabinHw * side, z: roofZ },
+            { x: roofRear,   y: cabinHw * side, z: roofZ },
+        ];
+        pane(side > 0 ? pts.reverse() : pts, 0, side, 0);
+    }
+
+    // Wheels. The fronts steer; the rears never do.
+    const radius = vehRand(spec.wheelRadius);
+    const tireW = vehRand(spec.tireWidth);
+    const axleY = Math.max(0.4, hw - vehRand(spec.wheelInset) - tireW / 2);
+    const frontX = hl - length * vehRand(spec.frontOverhang);
+    const rearX = -hl + length * vehRand(spec.rearOverhang);
+    const wheelPolys = makeWheel(radius, tireW);
+    const wheels = [];
+    for (const [x, steers] of [[frontX, true], [rearX, false]]) {
+        for (const side of [-1, 1]) {
+            wheels.push({ x, y: axleY * side, steers, polys: wheelPolys });
+        }
+    }
+
+    return {
+        type,
+        width, length, height: roofZ, color,
+        body, glass, wheels,
+        flat: makeVehicleFootprint(width, length, color),
+    };
 }
 
 // --- Drawing -----------------------------------------------------------------

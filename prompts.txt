@@ -375,3 +375,11 @@ Simple wheels which can be squares or diamonds, possibly hidden when zoomed way 
 Maybe surface/detail polygons (like houses have) for the windows, but probably only drawn when zoomed in quite a bit.
 
 Actually at very wide zoom levels, the whole vehicle could become a rectangle matching the overall width, length, and color.  That logic could be shared across all vehicle types.
+
+Hmm, a fair number of these "sedans" end up looking almost like pickup trucks.  I suspect the trunk is allowed to be too large (unless I'm confusing the trunk vs hood), looking like a pickup bed.  And the passenger cabin roof area allowed to be too small, considering a sedan should have a back seat.  (Front and back side windows can be drawn as a single window, if we have them, no need to waste resources on a separate back seat window).
+
+Fix that, and then also add pickupTruck.js as a new vehicle type.  Can essentially just enforce an even longer trunk than these original sedans had, and slightly smaller passenger cabin roof.  Max length goes up to maybe 19ft for pickup trucks.
+
+Player randomly gets either a sedan or pickup, for now.
+
+And yeah, add a vehicles.html test page.  Should have maybe a 6x6 grid of sedans, and another 6x6 grid of pickup trucks.
