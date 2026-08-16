@@ -33,9 +33,9 @@ const numParam = (k, dflt) => {
 };
 
 const GRID_N = Math.max(1, Math.min(12, Math.round(numParam('n', 6))));
-const CELL_X = 25;          // ft between one car and the next along its own length
-const CELL_Y = 13;          // ft between one row of cars and the next
-const BLOCK_GAP = 34;       // ft of empty ground between one body style and the next
+const CELL_X = 42;          // ft between one vehicle and the next along its own length
+const CELL_Y = 15;          // ft between one row and the next -- both sized for a 35ft bus
+const BLOCK_GAP = 40;       // ft of empty ground between one body style and the next
 const CAM_SPEED = 400;      // feet per second at default zoom
 
 const types = params.has('type')
@@ -66,6 +66,27 @@ let seed = params.has('seed') ? (numParam('seed', 0) | 0) : null;
 const blockH = (GRID_N - 1) * CELL_Y;
 const blockW = (GRID_N - 1) * CELL_X;
 
+// The pad under a block is a cell bigger than the block itself in each direction --
+// half a cell of margin on every side -- so the pitch from one block to the next has
+// to clear the pad, not just the outermost vehicle.
+const PAD_W = blockW + CELL_X + PAD_MARGIN * 2;
+const PAD_H = blockH + CELL_Y + PAD_MARGIN * 2;
+const PITCH_X = PAD_W + BLOCK_GAP;
+const PITCH_Y = PAD_H + BLOCK_GAP;
+
+// A row of blocks is much wider than it is deep, so with more than a couple of body
+// styles a single column or a single row wastes most of the screen. Pick whichever
+// arrangement comes out closest to square in world space.
+const BLOCK_COLS = (() => {
+    let best = 1, bestScore = Infinity;
+    for (let cols = 1; cols <= types.length; cols++) {
+        const rows = Math.ceil(types.length / cols);
+        const score = Math.abs(Math.log((cols * PITCH_X) / (rows * PITCH_Y)));
+        if (score < bestScore) { bestScore = score; best = cols; }
+    }
+    return best;
+})();
+
 let cars = [];
 let blocks = [];
 let stats = { ms: 0 };
@@ -81,12 +102,13 @@ function build() {
     cars = [];
     blocks = [];
     types.forEach((type, b) => {
-        const baseY = b * (blockH + BLOCK_GAP);
+        const baseX = (b % BLOCK_COLS) * PITCH_X;
+        const baseY = Math.floor(b / BLOCK_COLS) * PITCH_Y;
         for (let row = 0; row < GRID_N; row++) {
             for (let col = 0; col < GRID_N; col++) {
                 cars.push({
                     v: generateVehicle(type),
-                    x: col * CELL_X,
+                    x: baseX + col * CELL_X,
                     y: baseY + row * CELL_Y,
                     // Full lock left on the first column through full lock right on
                     // the last, so every column shows a different steering angle.
@@ -94,7 +116,7 @@ function build() {
                 });
             }
         }
-        blocks.push({ type, baseY });
+        blocks.push({ type, baseX, baseY });
     });
     stats.ms = performance.now() - t0;
     Math.random = sysRandom;
@@ -109,10 +131,11 @@ function regenerate() {
 let camX = 0, camY = 0;
 
 function gridBounds() {
-    const last = blocks.length ? blocks[blocks.length - 1].baseY : 0;
+    const lastX = Math.max(0, ...blocks.map(b => b.baseX));
+    const lastY = Math.max(0, ...blocks.map(b => b.baseY));
     return {
-        mnx: -CELL_X / 2 - PAD_MARGIN, mxx: blockW + CELL_X / 2 + PAD_MARGIN,
-        mny: -CELL_Y / 2 - PAD_MARGIN, mxy: last + blockH + CELL_Y / 2 + PAD_MARGIN,
+        mnx: -CELL_X / 2 - PAD_MARGIN, mxx: lastX + blockW + CELL_X / 2 + PAD_MARGIN,
+        mny: -CELL_Y / 2 - PAD_MARGIN, mxy: lastY + blockH + CELL_Y / 2 + PAD_MARGIN,
     };
 }
 
@@ -200,9 +223,8 @@ function render() {
     // One pad per block, all flat on the ground, so they can go down in one batch
     // before anything standing on them.
     projectAndDraw(blocks.map(b => groundRect(
-        -CELL_X / 2 - PAD_MARGIN, b.baseY - CELL_Y / 2 - PAD_MARGIN,
-        blockW + CELL_X + PAD_MARGIN * 2, blockH + CELL_Y + PAD_MARGIN * 2,
-        PAD_COLOR)), 0, 0, camX, camY);
+        b.baseX - CELL_X / 2 - PAD_MARGIN, b.baseY - CELL_Y / 2 - PAD_MARGIN,
+        PAD_W, PAD_H, PAD_COLOR)), 0, 0, camX, camY);
 
     // Far to near by projected screen Y: each car is drawn as a unit, so anything
     // in front of another has to go down after it.
@@ -214,7 +236,7 @@ function render() {
     ctx.font = 'bold 15px monospace';
     ctx.textAlign = 'center';
     for (const b of blocks) {
-        const [sx, sy] = project(blockW / 2, b.baseY - CELL_Y / 2 - PAD_MARGIN, 0, camX, camY);
+        const [sx, sy] = project(b.baseX + blockW / 2, b.baseY - CELL_Y / 2 - PAD_MARGIN, 0, camX, camY);
         ctx.lineWidth = 4;
         ctx.strokeStyle = 'rgba(0,0,0,0.7)';
         ctx.strokeText(b.type, sx, sy - 6);
@@ -230,11 +252,11 @@ function drawHud() {
     if (!showHud) return;
     const size = v => `${v.length.toFixed(1)}x${v.width.toFixed(1)}x${v.height.toFixed(1)}ft`;
     const lines = [
-        `${types.join(', ')}: ${GRID_N}x${GRID_N} of each = ${cars.length} vehicles`,
+        `${blocks.length} body style${blocks.length === 1 ? '' : 's'}, ${GRID_N}x${GRID_N} of each = ${cars.length} vehicles`,
         ...blocks.map(b => {
             const of = cars.filter(c => c.v.type === b.type);
             const l = of.map(c => c.v.length);
-            return `${b.type.padEnd(12)} length ${Math.min(...l).toFixed(1)}-${Math.max(...l).toFixed(1)}ft   e.g. ${size(of[0].v)}`;
+            return `${b.type.padEnd(12)} ${Math.min(...l).toFixed(1)}-${Math.max(...l).toFixed(1)}ft long   e.g. ${size(of[0].v)}`;
         }),
         'steering sweeps full left to full right, left column to right',
         `seed ${seed === null ? '(random)' : seed}   built in ${stats.ms.toFixed(1)}ms`,
@@ -244,7 +266,7 @@ function drawHud() {
         'G regen   S screenshot   H hide'
     ];
     ctx.fillStyle = 'rgba(0,0,0,0.55)';
-    ctx.fillRect(8, 8, 400, 18 * lines.length + 14);
+    ctx.fillRect(8, 8, 460, 18 * lines.length + 14);
     ctx.fillStyle = '#fff';
     ctx.font = '13px monospace';
     lines.forEach((l, i) => ctx.fillText(l, 18, 30 + i * 18));

@@ -23,38 +23,55 @@ With no real DOM every entry point turns into a no-op, which is what keeps
 `vehicles/` mirrors `buildings/`: `vehicleUtils.js` holds what every vehicle type
 shares -- the type registry (`registerVehicle` / `generateVehicle` /
 `generateRandomVehicle`), the palette, the wheels, `makeCarLike()` and
-`drawVehicle()` -- and one file per body style holds the rest. `sedan.js` and
-`pickupTruck.js` so far; the player gets one at random, weighted by the `weight`
-each type registers.
+`drawVehicle()` -- and one file per body style holds the rest: `sedan.js`,
+`pickupTruck.js`, `policeCar.js`, `cityBus.js`, `schoolBus.js`, `deliveryVan.js`.
+The player gets one at random, weighted by the `weight` each type registers, so
+cars are the common case and buses the rare one.
 
 Models are built in vehicle-local feet: **+x forward, +y the car's right, z up**,
 origin on the ground at the centre of the footprint. `drawVehicle()` rotates and
 places them, so a model never knows where it is; that is what will let the same
 code draw traffic later.
 
-Every type so far is the same shape in different proportions -- a full-width lower
-body, a narrower cabin, four box wheels, ~38 polys -- so that shape is
+Every type is the same shape in different proportions -- a full-width lower body, a
+narrower cabin on top, four box wheels, 37-50 polys -- so that shape is
 `makeCarLike(type, spec)` in vehicleUtils.js and a body style file is little more
 than a table of ranges. `makeExtrudedProfile()` is what gives a sloping hood or a
 raked windscreen without special cases; they are just edges of the profile.
 
+Turn `hoodFrac` and `rearFrac` right down and the same code makes a box: that is
+the city bus, whose "cabin" is the whole windowed body above the skirt. Turn the
+bonnet back up and it is a school bus; shorten the body and it is a delivery van.
 What separates a sedan from a pickup is mostly `rearFrac` against `minRoofFrac`: a
 sedan's boot is always shorter than its bonnet and always shorter than its flat
 roof, a pickup's bed is longer than both. `spec.bed` lays one dark quad into the
 rear deck for the bed floor -- a real box would need interior walls, and the far
 one of those is a backface, so it would be culled and leave a hole to see through.
 
-Both flanks' side windows are one pane each (no B-pillar at this size), and the
-right-hand one is wound in reverse: mirroring a polygon flips its normal, so
+Glass is per-flank, and `spec.sideGlass` (a [from, to] pair measured back from the
+front of the cabin) with `spec.bayFt` says which part of it is glazed and how
+finely: a car takes the default single pane per flank (no B-pillar -- at this size
+it would be a sub-pixel line), a bus asks for a bay every few feet, a van glazes
+only the front fifth, which is all the cab it has. Gaps between panes come for
+free, from the same inset that leaves a pillar around a car's window.
+
+The right-hand flank is wound in reverse: mirroring a polygon flips its normal, so
 without that both faces point the same way and you get two windows from one side of
-the car and none from the other.
+the vehicle and none from the other.
+
+`spec.palette` overrides the fleet colours -- school bus yellow, police liveries.
+Anything a type bolts to the roof goes in `v.roof` (the police light bar so far),
+drawn as its own pass after the body: a roof fitting is above every part of the
+body by construction, so painting it last is always right. `makeCarLike()` returns
+the chassis dimensions it derived in `v.frame` so a type can place such a thing
+without re-deriving them.
 
 Detail is chosen by `PX_PER_FT` alone (`VEHICLE_SOLID_MIN_ZOOM`,
-`VEHICLE_WHEELS_MIN_ZOOM`, `VEHICLE_GLASS_MIN_ZOOM`), down to a single flat
-rectangle of the right size and colour when zoomed way out. Wheels, body and glass
-are painted as three separate passes, because depth sorting compares whole polygons
-and cannot resolve the wheels tucked inside the body -- the same reason buildings
-hang their windows off a child drawable.
+`VEHICLE_WHEELS_MIN_ZOOM`, `VEHICLE_ROOF_MIN_ZOOM`, `VEHICLE_GLASS_MIN_ZOOM`), down
+to a single flat rectangle of the right size and colour when zoomed way out. Wheels,
+body, roof fittings and glass are painted as separate passes, because depth sorting
+compares whole polygons and cannot resolve the wheels tucked inside the body -- the
+same reason buildings hang their windows off a child drawable.
 
 ## Testing
 

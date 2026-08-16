@@ -383,3 +383,14 @@ Fix that, and then also add pickupTruck.js as a new vehicle type.  Can essential
 Player randomly gets either a sedan or pickup, for now.
 
 And yeah, add a vehicles.html test page.  Should have maybe a 6x6 grid of sedans, and another 6x6 grid of pickup trucks.
+
+Ok, now add busses.  Two kinds.
+
+City/charter busses are basically just a single plain rectangular prism, with windows.  25 to 35ft length, some small variation in width and height near a reasonable/realistic value.
+
+School busses have a hood/engine on the front, of course, and overall length 20 to 35ft.  And they're yellow, naturally.
+
+And another type of vehicle is delivery cans, food trucks, small freight trucks, whatever they're called.  Like UPS/Fedex trucks, you can search some images if it's helpful.
+They're 20 to 25ft long overall, with a short hood.
+
+Then police cars, which are sedans, but with the red/blue light bar on top, and colored shades of blue, white, or black.

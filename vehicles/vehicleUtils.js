@@ -57,6 +57,7 @@ function generateRandomVehicle() {
 // Thresholds are in pixels per foot, the same units as PX_PER_FT.
 const VEHICLE_SOLID_MIN_ZOOM = 0.9;    // under this the whole car is one flat rectangle
 const VEHICLE_WHEELS_MIN_ZOOM = 1.6;   // a wheel is ~2ft across: under this it is 3px
+const VEHICLE_ROOF_MIN_ZOOM = 2.5;     // things bolted to the roof, like a light bar
 const VEHICLE_GLASS_MIN_ZOOM = 4;      // windows are the first detail worth dropping
 
 // How far the front wheels turn at full lock, in radians (~29 degrees).
@@ -79,11 +80,12 @@ const VEHICLE_COLORS = [
     [1,  20,  85, 50],   // orange
 ];
 
-const VEHICLE_COLOR_TOTAL = VEHICLE_COLORS.reduce((s, c) => s + c[0], 0);
-
-function pickVehicleColor() {
-    let r = Math.random() * VEHICLE_COLOR_TOTAL;
-    for (const [weight, h, s, l] of VEHICLE_COLORS) {
+// Some types do not draw from the general fleet: a school bus is yellow, a police
+// car is one of three liveries. Those pass their own table of the same shape.
+function pickColorFrom(palette) {
+    const total = palette.reduce((s, c) => s + c[0], 0);
+    let r = Math.random() * total;
+    for (const [weight, h, s, l] of palette) {
         r -= weight;
         if (r <= 0) {
             // A small jitter so two white cars are not pixel-identical
@@ -92,8 +94,12 @@ function pickVehicleColor() {
                        l + (Math.random() - 0.5) * 8);
         }
     }
-    const last = VEHICLE_COLORS[VEHICLE_COLORS.length - 1];
+    const last = palette[palette.length - 1];
     return hsl(last[1], last[2], last[3]);
+}
+
+function pickVehicleColor() {
+    return pickColorFrom(VEHICLE_COLORS);
 }
 
 const TIRE_COLOR = 'hsl(0, 0%, 13%)';
@@ -203,8 +209,16 @@ function insetQuad(pts, frac) {
 //   rearOverhang
 //   wheelInset           how far the tyres tuck inside the flanks
 //   bed, bedRail         open bed on the rear deck, and how wide its rails are
+//   palette              a colour table of its own, instead of the general fleet
+//   sideGlass, bayFt     which part of each flank is glazed and how finely it is
+//                        divided into windows (see below)
+//   frontGlass,          false to leave that end unglazed
+//   rearGlass
+//
+// A bus is this same chassis with the nose and tail fractions turned right down,
+// which leaves a box; the "cabin" becomes the whole windowed body above the skirt.
 function makeCarLike(type, spec) {
-    const color = pickVehicleColor();
+    const color = pickColorFrom(spec.palette || VEHICLE_COLORS);
     const width = vehRand(spec.width);
     const length = vehRand(spec.length);
     const roofZ = vehRand(spec.height);
@@ -274,10 +288,9 @@ function makeCarLike(type, spec) {
     }
 
     // Glass, drawn only when zoomed in far enough to see it (VEHICLE_GLASS_MIN_ZOOM).
-    // Each pane is the cabin face it covers, shrunk to leave a pillar of body colour
-    // around it and pushed a hair outward so it lands in front of that face. One
-    // pane per flank covers both rows of side windows: at this size the B-pillar
-    // between them would be a sub-pixel line.
+    // Each pane is the piece of cabin face it covers, shrunk to leave a pillar of
+    // body colour around it and pushed a hair outward so it lands in front of that
+    // face -- so the gaps between panes come for free, from the shrinking.
     const eps = 0.03;
     const glass = [];
     const pane = (pts, nx, ny, nz) => glass.push({
@@ -292,34 +305,59 @@ function makeCarLike(type, spec) {
         const len = Math.hypot(dx, dz) || 1;
         return [dz / len, -dx / len];
     };
-    const [wsNx, wsNz] = faceNormal(cabinFront, beltZ, roofFront, roofZ);
-    pane([
-        { x: cabinFront, y: -cabinHw, z: beltZ },
-        { x: cabinFront, y:  cabinHw, z: beltZ },
-        { x: roofFront,  y:  cabinHw, z: roofZ },
-        { x: roofFront,  y: -cabinHw, z: roofZ },
-    ], wsNx, 0, wsNz);
+    if (spec.frontGlass !== false) {
+        const [wsNx, wsNz] = faceNormal(cabinFront, beltZ, roofFront, roofZ);
+        pane([
+            { x: cabinFront, y: -cabinHw, z: beltZ },
+            { x: cabinFront, y:  cabinHw, z: beltZ },
+            { x: roofFront,  y:  cabinHw, z: roofZ },
+            { x: roofFront,  y: -cabinHw, z: roofZ },
+        ], wsNx, 0, wsNz);
+    }
 
-    const [blNx, blNz] = faceNormal(roofRear, roofZ, cabinRear, beltZ);
-    pane([
-        { x: cabinRear, y:  cabinHw, z: beltZ },
-        { x: cabinRear, y: -cabinHw, z: beltZ },
-        { x: roofRear,  y: -cabinHw, z: roofZ },
-        { x: roofRear,  y:  cabinHw, z: roofZ },
-    ], blNx, 0, blNz);
+    // A van's rear is a roll-up door, so it gets no backlight.
+    if (spec.rearGlass !== false) {
+        const [blNx, blNz] = faceNormal(roofRear, roofZ, cabinRear, beltZ);
+        pane([
+            { x: cabinRear, y:  cabinHw, z: beltZ },
+            { x: cabinRear, y: -cabinHw, z: beltZ },
+            { x: roofRear,  y: -cabinHw, z: roofZ },
+            { x: roofRear,  y:  cabinHw, z: roofZ },
+        ], blNx, 0, blNz);
+    }
+
+    // Side glass. `sideGlass` is [from, to] as fractions of the cabin measured back
+    // from its front edge, and `bayFt` the rough width of one window: a car leaves
+    // both defaulted and gets a single pane down each flank (no B-pillar -- at this
+    // size it would be a sub-pixel line), a bus asks for a bay every few feet, and a
+    // van glazes only the front fifth, which is all the cab it has.
+    //
+    // The flank is a trapezoid, since the roof is shorter than the beltline, so a
+    // bay is cut along a parameter running from the back of the cabin to the front
+    // rather than by x alone.
+    const [gFrom, gTo] = spec.sideGlass || [0, 1];
+    const bays = spec.bayFt
+        ? Math.max(1, Math.round((gTo - gFrom) * cabinLen / vehRand(spec.bayFt)))
+        : 1;
+    const botX = t => cabinRear + t * cabinLen;
+    const topX = t => roofRear + t * (roofFront - roofRear);
 
     // The flanks are mirror images, so the right-hand one has to be wound the other
     // way round or its outward normal points into the car -- which leaves it facing
     // the same way as the left window: both would be drawn from one side of the car
     // and neither from the other.
     for (const side of [-1, 1]) {
-        const pts = [
-            { x: cabinRear,  y: cabinHw * side, z: beltZ },
-            { x: cabinFront, y: cabinHw * side, z: beltZ },
-            { x: roofFront,  y: cabinHw * side, z: roofZ },
-            { x: roofRear,   y: cabinHw * side, z: roofZ },
-        ];
-        pane(side > 0 ? pts.reverse() : pts, 0, side, 0);
+        for (let i = 0; i < bays; i++) {
+            const t0 = 1 - (gFrom + ((i + 1) / bays) * (gTo - gFrom));
+            const t1 = 1 - (gFrom + (i / bays) * (gTo - gFrom));
+            const pts = [
+                { x: botX(t0), y: cabinHw * side, z: beltZ },
+                { x: botX(t1), y: cabinHw * side, z: beltZ },
+                { x: topX(t1), y: cabinHw * side, z: roofZ },
+                { x: topX(t0), y: cabinHw * side, z: roofZ },
+            ];
+            pane(side > 0 ? pts.reverse() : pts, 0, side, 0);
+        }
     }
 
     // Wheels. The fronts steer; the rears never do.
@@ -341,6 +379,9 @@ function makeCarLike(type, spec) {
         width, length, height: roofZ, color,
         body, glass, wheels,
         flat: makeVehicleFootprint(width, length, color),
+        // Where the chassis ended up, so a type can bolt something to it without
+        // re-deriving the numbers -- see policeCar.js and its light bar.
+        frame: { hl, hw, groundZ, beltZ, roofZ, cabinFront, cabinRear, roofFront, roofRear, cabinHw },
     };
 }
 
@@ -374,12 +415,14 @@ function _emit(src, cos, sin, dx, dy) {
 // car itself). Which parts get drawn is decided by PX_PER_FT alone, so a caller
 // never has to think about zoom.
 //
-// The parts go down in three passes -- wheels, body, glass -- for the same reason
-// buildings hang their windows off a child drawable: depth sorting compares whole
-// polygons, so it cannot resolve a small poly that lies inside a big one. The
-// wheels are tucked within the body's footprint, so painting them first lets the
-// body cover everything but the tread showing below the sill, which is exactly
-// what should be visible; glass goes on last so it lands on the panel it belongs to.
+// The parts go down in separate passes -- wheels, body, roof fittings, glass -- for
+// the same reason buildings hang their windows off a child drawable: depth sorting
+// compares whole polygons, so it cannot resolve a small poly that lies inside a big
+// one. The wheels are tucked within the body's footprint, so painting them first
+// lets the body cover everything but the tread showing below the sill, which is
+// exactly what should be visible; glass goes on last so it lands on the panel it
+// belongs to. Anything in v.roof is above every part of the body by construction,
+// so painting it after the body is always right.
 function drawVehicle(v, wx, wy, heading, steer, camX, camY) {
     const cos = Math.cos(heading), sin = Math.sin(heading);
 
@@ -410,6 +453,11 @@ function drawVehicle(v, wx, wy, heading, steer, camX, camY) {
 
     for (const p of v.body) _emit(p, cos, sin, 0, 0);
     flush();
+
+    if (v.roof && PX_PER_FT >= VEHICLE_ROOF_MIN_ZOOM) {
+        for (const p of v.roof) _emit(p, cos, sin, 0, 0);
+        flush();
+    }
 
     if (PX_PER_FT >= VEHICLE_GLASS_MIN_ZOOM) {
         for (const p of v.glass) _emit(p, cos, sin, 0, 0);
