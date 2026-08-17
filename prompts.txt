@@ -590,3 +590,24 @@ The pole needs to be visible from all directions, so we can't quite use just a s
 Ah, one change.  Not every intersection should be a 4-way stop.  Some should only be 2-way stops (only one cross street stops), and a few uncontrolled intersections with no stop signs at all.  
 
 In general, if we have an intersection object, we probably want it to manage this for all its connecting streets, especially in the future when we (someday) add traffic lights and signals and such
+
+Now add reasonable performance metrics to each type of vehicle (for now, applies only when the player is driving, not for traffic).  
+
+Acceleration and deceleration, mainly.  Go online to confirm numbers, if needed.  
+
+Very roughly:  
+Large trucks and busses: 0 to 60 in 13 seconds. 
+
+Vans and pickups: 0 to 60 in 9 seconds.  
+
+Sedans and SUVs: 8 seconds.  
+
+C3 corvette: 5 seconds 
+
+Countach: 4 seconds  
+
+Enzo and C7 corvette: 3 seconds.  
+
+Ideally with some reasonable acceleration curve (each type can simply scale the curve by a constant, to achieve roughly the desired 0 to 60).  Since 0 to 20 is typically quicker than 60 to 90, of course.  
+
+Most cars can decelerate quicker than accelerate.  Sports cars especially

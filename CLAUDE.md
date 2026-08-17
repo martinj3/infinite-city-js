@@ -395,6 +395,39 @@ body, trim, roof fittings and glass are painted as separate passes, because dept
 sorting compares whole polygons and cannot resolve the wheels tucked inside the body
 -- the same reason buildings hang their windows off a child drawable.
 
+### Performance
+
+`vehicles/performance.js` gives the player's own car acceleration and braking that
+vary by what they're driving; traffic still moves at `traffic.js`'s flat
+`TRAFFIC_SPEED` regardless of body style, since nothing else ever reads a vehicle's
+`perf`. Every type shares one acceleration curve shape -- flat near a stop
+(`PERF_REFERENCE_ACCEL` below `PERF_LOW_SPEED`, roughly traction-limited) then
+falling as `1/speed` above it, the constant-power region a real engine is in once
+it's past peak torque, which is what makes 0-20mph always come quicker than an
+equal stretch at highway speed. A type doesn't get its own curve, only a scalar
+that stretches this one until its simulated 0-60 time matches a road-test figure
+for its class (`VEHICLE_PERF`, `13/9/8/6.5/5/4/3` seconds for trucks-and-buses,
+vans-and-pickups, sedans-and-SUVs, the police interceptor, the C3 Corvette, the
+Countach, and the Enzo/C7 respectively) -- so tuning a type is picking one number,
+not shaping a curve by hand. `PERF_MAX_ACCEL` caps the curve at a peak no vehicle
+may cross however short its target time is; without it, scaling the curve for a
+3-second hypercar would imply a standing-start g-force no tire could put down.
+Because the cap makes the curve's own 0-60 time have no closed form, each type's
+scalar is found once at load by bisection (`accelScaleFor`) rather than by
+division, searching for the `k` whose simulated time matches the target --
+still exactly one scalar per type, just found by search instead of arithmetic.
+
+Braking isn't power-limited the way accelerating is -- a brake can put its full
+force down at any speed short of lockup -- so it's one flat deceleration
+(`brakeG`, a fraction of g) rather than a curve, and every type's braking figure
+sits above its own peak acceleration, sports cars by the widest margin: a
+Corvette or Enzo can pull over 1g under braking, well past the ~1.09g
+(`PERF_MAX_ACCEL`) ceiling their acceleration is capped at, where a loaded cement
+truck's brakes clear its own weak 0.45g launch by a much smaller margin.
+The C3 and C7 Corvette are one registered type with two performance tiers, keyed
+as `corvette:c3`/`corvette:c7` in `VEHICLE_PERF_SUBTYPE` off `v.subtype` the same
+way `corvette.js` itself picks a body.
+
 ## Traffic
 
 `traffic.js` is the other cars. A car in traffic is not a thing standing at a

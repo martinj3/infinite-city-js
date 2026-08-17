@@ -24,6 +24,9 @@ initDriveControls();
 // steer is kept on the player because the car is drawn from it too: the front
 // wheels turn to match whatever is steering the car.
 const player = { x: 200, y: 0, angle: 0, speed: 0, steer: 0, vehicle: generateRandomVehicle() };
+// Resolved once, from the vehicle's type (see vehicles/performance.js), rather
+// than looked up every frame -- the player never swaps cars mid-drive.
+player.perf = vehiclePerf(player.vehicle);
 
 // --- Update ---
 function update(dt) {
@@ -35,10 +38,10 @@ function update(dt) {
     if (steer === 0) steer = touchDrive.steer * TOUCH_STEER_GAIN;
     player.steer = Math.max(-1, Math.min(1, steer));
 
-    if (gas) player.speed += ACCEL * dt;
+    if (gas) player.speed += curveAccel(player.speed, player.perf.accelK) * dt;
     if (brake) {
-        if (player.speed > 0) { player.speed -= BRAKE * dt; if (player.speed < 0) player.speed = 0; }
-        else player.speed -= ACCEL * 0.5 * dt;
+        if (player.speed > 0) { player.speed -= player.perf.brakeDecel * dt; if (player.speed < 0) player.speed = 0; }
+        else player.speed -= curveAccel(player.speed, player.perf.accelK) * 0.5 * dt;
     }
     if (!gas && !brake) {
         if (player.speed > 0) player.speed = Math.max(0, player.speed - DRAG * dt);

@@ -55,9 +55,8 @@ function getSinV() { return Math.sin(VIEW_ANGLE); }
 
 const MAX_SPEED = 150;
 const REVERSE_MAX = 30;
-const ACCEL = 40;
-const BRAKE = 60;
-const DRAG = 3;
+const DRAG = 3;   // coast-down when neither pedal is held; uniform across vehicles
+// Acceleration and braking are per-vehicle, not global -- see vehicles/performance.js
 const MAX_TURN_RATE = 3;
 // The touch slider reports the same -1..1 range a held arrow key does, but a
 // thumb pushed to the edge of a small on-screen track doesn't feel as sharp as
