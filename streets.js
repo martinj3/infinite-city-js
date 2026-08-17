@@ -260,9 +260,13 @@ function resolveNode(node) {
 }
 
 function generate(px, py) {
-    for (const [, node] of nodes) {
-        if (Math.hypot(node.x - px, node.y - py) < GENERATE_DIST) {
-            if (SLOTS.some(s => node.roads[s] === null)) resolveNode(node);
+    // Runs over every node every frame, so compare squared distances: hypot is
+    // slow enough to matter by the time a long drive has built thousands of nodes.
+    const r2 = GENERATE_DIST * GENERATE_DIST;
+    for (const node of nodes.values()) {
+        const dx = node.x - px, dy = node.y - py;
+        if (dx * dx + dy * dy < r2 && SLOTS.some(s => node.roads[s] === null)) {
+            resolveNode(node);
         }
     }
 }

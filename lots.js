@@ -327,7 +327,7 @@ function drawLots(camX, camY, vl, vr, vt, vb) {
     for (const lot of visible) lot.screenY = project(lot.cx, lot.cy, 0, camX, camY)[1];
     visible.sort((a, b) => a.screenY - b.screenY);
 
-    const pAndD = (polys, ox, oy) => projectAndDraw(polys, ox, oy, camX, camY);
+    const pAndD = (polys, ox, oy) => projectAndDraw(polys, ox, oy, camX, camY, true);
     const pDepth = (poly, ox, oy) => polyDepth(poly, ox, oy, camX, camY);
     for (const lot of visible) drawDrawableTree(lot.house, 0, 0, pAndD, pDepth);
 }

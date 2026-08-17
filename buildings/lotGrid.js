@@ -201,7 +201,7 @@ function render() {
     ctx.fillStyle = '#2d8a2e';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    const pAndD = (polys, ox, oy) => projectAndDraw(polys, ox, oy, camX, camY);
+    const pAndD = (polys, ox, oy) => projectAndDraw(polys, ox, oy, camX, camY, true);
     const pDepth = (poly, ox, oy) => polyDepth(poly, ox, oy, camX, camY);
 
     // Far-to-near by the projected screen Y of each lot's origin

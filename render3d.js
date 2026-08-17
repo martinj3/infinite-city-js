@@ -36,7 +36,12 @@ function polyDepth(poly, ox, oy, camX, camY) {
 // Project, backface-cull, depth-sort, and draw a batch of polygons.
 // The sort is stable (spec-guaranteed), so exact depth ties keep their batch
 // order: a detail pushed after the face it decorates still paints over it.
-function projectAndDraw(polys, ox, oy, camX, camY) {
+//
+// staticLit: the polys are baked -- they never move or change color (buildings)
+// -- so each one's lit color is computed once and kept on the poly. Lighting is
+// world-space, so camera rotation cannot invalidate it. Vehicle polys rotate
+// every frame, changing their normals, so they must not pass this.
+function projectAndDraw(polys, ox, oy, camX, camY, staticLit = false) {
     const cosV = getCosV(), sinV = getSinV();
     const halfW = canvas.width / 2, halfH = canvas.height / 2;
     const oxc = ox - camX, oyc = oy - camY;
@@ -61,8 +66,9 @@ function projectAndDraw(polys, ox, oy, camX, camY) {
                     - (sp[1][1] - sp[0][1]) * (sp[2][0] - sp[0][0]);
         if (cross <= 0) continue;
 
-        const normal = computeNormal(pts);
-        const litColor = applyLighting(poly.color, normal);
+        const litColor = staticLit
+            ? poly._lit || (poly._lit = applyLighting(poly.color, computeNormal(pts)))
+            : applyLighting(poly.color, computeNormal(pts));
         projected.push({ sp, color: litColor, depth: depth / n });
     }
 

@@ -488,3 +488,15 @@ Try to fix it (check a few screenshot samples to make sure you didn't break anyt
 Also, someday we may swap out the renderer for some real 3d game engine (not today), so try to keep the polygon generation compatible with that case (assuming it is now, if it's not, don't worry about fixing that now).
 
 Also, while you're digging into the rendering logic, see if there's any obvious opportunity for low-effort, high-reward optimization, to improve performance.  If so, do it.
+
+---
+
+Ok, we'll stick with exactly what we have now, for the depth sorting thing.  Failures are extremely rare, and not that noticeable in a driving game.
+
+Have one last look throughout the whole code base for any other possible performance optimizations.
+
+Only things that won't drastically increase code complexity or add too many lines of code.  Relatively easy wins.
+
+Trade against code readability and maintainability.  If the perf win would be very tiny, then readability wins.
+
+Implement any that you find.

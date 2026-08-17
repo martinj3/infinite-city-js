@@ -212,16 +212,24 @@ function drawScene(camX, camY) {
 
     applyCamera(camX, camY);
 
-    // 1) Road surfaces + edge lines
+    // Cull once: every pass below walks only what is actually on screen, which
+    // on a long-driven map is a sliver of the thousands of streets built.
+    const visStreets = [], visNodes = [];
     for (const s of streets) {
         const b = s.bounds;
         if (b.mxx < vl || b.mnx > vr || b.mxy < vt || b.mny > vb) continue;
-        s.curve ? drawCurve(s) : drawStraight(s);
+        visStreets.push(s);
+    }
+    for (const n of nodes.values()) {
+        if (n.x < vl || n.x > vr || n.y < vt || n.y > vb) continue;
+        visNodes.push(n);
     }
 
+    // 1) Road surfaces + edge lines
+    for (const s of visStreets) s.curve ? drawCurve(s) : drawStraight(s);
+
     // 2) Intersection squares (fixed size to accommodate all street widths)
-    for (const [, n] of nodes) {
-        if (n.x < vl || n.x > vr || n.y < vt || n.y > vb) continue;
+    for (const n of visNodes) {
         ctx.save();
         ctx.fillStyle = n.color || '#666';
         ctx.translate(n.x * PX_PER_FT, n.y * PX_PER_FT);
@@ -232,36 +240,21 @@ function drawScene(camX, camY) {
     }
 
     // 3) Sidewalks (strips along each street, plus corner joins at intersections)
-    for (const s of streets) {
-        const b = s.bounds;
-        if (b.mxx < vl || b.mnx > vr || b.mxy < vt || b.mny > vb) continue;
-        s.curve ? drawCurveSW(s) : drawStraightSW(s);
-    }
-    for (const [, n] of nodes) {
-        if (n.x < vl || n.x > vr || n.y < vt || n.y > vb) continue;
-        drawNodeSW(n);
-    }
+    for (const s of visStreets) s.curve ? drawCurveSW(s) : drawStraightSW(s);
+    for (const n of visNodes) drawNodeSW(n);
 
     if (PX_PER_FT >= MARKINGS_MIN_ZOOM) {
         // 4) Center lane markings
         ctx.strokeStyle = '#FFD700';
         ctx.lineWidth = 1;
         ctx.setLineDash([10 * PX_PER_FT, 10 * PX_PER_FT]);
-        for (const s of streets) {
-            const b = s.bounds;
-            if (b.mxx < vl || b.mnx > vr || b.mxy < vt || b.mny > vb) continue;
-            s.curve ? drawCurveCL(s) : drawStraightCL(s);
-        }
+        for (const s of visStreets) s.curve ? drawCurveCL(s) : drawStraightCL(s);
         ctx.setLineDash([]);
 
         // 5) White edge lines (solid, 1ft inset from street edges)
         ctx.strokeStyle = '#fff';
         ctx.lineWidth = 1;
-        for (const s of streets) {
-            const b = s.bounds;
-            if (b.mxx < vl || b.mnx > vr || b.mxy < vt || b.mny > vb) continue;
-            s.curve ? drawCurveWL(s) : drawStraightWL(s);
-        }
+        for (const s of visStreets) s.curve ? drawCurveWL(s) : drawStraightWL(s);
     }
 
     ctx.restore();

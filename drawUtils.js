@@ -166,11 +166,23 @@ function drawDrawableTree(drawable, ox, oy, projectAndDrawFn, depthFn) {
     }
 }
 
+// Depth is linear in the points, so the average of the per-poly depths equals
+// the depth of one averaged point -- which is computed once and cached on the
+// drawable, instead of re-walking every poly (a church's worth of windows)
+// every frame. Safe because trees are baked into place before they are first
+// drawn and never move again.
 function avgDrawableDepth(drawable, ox, oy, depthFn) {
     if (drawable.polys.length === 0) return -Infinity;
-    let sum = 0;
-    for (const poly of drawable.polys) {
-        sum += depthFn(poly, ox, oy);
+    if (!drawable._depthPoly) {
+        let x = 0, y = 0;
+        for (const poly of drawable.polys) {
+            let px = 0, py = 0;
+            for (const p of poly.pts) { px += p.x; py += p.y; }
+            x += px / poly.pts.length;
+            y += py / poly.pts.length;
+        }
+        const n = drawable.polys.length;
+        drawable._depthPoly = { pts: [{ x: x / n, y: y / n, z: 0 }] };
     }
-    return sum / drawable.polys.length;
+    return depthFn(drawable._depthPoly, ox, oy);
 }
