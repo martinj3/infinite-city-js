@@ -46,19 +46,41 @@ function polyDepth(poly, ox, oy, camX, camY) {
 // flank's lettering culls along with its face (see makeFlankText).
 const PANEL_EM = 100;
 
+// Letters smaller than this on screen are a smudge, not a word, so the panel is
+// left blank instead. This is the zoom cutoff for every kind of lettering, and it
+// is the *letters* that are measured, not the panel: a long name shrunk to fit a
+// narrow panel drops out sooner than a short one on the same panel, which is
+// exactly when each stops being readable. The panel's width is held to the same
+// bar, which is also what disposes of a face turned exactly edge-on: it projects
+// to a sliver a rounding error wide, and lettering it is a transform with no
+// inverse for no pixels.
+const TEXT_MIN_PX = 5;
+
 function drawPanelText(sp, str, color, aspect) {
     const tl = sp[0], tr = sp[1], bl = sp[3];
     const wide = PANEL_EM * aspect;
+    const ux = tr[0] - tl[0], uy = tr[1] - tl[1];   // along the line of text
+    const vx = bl[0] - tl[0], vy = bl[1] - tl[1];   // down it
+    const down = Math.hypot(vx, vy);
+    // How far the panel reaches across, measured square to that: a face turned
+    // edge-on still projects to a line of some length, and it is this that goes
+    // to zero, not the length of either edge.
+    const across = Math.abs(ux * vy - uy * vx) / (down || 1);
+
     ctx.save();
-    ctx.setTransform((tr[0] - tl[0]) / wide, (tr[1] - tl[1]) / wide,
-                     (bl[0] - tl[0]) / PANEL_EM, (bl[1] - tl[1]) / PANEL_EM,
-                     tl[0], tl[1]);
     ctx.font = `bold ${PANEL_EM}px sans-serif`;
     // Shrink a long name to the panel's width; a short one is drawn at the
-    // panel's full height. A canvas that cannot measure text (tools/render.js)
-    // reports 0 and simply gets the unshrunk size.
+    // panel's full height.
     const w = ctx.measureText(str).width;
-    if (w > wide) ctx.font = `bold ${Math.max(1, Math.floor(PANEL_EM * wide / w))}px sans-serif`;
+    const em = w > wide ? Math.max(1, Math.floor(PANEL_EM * wide / w)) : PANEL_EM;
+    // The transform scales panel units by the panel's own projected size, so this
+    // is the em the letters actually land at, in device pixels.
+    if (em * down < TEXT_MIN_PX * PANEL_EM || across < TEXT_MIN_PX) {
+        ctx.restore();
+        return;
+    }
+    ctx.setTransform(ux / wide, uy / wide, vx / PANEL_EM, vy / PANEL_EM, tl[0], tl[1]);
+    if (em !== PANEL_EM) ctx.font = `bold ${em}px sans-serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillStyle = color;

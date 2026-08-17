@@ -33,6 +33,11 @@ function generateBuilding(name, lot) {
 const ROOF_COLOR = 'hsl(20, 30%, 35%)';
 const WINDOW_COLOR = 'hsl(210, 50%, 75%)';
 
+// A random number in [lo, hi). Building code is mostly ranges rolled per building.
+function frand(lo, hi) {
+    return lo + Math.random() * (hi - lo);
+}
+
 // Creates a gable roof on top of a rectangular prism.
 // ox, oy, oz: origin of the prism; w, l, h: prism dimensions.
 // lengthwise: if true, ridge runs along X; if false, ridge runs along Y.
@@ -114,21 +119,66 @@ function makeHipRoof(ox, oy, oz, w, l, h, lengthwise, wallColor) {
     }
 }
 
+// The flat roof of a commercial building: a deck at the top of the floors with a
+// parapet standing above it, which is how nearly every office block, store and
+// warehouse ends. The walls are built the full height -- floors plus parapet --
+// and this adds the deck inside them, plus the parapet's inward faces.
+//
+// The parapet has no thickness (a real one is under a foot, which is a pixel or
+// two here), so it is those inward faces alone that make it read as a wall
+// standing around a sunken deck. They earn their place: the two walls facing away
+// from the camera have their outer faces culled, and without an inner face there
+// the deck's far edge would have nothing above it and you would see through the
+// building. The ordering works out on its own -- the deck sorts at the prism's
+// centroid, every visible wall sorts nearer than that, so the near parapet paints
+// over the deck's near edge exactly as it should, while a far inner face lands
+// wholly above the deck edge it shares and can never be covered by it.
+function makeFlatRoof(ox, oy, deckZ, w, l, parapet, deckColor, innerColor) {
+    const p = (x, y, z) => ({ x, y, z });
+    const z0 = deckZ, z1 = deckZ + parapet;
+    return [
+        { pts: [p(ox,oy,deckZ), p(ox+w,oy,deckZ), p(ox+w,oy+l,deckZ), p(ox,oy+l,deckZ)], color: deckColor },
+        // Wound inward: each is the winding the opposite wall of a prism uses.
+        { pts: [p(ox+w,oy,z0), p(ox,oy,z0), p(ox,oy,z1), p(ox+w,oy,z1)], color: innerColor },
+        { pts: [p(ox,oy+l,z0), p(ox+w,oy+l,z0), p(ox+w,oy+l,z1), p(ox,oy+l,z1)], color: innerColor },
+        { pts: [p(ox,oy,z0), p(ox,oy+l,z0), p(ox,oy+l,z1), p(ox,oy,z1)], color: innerColor },
+        { pts: [p(ox+w,oy+l,z0), p(ox+w,oy,z0), p(ox+w,oy,z1), p(ox+w,oy+l,z1)], color: innerColor },
+    ];
+}
+
+// A panel on the street-facing (north) wall of a prism, at y, spanning x0..x1 and
+// z0..z1: a shop sign, or the lettering on one. Wound top-left, top-right,
+// bottom-right, bottom-left as a reader standing in the street sees it, which is
+// both the front-facing winding (so it culls with the wall it lies on) and what
+// drawPanelText needs in order to letter it (see render3d.js). Facing that wall a
+// reader has +x on their left, so the quad starts at the high end of x -- get it
+// backwards and the winding reverses and the panel simply culls away.
+function makeFrontPanel(x0, x1, y, z0, z1, color, text) {
+    const p = (x, z) => ({ x, y, z });
+    return { pts: [p(x1, z1), p(x0, z1), p(x0, z0), p(x1, z0)], color, text };
+}
+
 // Generate window polys for all 4 walls of a prism.
-// exclusions: per-wall array of {start, end} zones to avoid (e.g. door). These are
-// ground-floor features, so they only take out the windows on the bottom storey.
+// exclusions: per-wall array of {start, end} zones to avoid (e.g. door), each
+// taking out the windows of one storey -- `floor`, defaulting to the ground floor,
+// which is where nearly every such feature is. An office's sign band is the
+// exception: it hangs across the second storey, so the glass behind it goes.
 // floors, storeyHeight: how many rows of windows, and how far apart. A wall is laid
 // out once and repeated up the prism, so the windows of each storey line up.
+// opts overrides the shape of the glazing, in feet: `top` and `height` are the
+// head height above the storey's own floor and the pane height, `width` the range
+// of pane widths, `gap` the space between panes and `margin` the clear edge at
+// each end. The defaults are a house's; an office asks for wider, taller panes
+// closer together, which is most of what tells the two apart at a glance.
 // Returns array of polygon objects.
-function generatePrismWindows(ox, oy, w, l, exclusions, floors = 1, storeyHeight = 0) {
+function generatePrismWindows(ox, oy, w, l, exclusions, floors = 1, storeyHeight = 0, opts = {}) {
+    const { top = [7, 8], height = [3, 5], width = [3, 8], gap = 4, margin = 2 } = opts;
     const p = (x, y, z) => ({x, y, z});
     const eps = 0.05;
-    const winTop = 7 + Math.random();            // 7-8ft above its own floor (uniform per prism)
-    const winH = 3 + Math.random() * 2;          // 3-5ft (uniform per prism)
+    const winTop = top[0] + Math.random() * (top[1] - top[0]);        // uniform per prism
+    const winH = height[0] + Math.random() * (height[1] - height[0]); // uniform per prism
     const winBottom = winTop - winH;
-    const stdW = 3 + Math.random() * 5;          // 3-8ft standard width
-    const gap = 4;                                // space between windows
-    const margin = 2;                             // min distance from wall edge
+    const stdW = width[0] + Math.random() * (width[1] - width[0]);    // standard pane width
 
     const walls = [
         { lo: ox, hi: ox + w, excl: exclusions.north || [],
@@ -146,10 +196,10 @@ function generatePrismWindows(ox, oy, w, l, exclusions, floors = 1, storeyHeight
         // Where the windows go, decided once for the whole wall
         const spans = [];
         let pos = wall.lo + margin;
-        while (pos + 3 <= wall.hi - margin) {
+        while (pos + width[0] <= wall.hi - margin) {
             let winW = stdW;
             if (Math.random() < 0.25) {
-                winW = Math.max(3, Math.min(8, stdW + (Math.random() - 0.5) * 4));
+                winW = Math.max(width[0], Math.min(width[1], stdW + (Math.random() - 0.5) * 4));
             }
             if (pos + winW > wall.hi - margin) break;
             spans.push([pos, pos + winW]);
@@ -159,8 +209,8 @@ function generatePrismWindows(ox, oy, w, l, exclusions, floors = 1, storeyHeight
         for (let f = 0; f < floors; f++) {
             const z0 = f * storeyHeight + winBottom, z1 = f * storeyHeight + winTop;
             for (const [a, b] of spans) {
-                // A door on the ground floor stands where a window would have been
-                if (f === 0 && wall.excl.some(e => a < e.end && b > e.start)) continue;
+                // A door, or a sign, stands where a window would have been
+                if (wall.excl.some(e => (e.floor || 0) === f && a < e.end && b > e.start)) continue;
                 polys.push(wall.poly(a, b, z0, z1));
             }
         }

@@ -513,3 +513,19 @@ But the box on the back is most often white.
 Their overall length can vary from 21ft to 31ft.  
 
 You can maybe write a list of 30 or so plausible-sounding names for moving, storage, delivery, van line, and trucking companies.  Assign one at random to 50% of these trucks (other half are just plain).  If it's possible to use drawtext or something to show the text on the side of the box?
+
+---
+
+Of course, that text on those truck boxes should be hidden at wider zoom levels.  You probably already thought of that.  
+
+Moving on, next task:  low-rise office buildings.  One to six floors.  Lot depths from 70 to 130ft, lot widths from 70 to 150ft.  
+
+Like houses, they have a main prism (from 40 to 95% of the lot size).  If there's room, they can also have auxiliary prisms, like houses, but these can be no taller than the main prism.  
+
+Flat roofs, like most office buildings, stores, and commercial buildings.  So a new roof type, I guess.  
+
+Pick a realistic set of possible colors for them, with some random variation around the chosen color, as for houses.  
+
+When they are 2 or more floors, the second floor facing the street can have a sign (text on a background color distinct from the building color.  They have signs 50% of the time, when a sign is possible (not blocked by an auxiliary wing prism, and 2+ floors).  
+
+For the sign text, make up a list of 50 plausible sounding corporate, store, and business and office plaza names.  Placement should be handled similarly to churches, only when there's space.  Churches are a little too common right now.  These low rise office buildings should be more common than churches, but much less common than houses.

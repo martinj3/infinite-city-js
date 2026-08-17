@@ -20,13 +20,19 @@
 // the matching buildings/<name>s.js is what knows how to put something on the lot.
 const LOT_TYPES = {
     house: {
-        prob: 0.95,
+        prob: 0.88,
         width: [40, 90],    // along the street
         depth: [45, 70],    // away from the street
         setback: [0, 25],   // street edge of the lot to the front of the building
     },
+    office: {
+        prob: 0.09,
+        width: [70, 150],
+        depth: [70, 130],
+        setback: [0, 25],
+    },
     church: {
-        prob: 0.05,
+        prob: 0.03,
         width: [70, 120],
         depth: [90, 130],
         setback: [0, 25],   // same building line as the houses on the block

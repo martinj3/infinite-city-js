@@ -18,6 +18,56 @@ camera already follows the car. The pedals appear only on a coarse pointer --
 With no real DOM every entry point turns into a no-op, which is what keeps
 `tools/render.js` working.
 
+## Buildings
+
+`buildings/` works the way `vehicles/` does: `buildingUtils.js` holds what every
+type shares -- the registry (`registerBuilding` / `generateBuilding`), the roofs,
+`generatePrismWindows()`, and the lot-fitting helpers -- and one file per type
+holds the rest: `houses.js`, `offices.js`, `churches.js`. A type registers itself
+under the name of the `LOT_TYPE` it builds for (see `lots.js`), so a new kind of
+building is a new file plus a script tag, and `lots.js` never learns its name.
+Everything is generated in lot-local feet: x along the street, y away from it, so
+y = 0 is the street edge and a prism's "north" face is its front.
+
+Low-rise offices are the commercial half of a street: a main prism on the
+building line, up to two wings, one to six storeys. What separates one from a
+house is only three things, but they are the three you notice -- a flat roof, wide
+banded glazing instead of punched openings (`OFFICE_WINDOWS` overriding
+`generatePrismWindows`' house defaults), and a sign. Storey count is capped by the
+floor plate, about one storey per 1200 sq ft, so a six-storey block needs most of
+a full lot and a small footprint stays a shopfront; a wing is never taller than
+what it hangs off. Wings may stand ahead of the building line as well as beside
+and behind, which is what gives the sign a way to be blocked, and a pavilion that
+stands there takes the entrance with it -- the door has to go in *that* prism's
+own details, because a nearer sibling drawable is drawn after the main block and
+would paint over a door left behind on it.
+
+`makeFlatRoof()` is the flat-roof type, and it is a parapet, not a lid: the walls
+are built the full height (floors plus parapet) and it adds the deck inside them
+along with the parapet's *inward* faces. Those inner faces are the whole trick.
+The two walls facing away from the camera have their outer faces culled, so
+without an inner face there the deck's far edge would have nothing above it and
+you would see straight through the building. The ordering needs no help: the deck
+sorts at the prism's centroid and every visible wall sorts nearer than that, so
+the near parapet paints over the deck's near edge exactly as it should, while a
+far inner face lands wholly above the deck edge it shares and can never be
+covered by it. The parapet has no thickness, which at this size is nothing
+(a real one is a pixel or two), and that is what keeps it to four extra polys.
+
+Rooftop plant hangs off the prism's *details* child rather than sitting in with
+the walls, for the reason a truck's frame rails go in `v.under`: the deck is one
+polygon sorting at the middle of the roof, so a unit at the far end sorts before
+it and gets painted over. A child drawable is always drawn after its parent's own
+polys, which is the fix.
+
+A sign is a board across the second storey of the front wall, on half the
+buildings that can have one (two storeys, nothing standing in front), and it is
+the same lettering machinery a box truck's flank uses -- `makeFrontPanel()` for
+the board and again for the name on it, the name standing a whisker prouder so it
+sorts after. The second-storey glass behind it is dropped, which is what
+`generatePrismWindows`' per-exclusion `floor` is for; everything else that
+excludes a window is a door, and doors are on the ground floor.
+
 ## Vehicles
 
 `vehicles/` mirrors `buildings/`: `vehicleUtils.js` holds what every vehicle type
@@ -147,7 +197,15 @@ be the same front-facing winding, so the far side's name culls with its own flan
 A viewer sees the nose on their left from one flank and on their right from the
 other, so the two sides read in opposite directions along x, and the same name
 starts at opposite ends of the truck, exactly as painted lettering does on a real
-one. Names are kept to about twenty characters: one line is as wide as the box, so
+one. Lettering has a zoom cutoff of its own, in `drawPanelText`: it is the
+*letters* that are measured against `TEXT_MIN_PX`, not the panel, so a long name
+shrunk to fit a narrow box drops out sooner than a short one on the same box --
+which is exactly when each stops being readable rather than a smudge. The same
+check on the panel's width square to its own baseline is what disposes of a face
+turned exactly edge-on: it still projects to a line of some length, so neither
+edge goes to zero, but the area between them does, and lettering it would be a
+transform with no inverse drawn for no pixels.
+Names are kept to about twenty characters: one line is as wide as the box, so
 a name twice as long is drawn half as tall and stops looking like signwriting.
 
 The classics -- the Beetle, the splitscreen Minibus, `corvette.js`
@@ -224,24 +282,34 @@ Two complementary techniques, both provided by that file:
   sub-pixel-thin features, so don't trust it on hairlines -- verify those by counting.
   It draws no glyphs either, so a truck's lettering is a blank panel here; subclass
   `RasterCtx` with a `fillText` that blocks out each letter if you need to see where
-  text lands. (`measureText` does answer with a plausible width for the current font,
-  so code that fits text to a box behaves.)
+  text lands. (Both test contexts answer `measureText` with a plausible width for
+  the current font, so code that fits text to a box takes the branches it exists
+  for instead of dividing by zero.)
 - **Count the calls.** `probeCtx(cb)` returns a context that draws nothing and reports
   every call, for assertions pixels answer badly: "does every street draw exactly two
   sidewalk bands", "does any NaN reach the canvas", "does exactly one flank's name
-  survive culling at every heading". Pass it to `renderPage({ ctx })`.
+  survive culling at every heading", "at what zoom does the lettering stop being
+  drawn". Pass it to `renderPage({ ctx })`.
+
+Neither test context draws glyphs, so whether lettering is legible -- the right
+size, the right way round, readable against its background -- is the one thing
+only a real browser answers. Chromium is pre-installed (see the environment notes)
+and `playwright-core` drives it against a local static server in a dozen lines.
 
 `renderPage({ search, width, height, scripts })` is also exported for custom harnesses;
 it returns `{ ctx, sandbox, run }`, where `run('expr')` evaluates inside the page, e.g.
 `run('initMap(); growCity(500)')`. A `scripts` entry may be `{ code }` instead of a
 filename, standing in for an inline `<script>` tag.
 
-Buildings have their own pages, one per type: `buildings/houses.html` and
-`buildings/churches.html` lay out one building on every lot size that type is ever
-asked for (lot width across, depth back), so the extremes are always on screen. Both
+Buildings have their own pages, one per type: `buildings/houses.html`,
+`buildings/offices.html` and `buildings/churches.html` lay out one building on
+every lot size that type is ever asked for (lot width across, depth back), so the
+extremes are always on screen. All three
 are `buildings/lotGrid.js` with a different `GRID_TYPE`, and take `?seed`, `?step`,
 `?setback`, `?zoom`. Loading them headlessly needs the inline `{ code: "const
-GRID_TYPE = 'house';" }` script before `lotGrid.js`.
+GRID_TYPE = 'house';" }` script before `lotGrid.js`. Note that at the default
+camera these pages show the *backs* of the buildings -- the lot's street edge is
+the far one -- so `?angle=135` or so is what you want for a front door or a sign.
 
 `vehicles/vehicles.html` is the same idea for vehicles: a 6x6 block of every
 registered type, all facing the same way so proportions line up, with the steering

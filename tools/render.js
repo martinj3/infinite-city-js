@@ -25,7 +25,8 @@ const ROOT = path.join(__dirname, '..');
 // Mirrors the script tags in streetTest.html
 const DEFAULT_SCRIPTS = [
     'constants.js', 'controls.js', 'drawUtils.js', 'lighting.js', 'render3d.js',
-    'buildings/buildingUtils.js', 'buildings/houses.js', 'buildings/churches.js',
+    'buildings/buildingUtils.js', 'buildings/houses.js', 'buildings/offices.js',
+    'buildings/churches.js',
     'streets.js', 'lots.js', 'drawing.js', 'streetTest.js',
 ];
 
@@ -171,10 +172,7 @@ class RasterCtx {
     // something real instead of by zero.
     fillText() { }
     strokeText() { }
-    measureText(str) {
-        const m = /([\d.]+)px/.exec(this.font);
-        return { width: 0.55 * (m ? parseFloat(m[1]) : 16) * String(str).length };
-    }
+    measureText(str) { return { width: estimateTextWidth(this.font, str) }; }
 
     toPNG() {
         const stride = this.w * 3 + 1;
@@ -210,22 +208,34 @@ class RasterCtx {
     }
 }
 
+// What a string would measure in the given font, near enough for code that fits
+// text to a box. Neither test context draws glyphs, but both have to answer this
+// or such code divides by zero and never takes the branch it exists for.
+function estimateTextWidth(font, str) {
+    const m = /([\d.]+)px/.exec(font || '');
+    return 0.55 * (m ? parseFloat(m[1]) : 16) * String(str).length;
+}
+
 // A context that draws nothing and reports every call instead. Use it to assert on
 // counts ("every street draws two sidewalk bands") or to catch NaN reaching the
 // canvas -- questions pixels answer badly.
 function probeCtx(onCall, width = 900, height = 700) {
-    return new Proxy({}, {
+    // Properties are kept rather than discarded, so that measureText can answer
+    // for whatever font was last set -- without it the probe never exercises the
+    // "shrink this name to fit" branch, and reports text that the real canvas
+    // would have found too small to draw.
+    const state = {};
+    return new Proxy(state, {
         get(_, k) {
             if (k === 'canvas') return { width, height };
             return (...args) => {
                 if (onCall) onCall(String(k), args);
                 // Every call is reported and returns nothing -- except the one
-                // whose result callers read back. Text laid out to fit a box
-                // measures it first, and undefined.width would throw.
-                if (k === 'measureText') return { width: 0 };
+                // whose result callers read back.
+                if (k === 'measureText') return { width: estimateTextWidth(state.font, args[0]) };
             };
         },
-        set() { return true; }
+        set(_, k, v) { state[k] = v; return true; }
     });
 }
 

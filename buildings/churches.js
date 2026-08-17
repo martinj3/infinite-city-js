@@ -47,10 +47,6 @@ const MISSION_WALLS = [
 
 const ARCH_SEGS = 6;    // segments approximating the half circle atop a window
 
-function frand(lo, hi) {
-    return lo + Math.random() * (hi - lo);
-}
-
 function weightedPick(entries) {
     let r = Math.random() * entries.reduce((s, e) => s + e[0], 0);
     for (const [wt, v] of entries) { r -= wt; if (r <= 0) return v; }
