@@ -219,6 +219,14 @@ function makeVehicleFootprint(width, length, color) {
     ], color }];
 }
 
+// A vehicle's overall length in feet, read off the footprint every type builds for
+// its zoomed-out self. Traffic spaces cars along a block by it, and a fire engine
+// is twice the car it is parked behind.
+function vehicleLength(v) {
+    const pts = v.flat[0].pts;
+    return pts[1].x - pts[0].x;
+}
+
 // A detail quad on both flanks of a full-width body -- a compartment door, a
 // stripe, a rib. x0 < x1 and z0 < z1 bound it in side view; each quad is pushed a
 // hair outward so it lands in front of the face it decorates, and the right-hand

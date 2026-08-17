@@ -18,6 +18,12 @@
 // T is the one worth playing with alongside Q/E: hold Q and watch the near side of
 // each street go see-through as it swings away from vertical, which is the whole
 // point of the effect and hard to judge from a still.
+//
+// Traffic is here too, and behaves as it does in the game: the camera stands in for
+// the player, so cars exist within 1500ft of it and are deleted past that. The city
+// is grown before the camera has flown anywhere, so the traffic is around wherever
+// the camera *started* -- fly away and it thins out, and only pressing space to
+// build more streets puts new cars on the map.
 
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
@@ -64,6 +70,9 @@ let stats = { visited: 0, ms: 0 };
 
 function build() {
     Math.random = seed === null ? sysRandom : mulberry32(seed);
+    // Traffic only exists near whoever it is for, and here that is the camera. Set
+    // before the city is grown, because a street is populated as it is built.
+    setTrafficFocus(camX, camY);
     resetMap();
     const t0 = performance.now();
     initMap();
@@ -193,6 +202,7 @@ function drawHud() {
         `streets ${streets.length}   intersections ${nodes.size}`,
         `buildings ${lots}${PX_PER_FT < HOUSES_MIN_ZOOM
             ? ` (only those over ${Math.round(SKYLINE_MIN_PX / PX_PER_FT)}ft: zoom in)` : ''}`,
+        `traffic ${traffic.length} within ${TRAFFIC_RADIUS}ft of the camera`,
         `visited ${stats.visited}   unresolved ${countUnresolved()}`,
         `seed ${seed === null ? '(random)' : seed}   built in ${stats.ms.toFixed(0)}ms`,
         `zoom ${PX_PER_FT.toFixed(2)} px/ft   rot ${(normA(VIEW_ANGLE) * 180 / Math.PI).toFixed(0)}deg   tilt ${Y_SCALE.toFixed(2)}`,
@@ -215,6 +225,7 @@ function loop(time) {
     const dt = lastTime ? Math.min((time - lastTime) / 1000, 0.05) : 0;
     lastTime = time;
     update(dt);
+    updateTraffic(camX, camY, dt);
     drawScene(camX, camY);
     drawHud();
     requestAnimationFrame(loop);

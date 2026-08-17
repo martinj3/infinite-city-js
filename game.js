@@ -63,6 +63,9 @@ function update(dt) {
     if (keys['r'] || keys['R']) Y_SCALE = Math.min(Y_SCALE_MAX, Y_SCALE + TILT_SPEED * dt);
     if (keys['f'] || keys['F']) Y_SCALE = Math.max(Y_SCALE_MIN, Y_SCALE - TILT_SPEED * dt);
 
+    // Traffic first, so the streets generate() is about to create are populated
+    // around where the player is now rather than where they were last frame.
+    updateTraffic(player.x, player.y, dt);
     generate(player.x, player.y);
 }
 

@@ -107,6 +107,9 @@ function pushStreet(x1, y1, x2, y2, curve, props) {
     // Lots (and their buildings) are generated once, here, and persist on the street.
     // Optional so pages and test harnesses can load streets.js without lots.js.
     if (typeof generateStreetLots === 'function') generateStreetLots(s);
+    // Traffic is seeded the same way, but unlike the lots it does not stay put:
+    // these cars drive off this block within the minute (see traffic.js).
+    if (typeof spawnStreetTraffic === 'function') spawnStreetTraffic(s);
     return s;
 }
 
@@ -277,6 +280,8 @@ function nodeUnresolved(n) { return SLOTS.some(s => n.roads[s] === null); }
 function resetMap() {
     nodes.clear();
     streets.length = 0;
+    // Traffic holds street objects directly, so it goes with them.
+    if (typeof resetTraffic === 'function') resetTraffic();
 }
 
 // Seed the map: two intersections joined by one east-west street.

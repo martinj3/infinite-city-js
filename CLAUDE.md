@@ -391,14 +391,77 @@ body, trim, roof fittings and glass are painted as separate passes, because dept
 sorting compares whole polygons and cannot resolve the wheels tucked inside the body
 -- the same reason buildings hang their windows off a child drawable.
 
+## Traffic
+
+`traffic.js` is the other cars. A car in traffic is not a thing standing at a
+place, the way a building is -- it is a position *on a street*: which street, how
+far along it, and which of the two ways it points. World coordinates are derived
+from that every frame and never stored as the truth. That one decision is what
+makes a curve free (the car rides a circle of a slightly different radius; the
+lane offset square to the direction of travel *is* radial on an arc, so there is
+no special case) and an intersection a single assignment. `pos` is measured from
+whichever end that car started at, so it always runs 0 to length and none of the
+arithmetic branches on direction.
+
+Cars are seeded onto a block as it is built, from `pushStreet`, the same moment
+and the same way its lots are -- but unlike the lots they do not stay: a block's
+own cars have driven off it within the minute. The mix of body styles is
+`generateRandomVehicle()`, so the odds of meeting a Countach out there are the
+odds of having been given one to drive. Each direction is packed separately, since
+two cars going opposite ways are in different lanes and cannot be in each other's
+way; within a lane, sorting the random offsets and then pushing each car past the
+ones before it by their own lengths plus a gap spaces them exactly, and the
+tightest arrangement the shuffle can reach is still one clear gap.
+
+They drive at a flat 25mph and stop for nothing -- not the turn, not the car in
+front, not the intersection, which they are simply through the far side of on the
+same frame, pointing whichever way they picked. The one rule at a node is no
+U-turns, which is just "any street here except the one I arrived on"; a dead end
+is the only place there is no other choice, and over 15,000 crossings every U-turn
+taken was at one.
+
+Everything within `TRAFFIC_RADIUS` (1500ft) of the player is simulated whether it
+is on screen or not, and everything past it is deleted outright -- which is what
+lets you turn around and chase a car you saw, because it is still where it should
+be rather than where it was. Spawning is gated on the same radius, since a car
+built further away would be deleted on the very next update; driving never
+rejects anything (a street is born a few feet from the car that triggered it),
+but `growCity()` builds a whole city at once from wherever in it it likes.
+
+Note what this does *not* have: nothing ever repopulates a block. Spawning is tied
+to a street being created, deletion to a distance, so an area you sit in drains --
+parked, a typical 38 cars falls to 14 in two minutes and 5 in five. Driving hides
+it, because you are always meeting new streets.
+
+Traffic joins the buildings' depth pass (`drawLots`) rather than getting one of
+its own, so a car on the far side of a block goes behind that block's houses
+instead of being painted over them; its position fields are named `cx, cy` for
+exactly that reason, so both kinds of thing sort through the same line. The
+player's car is the deliberate exception -- still drawn last, on top of
+everything, because losing sight of your own car behind a house you are driving
+past is worse than the occlusion being right. Cars drop out at `HOUSES_MIN_ZOOM`,
+with the houses: below that only the skyline is left, and there are no cars in a
+skyline.
+
+Adding traffic changed what a given `?seed` builds. Spawning draws from
+`Math.random()`, so the stream every later street reads has moved; the city is
+still deterministic, just not the same city an old screenshot shows. Suppress
+`spawnStreetTraffic` and the pixels match the pre-traffic build exactly.
+
 ## Testing
 
 `streetTest.html` is the fastest way to check street generation: it grows a whole
 city up front (no car, camera flies around) via the same `initMap()`/`generate()`
 path the driving game uses. `?seed=123` makes it deterministic, and `S` saves a PNG.
+Traffic runs here too, with the camera standing in for the player -- but the city is
+grown before the camera has flown anywhere, so the cars are around wherever it
+*started*: fly off and it thins out, and only `space` (build more streets) or `G`
+(regenerate, around wherever you are now) puts new ones on the map.
 
 Agents without a browser can test headlessly with `tools/render.js`, which runs the
 real page scripts in a Node `vm` with a stub DOM. No dependencies, no build step.
+`DEFAULT_SCRIPTS` is now read out of `streetTest.html`'s own script tags rather than
+copied, so adding a file to that page is all it takes to reach the harness.
 Two complementary techniques, both provided by that file:
 
 - **Look at it.** `node tools/render.js out.png "?seed=42&streets=500"` paints the

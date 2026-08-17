@@ -548,3 +548,16 @@ Lot sizes are always squares, between 110 and 130ft on a side.  With the buildin
 
 Get creative.  Certainly some should be fairly plain rectangle towers with flat roofs.  But many are elaborately shaped or decorated (eg Chrysler building, Empire State, petronas towers, Taipei 101, burj kalifa, sears/willis tower, freedom tower, etc, look to other famous skyscrapers for inspiration).  
 They have fancy elements like spires, steeple-like crown elements, decorative spikes, decorative vertical ridges, etc etc.  I'm giving you extra thinking effort, make them look cool and realistic!
+
+---
+
+Now I want some traffic.  Keep it simple for now.  When a new street segment is generated, it gets between 0 and 12 vehicles spawned on it.  Some driving in each direction, at random.   
+Random spacing along the street at spawn, but not touching or overlapping of course.  
+
+They all drive a constant 25mph, don’t slow down for turns or collisions or anything.  For now they simply teleport through intersections, picking a random direction to turn (but never u-turns).  
+
+They persist and continue to be simulated as long as they are within 1500ft of the player, and are completely deleted at some point once they exceed that.  (They may not be drawn when off screen, to save resources, but are still tracked and simulated within 1500ft).  
+
+Player should naturally be able to turn around and chase down an interesting car they saw, even after it goes off screen.  
+
+The same probability for the players car being a certain vehicle also applies to spawning these non-player vehicles

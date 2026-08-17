@@ -22,14 +22,11 @@ const vm = require('vm');
 const zlib = require('zlib');
 
 const ROOT = path.join(__dirname, '..');
-// Mirrors the script tags in streetTest.html
-const DEFAULT_SCRIPTS = [
-    'constants.js', 'controls.js', 'drawUtils.js', 'lighting.js', 'render3d.js',
-    'buildings/buildingUtils.js', 'buildings/houses.js', 'buildings/offices.js',
-    'buildings/skyscrapers.js',
-    'buildings/churches.js',
-    'streets.js', 'lots.js', 'drawing.js', 'streetTest.js',
-];
+// The script tags of streetTest.html, in order, read from the page itself: this
+// used to be a hand-copied list, and a list that has to be kept in step with a file
+// sitting next to it is a list that will one day disagree with it.
+const DEFAULT_SCRIPTS = [...fs.readFileSync(path.join(ROOT, 'streetTest.html'), 'utf8')
+    .matchAll(/<script src="([^"]+)"><\/script>/g)].map(m => m[1]);
 
 // --- Matrix helpers (canvas transforms are 2x3: [a, b, c, d, e, f]) ---
 function mul(m, n) { // apply n in m's local space

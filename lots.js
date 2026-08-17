@@ -397,22 +397,29 @@ function drawLots(camX, camY, vl, vr, vt, vb) {
             b.mxy + Math.max(0, dy) + pad < vt || b.mny + Math.min(0, dy) - pad > vb) continue;
         for (const lot of s.lots) if (lot.top >= minTop) visible.push(lot);
     }
+    // Traffic stands on the ground like a building does, so it sorts here rather
+    // than in a pass of its own: a car on the far side of a block belongs behind
+    // that block's houses. Optional, so a page can load lots.js without traffic.
+    if (typeof collectTraffic === 'function') collectTraffic(visible, vl, vr, vt, vb);
     if (visible.length === 0) return;
 
-    // Sort by projected screen Y of the lot center (far-to-near)
-    for (const lot of visible) lot.screenY = project(lot.cx, lot.cy, 0, camX, camY)[1];
+    // Sort by projected screen Y of the center (far-to-near)
+    for (const item of visible) item.screenY = project(item.cx, item.cy, 0, camX, camY)[1];
     visible.sort((a, b) => a.screenY - b.screenY);
 
     const pAndD = (polys, ox, oy) => projectAndDraw(polys, ox, oy, camX, camY, true);
     const pDepth = (poly, ox, oy) => polyDepth(poly, ox, oy, camX, camY);
     const cosV = getCosV(), sinV = getSinV();
-    for (const lot of visible) {
+    for (const item of visible) {
+        // Cars share the sort but not the drawing: they move, so their polys
+        // cannot be lit once and kept the way a building's are.
+        if (item.vehicle) { drawTrafficVehicle(item, camX, camY); continue; }
         // A building in the way is painted see-through rather than skipped: you
         // still want to know it is there, and its far walls showing through its
         // near ones is what makes it read as a ghost instead of flat paint.
-        const fade = buildingFade && lotHidesStreet(lot, cosV, sinV);
+        const fade = buildingFade && lotHidesStreet(item, cosV, sinV);
         if (fade) ctx.globalAlpha = BUILDING_FADE_ALPHA;
-        drawDrawableTree(lot.house, 0, 0, pAndD, pDepth);
+        drawDrawableTree(item.house, 0, 0, pAndD, pDepth);
         if (fade) ctx.globalAlpha = 1;
     }
 }
