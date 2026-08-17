@@ -22,20 +22,20 @@ With no real DOM every entry point turns into a no-op, which is what keeps
 
 `vehicles/` mirrors `buildings/`: `vehicleUtils.js` holds what every vehicle type
 shares -- the type registry (`registerVehicle` / `generateVehicle` /
-`generateRandomVehicle`), the palette, the wheels, `makeCarLike()` and
-`drawVehicle()` -- and one file per body style holds the rest: `sedan.js`,
-`pickupTruck.js`, `suv.js`, `van.js`, `policeCar.js`, `cityBus.js`,
-`schoolBus.js`, `deliveryVan.js`.
+`generateRandomVehicle`), the palette, the wheels, `makeCarLike()`,
+`makeTruck()` and `drawVehicle()` -- and one file per body style holds the rest:
+`sedan.js`, `pickupTruck.js`, `suv.js`, `van.js`, `policeCar.js`, `cityBus.js`,
+`schoolBus.js`, `deliveryVan.js`, `fireTruck.js`, `trashTruck.js`,
+`cementTruck.js`.
 The player gets one at random, weighted by the `weight` each type registers, so
-SUVs and cars are the common case and buses the rare one.
+SUVs and cars are the common case and buses and work trucks the rare ones.
 
-Nine more are registered but have no body style yet -- `fireTruck.js`,
-`trashTruck.js`, `cementTruck.js`, `vwBeetle.js`, `vwMinibus.js`, `corvette.js`,
-`craneTruck.js`, `boxTruck.js`, `semiTruck.js` -- each a one-liner calling
-`registerPlaceholderVehicle(name)`, which draws it as a sedan at weight 0.
-`r -= 0` in `randomVehicleType()` can never cross zero on its own, so a
-weight-0 type can only come up once every real type is exhausted, which never
-happens: no special case anywhere has to know a placeholder is one.
+Six more are registered but have no body style yet -- `vwBeetle.js`,
+`vwMinibus.js`, `corvette.js`, `craneTruck.js`, `boxTruck.js`, `semiTruck.js` --
+each a one-liner calling `registerPlaceholderVehicle(name)`, which draws it as a
+sedan at weight 0. `r -= 0` in `randomVehicleType()` can never cross zero on its
+own, so a weight-0 type can only come up once every real type is exhausted, which
+never happens: no special case anywhere has to know a placeholder is one.
 
 Models are built in vehicle-local feet: **+x forward, +y the car's right, z up**,
 origin on the ground at the centre of the footprint. `drawVehicle()` rotates and
@@ -98,12 +98,28 @@ body by construction, so painting it last is always right. `makeCarLike()` retur
 the chassis dimensions it derived in `v.frame` so a type can place such a thing
 without re-deriving them.
 
+The three work trucks are not car-likes: `makeTruck()` builds what they share -- a
+cab (cab-over or conventional, recorded in `v.cab`), a heavy bumper, dark frame
+rails, and a steering front axle ahead of a rear group that can be a tandem pair --
+and each file bolts its apparatus on behind: the fire engine its compartment body,
+racked ladder and light bar, the rear loader its extruded hopper-and-tailgate
+silhouette, the mixer its drum, a tilted `makeLatheX()` (drawUtils.js) whose dark
+rear cap is the mouth -- interior faces would be culled backfaces, so an open end
+is painted, not modelled. The drum's belly band is one lathe ring in the cab's
+colour, a whisker proud of the surface. Flank details that lie on a body face --
+roll-up doors, stripes, ribs -- go in `v.trim`, a pass drawn right after the body,
+because depth sorting cannot resolve a small quad inside a big face; `v.roof`
+stays reserved for things above the whole vehicle (the trash truck's beacon rides
+the body's top edge, not the cab, for exactly that reason -- its body stands taller
+than its cab, which is also why a truck's glass joins the body batch instead of
+the always-on-top glass pass: the body would show through it from behind).
+
 Detail is chosen by `PX_PER_FT` alone (`VEHICLE_SOLID_MIN_ZOOM`,
 `VEHICLE_WHEELS_MIN_ZOOM`, `VEHICLE_ROOF_MIN_ZOOM`, `VEHICLE_GLASS_MIN_ZOOM`), down
 to a single flat rectangle of the right size and colour when zoomed way out. Wheels,
-body, roof fittings and glass are painted as separate passes, because depth sorting
-compares whole polygons and cannot resolve the wheels tucked inside the body -- the
-same reason buildings hang their windows off a child drawable.
+body, trim, roof fittings and glass are painted as separate passes, because depth
+sorting compares whole polygons and cannot resolve the wheels tucked inside the body
+-- the same reason buildings hang their windows off a child drawable.
 
 ## Testing
 

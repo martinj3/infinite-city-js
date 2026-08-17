@@ -96,20 +96,28 @@ const VEHICLE_COLORS = [
 
 // Some types do not draw from the general fleet: a school bus is yellow, a police
 // car is one of three liveries. Those pass their own table of the same shape.
-function pickColorFrom(palette) {
+// The components version is for a type that needs shades of one draw -- a garbage
+// truck's body ribs a step darker than its paint -- since a finished hsl() string
+// cannot be darkened.
+function pickColorComponentsFrom(palette) {
     const total = palette.reduce((s, c) => s + c[0], 0);
     let r = Math.random() * total;
     for (const [weight, h, s, l] of palette) {
         r -= weight;
         if (r <= 0) {
             // A small jitter so two white cars are not pixel-identical
-            return hsl(h + (Math.random() - 0.5) * 8,
-                       s + (Math.random() - 0.5) * 6,
-                       l + (Math.random() - 0.5) * 8);
+            return { h: h + (Math.random() - 0.5) * 8,
+                     s: s + (Math.random() - 0.5) * 6,
+                     l: l + (Math.random() - 0.5) * 8 };
         }
     }
     const last = palette[palette.length - 1];
-    return hsl(last[1], last[2], last[3]);
+    return { h: last[1], s: last[2], l: last[3] };
+}
+
+function pickColorFrom(palette) {
+    const c = pickColorComponentsFrom(palette);
+    return hsl(c.h, c.s, c.l);
 }
 
 function pickVehicleColor() {
@@ -194,6 +202,28 @@ function makeVehicleFootprint(width, length, color) {
         { x:  hl, y:  hw, z },
         { x: -hl, y:  hw, z },
     ], color }];
+}
+
+// A detail quad on both flanks of a full-width body -- a compartment door, a
+// stripe, a rib. x0 < x1 and z0 < z1 bound it in side view; each quad is pushed a
+// hair outward so it lands in front of the face it decorates, and the right-hand
+// one is wound in reverse, for the same mirror-image reason the side windows are
+// (see makeCarLike). These belong in v.trim, the pass drawn after the body,
+// because depth sorting compares whole polygons and cannot resolve a small quad
+// lying inside a big face.
+function makeFlankQuads(x0, x1, z0, z1, hw, color, eps = 0.04) {
+    const quads = [];
+    for (const side of [-1, 1]) {
+        const y = (hw + eps) * side;
+        const pts = [
+            { x: x0, y, z: z0 },
+            { x: x1, y, z: z0 },
+            { x: x1, y, z: z1 },
+            { x: x0, y, z: z1 },
+        ];
+        quads.push({ pts: side > 0 ? pts.reverse() : pts, color });
+    }
+    return quads;
 }
 
 // Inset a quad toward its own centre, for a detail poly (a window) that has to sit
@@ -421,6 +451,134 @@ function makeCarLike(type, spec) {
     };
 }
 
+// --- The truck chassis -------------------------------------------------------
+// A fire engine, a garbage truck or a mixer is not a car-like: it is a cab, an
+// exposed frame, and a work body bolted on behind. This builds the parts those
+// types share -- the cab (cab-over or conventional, with its bumper and glass),
+// the dark frame rails running back from it, and the wheels, with a tandem rear
+// axle pair when asked -- and reports where everything ended up in v.frame, so the
+// type can build its apparatus in place. The type pushes that apparatus into
+// v.body, flank details into v.trim (see drawVehicle), and anything that clears
+// the whole vehicle into v.roof.
+//
+// Unlike a car's, a truck's glass goes in the body batch, not the always-on-top
+// glass pass: a tall work body behind the cab can occlude the cab's windows from
+// rear views, which the glass pass would paint straight through. Truck windows
+// are big enough that skipping the glass zoom gate costs nothing to look at.
+//
+// Spec fields, [lo, hi] ranges in feet unless noted:
+//   width, length        overall
+//   cabOver              bool (a resolved choice, not a range): flat nose with the
+//                        cab over the engine, or a conventional bonnet ahead of it
+//   cabRoof              z of the cab roof
+//   belt                 z of the cab's window line, and the top of the bonnet
+//   cabLen               windscreen base to the cab's back wall
+//   hoodLen, hoodDrop    the bonnet ahead of that, and how far its nose falls
+//                        below the belt (conventional only)
+//   wsRake               how far the windscreen leans back, in feet
+//   cabInset             cab sides inboard of the body flanks
+//   clearance            underside of cab and frame
+//   chassisZ             top of the frame rails: the deck the apparatus sits on
+//   frameWFrac           frame width as a fraction of body width (number, not a range)
+//   bumper               how far the front bumper juts past the nose
+//   color                cab paint, an hsl() string the type has already resolved
+//   wheelRadius, tireWidth, wheelInset
+//   frontAxle            nose to front axle, in feet
+//   rearAxle             tail to the centre of the rear axle group, in feet
+//   tandem               bool: two rear axles instead of one
+//   tandemGap            spacing between tandem axles
+const TRUCK_FRAME_COLOR = 'hsl(220, 6%, 20%)';
+const TRUCK_BUMPER_COLOR = 'hsl(210, 5%, 55%)';
+
+function makeTruck(type, spec) {
+    const width = vehRand(spec.width);
+    const length = vehRand(spec.length);
+    const hl = length / 2, hw = width / 2;
+    const clearance = vehRand(spec.clearance);
+    const chassisZ = vehRand(spec.chassisZ);
+    const cabRoofZ = vehRand(spec.cabRoof);
+    const beltZ = vehRand(spec.belt);
+    const wsRake = vehRand(spec.wsRake);
+    const hoodLen = spec.cabOver ? 0 : vehRand(spec.hoodLen);
+    const cabBackX = hl - hoodLen - vehRand(spec.cabLen);
+    const wsBaseX = hl - hoodLen;        // windscreen base: the nose, or the bonnet's back
+    const roofFrontX = wsBaseX - wsRake;
+    const cabHw = hw - vehRand(spec.cabInset);
+    const color = spec.color;
+
+    // The cab in side view, closed by the implicit back-wall edge. A conventional
+    // cab gets the two extra bonnet points a car's hood profile has.
+    const profile = [
+        { x: cabBackX, z: clearance },
+        { x: hl,       z: clearance },
+    ];
+    if (spec.cabOver) {
+        profile.push({ x: hl, z: beltZ });
+    } else {
+        profile.push({ x: hl,      z: beltZ - vehRand(spec.hoodDrop) },
+                     { x: wsBaseX, z: beltZ });
+    }
+    profile.push({ x: roofFrontX, z: cabRoofZ },
+                 { x: cabBackX,   z: cabRoofZ });
+    const body = makeExtrudedProfile(profile, -cabHw, cabHw, color);
+
+    // Frame rails from the tail to under the cab, narrower than the body, so the
+    // gap between cab and apparatus shows chassis rather than daylight.
+    const frameHw = hw * (spec.frameWFrac || 0.55);
+    body.push(...makeRectangularPrism(-hl + 0.3, -frameHw, clearance,
+        cabBackX - (-hl + 0.3) + 1.0, frameHw * 2, chassisZ - clearance, TRUCK_FRAME_COLOR));
+
+    // Every truck leads with a heavy steel bumper.
+    const bumper = vehRand(spec.bumper || [0.4, 0.6]);
+    body.push(...makeRectangularPrism(hl - 0.05, -hw * 0.94, clearance - 0.1,
+        bumper, hw * 1.88, 0.95, TRUCK_BUMPER_COLOR));
+
+    // Cab glass: the windscreen on the raked face, one window down each cab flank.
+    const eps = 0.03;
+    const wsDx = roofFrontX - wsBaseX, wsDz = cabRoofZ - beltZ;
+    const wsLen = Math.hypot(wsDx, wsDz) || 1;
+    const wsNx = wsDz / wsLen, wsNz = -wsDx / wsLen;
+    body.push({ pts: insetQuad([
+        { x: wsBaseX,    y: -cabHw, z: beltZ },
+        { x: wsBaseX,    y:  cabHw, z: beltZ },
+        { x: roofFrontX, y:  cabHw, z: cabRoofZ },
+        { x: roofFrontX, y: -cabHw, z: cabRoofZ },
+    ], 0.14).map(p => ({ x: p.x + wsNx * eps, y: p.y, z: p.z + wsNz * eps })), color: GLASS_COLOR });
+
+    for (const side of [-1, 1]) {
+        const y = cabHw * side;
+        const pts = insetQuad([
+            { x: cabBackX,   y, z: beltZ },
+            { x: wsBaseX,    y, z: beltZ },
+            { x: roofFrontX, y, z: cabRoofZ },
+            { x: cabBackX,   y, z: cabRoofZ },
+        ], 0.18).map(p => ({ x: p.x, y: p.y + side * eps, z: p.z }));
+        body.push({ pts: side > 0 ? pts.reverse() : pts, color: GLASS_COLOR });
+    }
+
+    // Wheels: a steering front axle, then the rear group -- one axle, or a tandem
+    // pair straddling the group's centre.
+    const radius = vehRand(spec.wheelRadius);
+    const tireW = vehRand(spec.tireWidth);
+    const axleY = Math.max(0.4, hw - vehRand(spec.wheelInset) - tireW / 2);
+    const frontX = hl - vehRand(spec.frontAxle);
+    const rearC = -hl + vehRand(spec.rearAxle);
+    const gap = spec.tandem ? vehRand(spec.tandemGap) : 0;
+    const rearXs = spec.tandem ? [rearC - gap / 2, rearC + gap / 2] : [rearC];
+    const wheelPolys = makeWheel(radius, tireW);
+    const wheels = [];
+    for (const side of [-1, 1]) wheels.push({ x: frontX, y: axleY * side, steers: true, polys: wheelPolys });
+    for (const x of rearXs) for (const side of [-1, 1]) wheels.push({ x, y: axleY * side, steers: false, polys: wheelPolys });
+
+    return {
+        type, width, length, height: cabRoofZ, color,
+        body, glass: [], wheels, trim: [], roof: [],
+        flat: makeVehicleFootprint(width, length, color),
+        frame: { hl, hw, clearance, chassisZ, beltZ, cabRoofZ, cabBackX, cabHw,
+                 wheelRadius: radius, frontX, rearXs, axleY },
+    };
+}
+
 // --- Drawing -----------------------------------------------------------------
 // A vehicle moves and steers every frame, so unlike a building its polys cannot be
 // baked into world coordinates once and left alone. They are rotated fresh each
@@ -451,14 +609,16 @@ function _emit(src, cos, sin, dx, dy) {
 // car itself). Which parts get drawn is decided by PX_PER_FT alone, so a caller
 // never has to think about zoom.
 //
-// The parts go down in separate passes -- wheels, body, roof fittings, glass -- for
-// the same reason buildings hang their windows off a child drawable: depth sorting
-// compares whole polygons, so it cannot resolve a small poly that lies inside a big
-// one. The wheels are tucked within the body's footprint, so painting them first
-// lets the body cover everything but the tread showing below the sill, which is
-// exactly what should be visible; glass goes on last so it lands on the panel it
-// belongs to. Anything in v.roof is above every part of the body by construction,
-// so painting it after the body is always right.
+// The parts go down in separate passes -- wheels, body, trim, roof fittings, glass
+// -- for the same reason buildings hang their windows off a child drawable: depth
+// sorting compares whole polygons, so it cannot resolve a small poly that lies
+// inside a big one. The wheels are tucked within the body's footprint, so painting
+// them first lets the body cover everything but the tread showing below the sill,
+// which is exactly what should be visible; v.trim is detail lying on the body's
+// own faces (a truck's compartment doors and stripes), painted right after them;
+// glass goes on last so it lands on the panel it belongs to. Anything in v.roof is
+// above every part of the body by construction, so painting it after the body is
+// always right.
 function drawVehicle(v, wx, wy, heading, steer, camX, camY) {
     const cos = Math.cos(heading), sin = Math.sin(heading);
 
@@ -489,6 +649,11 @@ function drawVehicle(v, wx, wy, heading, steer, camX, camY) {
 
     for (const p of v.body) _emit(p, cos, sin, 0, 0);
     flush();
+
+    if (v.trim && PX_PER_FT >= VEHICLE_ROOF_MIN_ZOOM) {
+        for (const p of v.trim) _emit(p, cos, sin, 0, 0);
+        flush();
+    }
 
     if (v.roof && PX_PER_FT >= VEHICLE_ROOF_MIN_ZOOM) {
         for (const p of v.roof) _emit(p, cos, sin, 0, 0);

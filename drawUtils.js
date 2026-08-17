@@ -37,6 +37,46 @@ function makeRectangularPrism(ox, oy, oz, w, l, h, color, includeTop = true) {
     return faces;
 }
 
+// A faceted surface of revolution around a line parallel to the x axis: a drum, a
+// tank, a barrel. `stations` are cross-sections in increasing-x order, each
+// { x, z, r } -- the centre of that section and its radius -- so a varying r gives
+// the taper and a varying z lets the whole axis tilt. `sides` is how many facets
+// make up the circumference; 8 reads as round at vehicle scale.
+//
+// `color` is one colour for the whole surface, or a function of the ring index
+// (0 spans stations[0]-stations[1]) for a band of another colour partway along.
+//
+// Both ends are capped. The caps default to the surface colour, but can be given
+// their own -- a dark cap is how a drum gets an open mouth without interior faces
+// (which would be backfaces, culled, leaving a hole to see through). capLo is the
+// cap at stations[0], facing -x; capHi faces +x. Winding matches
+// makeRectangularPrism, so culling and lighting treat the facets like any wall.
+function makeLatheX(stations, sides, color, capLo, capHi) {
+    const ringColor = typeof color === 'function' ? color : () => color;
+    capLo = capLo || ringColor(0);
+    capHi = capHi || ringColor(stations.length - 2);
+    const ring = s => {
+        const pts = [];
+        for (let j = 0; j < sides; j++) {
+            const a = (j / sides) * Math.PI * 2;
+            pts.push({ x: s.x, y: s.r * Math.sin(a), z: s.z + s.r * Math.cos(a) });
+        }
+        return pts;
+    };
+    const rings = stations.map(ring);
+    const faces = [];
+    faces.push({ pts: rings[0].slice(), color: capLo });
+    faces.push({ pts: rings[rings.length - 1].slice().reverse(), color: capHi });
+    for (let i = 0; i + 1 < rings.length; i++) {
+        for (let j = 0; j < sides; j++) {
+            const k = (j + 1) % sides;
+            faces.push({ pts: [rings[i][j], rings[i + 1][j], rings[i + 1][k], rings[i][k]]
+                .map(p => ({ x: p.x, y: p.y, z: p.z })), color: ringColor(i) });
+        }
+    }
+    return faces;
+}
+
 // Side walls of an extruded footprint: one quad per edge of pts, from z0 up by h.
 // pts run in the same winding order makeRectangularPrism's footprint does
 // ((0,0) -> (w,0) -> (w,l) -> (0,l)), i.e. with the outside on the right walking

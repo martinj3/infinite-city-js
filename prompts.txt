@@ -413,3 +413,16 @@ Now add skeleton, placeholder files for several new types of vehicles:
 Firetruck. Trash truck. Cement truck. vwBeetle. vwMinibus. Corvette. CraneTruck.  BoxTruck. And SemiTruck.
 
 For now, these are just placeholders and should import logic from sedan.js to just draw as sedans for now.  They should also have probability zero of being chosen as the player's car, for now.
+
+Ok, now flesh out the drawing of 3 vehicle types: Firetruck, trashtruck, and cement truck.  Currently these 3 draw as sedans as a placeholder.
+
+Fire trucks: 25 to 35ft long, cab over engine design always, or whatever is typical of Firetrucks.  For all of these you can look up images online if it's helpful.  75% shades of red, 25% shades of yellow/orange.
+
+Garbage trucks: 22 to 31ft long.  Mostly muted colors, although blue and green aren't unusual these days.  Can be regular cab or cab-over, but cab-over is more common these days.
+
+Cement mixer trucks:  23 to 32ft long.  More variety of colors, at least for the cab, which can probably have all the colors sedans have. Though the mixer mechanisms are typically white or grey.  Can be regular cab or cab-over, regular cab is still common in the US today for cement trucks.
+
+All can vary their heights and widths a little, around a reasonable average for the type.  And various other dimensions can have a bit of randomness, where appropriate, to add some flavor.
+
+For all 3 of these types, they are relatively rare on the road, so we'll rarely have to draw many on screen at once.  Therefore, we can spend considerably more "detail polygons" on decorating them to look nice and cool and realistic!
+I've chosen you, Fable, the largest smartest model for this reason, to make these types nice and detailed, and least when zoomed in.
