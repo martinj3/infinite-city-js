@@ -539,3 +539,12 @@ So, if any building (church, house, or low rise office building) exceeds, say, 3
 Ideally this logic should be mostly shared among the different building types.  
 
 Can show this effect in streetTest.html as well, for easier testing.
+
+---
+
+Now add high-rise office towers.  Skyscrapers.  In our context, let's say that means 15 to 30 floors (more than that might get too expensive to draw all the windows and such, with our current rendering system, but we can still include design elements inspired by taller buildings in the real world).  
+
+Lot sizes are always squares, between 110 and 130ft on a side.  With the building occupying between 85 and 98% of the lot size.  Floor height varies, but is generally taller than house ceilings.  Maybe 9 to 13ft per floor.  The first floor, ground floor could have a chance to be double that, tall lobbies are common in the real world, in buildings like this.  
+
+Get creative.  Certainly some should be fairly plain rectangle towers with flat roofs.  But many are elaborately shaped or decorated (eg Chrysler building, Empire State, petronas towers, Taipei 101, burj kalifa, sears/willis tower, freedom tower, etc, look to other famous skyscrapers for inspiration).  
+They have fancy elements like spires, steeple-like crown elements, decorative spikes, decorative vertical ridges, etc etc.  I'm giving you extra thinking effort, make them look cool and realistic!

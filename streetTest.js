@@ -191,7 +191,8 @@ function drawHud() {
     for (const s of streets) lots += s.lots ? s.lots.length : 0;
     const lines = [
         `streets ${streets.length}   intersections ${nodes.size}`,
-        `houses ${lots}${PX_PER_FT < HOUSES_MIN_ZOOM ? ' (hidden: zoom in)' : ''}`,
+        `buildings ${lots}${PX_PER_FT < HOUSES_MIN_ZOOM
+            ? ` (only those over ${Math.round(SKYLINE_MIN_PX / PX_PER_FT)}ft: zoom in)` : ''}`,
         `visited ${stats.visited}   unresolved ${countUnresolved()}`,
         `seed ${seed === null ? '(random)' : seed}   built in ${stats.ms.toFixed(0)}ms`,
         `zoom ${PX_PER_FT.toFixed(2)} px/ft   rot ${(normA(VIEW_ANGLE) * 180 / Math.PI).toFixed(0)}deg   tilt ${Y_SCALE.toFixed(2)}`,

@@ -106,6 +106,10 @@ function build() {
         });
     });
     stats.ms = performance.now() - t0;
+    // The tallest building in the grid, which the fit has to leave room for --
+    // height goes straight up the screen and owes nothing to the lot's footprint,
+    // and a tower is ten times the height of the house this page was written for.
+    stats.top = lots.reduce((m, lot) => Math.max(m, drawableTop(lot.drawable)), 0);
     Math.random = sysRandom;
 }
 
@@ -129,8 +133,13 @@ function fitToGrid() {
         sx = Math.max(sx, Math.abs(dx * cos - dy * sin));
         sy = Math.max(sy, Math.abs((dx * sin + dy * cos) * Y_SCALE));
     }
-    const fit = 0.95 * Math.min(canvas.width / 2 / sx, canvas.height / 2 / sy);
+    // Buildings only ever stick out of the top, so the vertical span is the
+    // ground's both ways plus their height once, and the camera slides down-screen
+    // by half of that to put the surplus back in the middle.
+    const fit = 0.95 * Math.min(canvas.width / 2 / sx, canvas.height / (2 * sy + stats.top));
     PX_PER_FT = Math.max(PX_PER_FT_MIN, Math.min(PX_PER_FT_MAX, fit));
+    const drop = stats.top / (2 * Y_SCALE);
+    camX -= drop * sin; camY -= drop * cos;
 }
 
 // --- Input ---

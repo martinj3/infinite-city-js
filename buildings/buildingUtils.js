@@ -38,6 +38,87 @@ function frand(lo, hi) {
     return lo + Math.random() * (hi - lo);
 }
 
+// Pick from a [weight, h, s, l] palette, keeping the components so shades of the
+// same material -- a parapet's inner face, a roof deck, a rib -- can be stepped
+// off it. `jitter` is the full width of the random spread on each component, so
+// two buildings that drew the same entry are still not the same colour.
+function pickPaletteColor(palette, jitter = [10, 10, 8]) {
+    let r = Math.random() * palette.reduce((sum, e) => sum + e[0], 0);
+    let e = palette[palette.length - 1];
+    for (const c of palette) { r -= c[0]; if (r <= 0) { e = c; break; } }
+    return {
+        h: e[1] + (Math.random() - 0.5) * jitter[0],
+        s: e[2] + (Math.random() - 0.5) * jitter[1],
+        l: e[3] + (Math.random() - 0.5) * jitter[2],
+    };
+}
+
+// Pick a value from [weight, value] pairs. Weights need not sum to anything.
+function weightedPick(entries) {
+    let r = Math.random() * entries.reduce((s, e) => s + e[0], 0);
+    for (const [wt, v] of entries) { r -= wt; if (r <= 0) return v; }
+    return entries[entries.length - 1][1];
+}
+
+// A pyramidal spire over a rectangular base, apex centered. Fresh vertex
+// objects per face (no sharing), same as makeRectangularPrism.
+function makeSpire(ox, oy, z0, w, l, h, color) {
+    const p = (x, y, z) => ({ x, y, z });
+    const cx = [ox, ox + w, ox + w, ox], cy = [oy, oy, oy + l, oy + l];
+    const faces = [];
+    for (let i = 0; i < 4; i++) {
+        const j = (i + 1) % 4;
+        faces.push({ pts: [p(cx[i], cy[i], z0), p(cx[j], cy[j], z0), p(ox + w / 2, oy + l / 2, z0 + h)], color });
+    }
+    return faces;
+}
+
+// The outline of a set of cells on a grid, as a footprint ring for makeWalls or
+// makeLoft. `mask` is a cols x rows array of booleans in column-major order
+// (mask[i * rows + j] is the cell at column i, row j); cells are cw by cl feet,
+// and the ring comes back in feet from the grid's corner.
+//
+// This is how a plan gets a shape no rectangle has -- the cross, the L, the
+// staircase of a bundled tube tower -- without hand-writing its corners. Every
+// boundary edge (one whose neighbour is empty) is emitted in the winding makeWalls
+// wants, so walking them start-to-end chains the outline in one pass; collinear
+// runs are then merged, because two walls in a line are one wall. Assumes the
+// filled cells form one blob with no holes, which every plan here does.
+function traceCellOutline(mask, cols, rows, cw, cl) {
+    const on = (i, j) => i >= 0 && j >= 0 && i < cols && j < rows && mask[i * rows + j];
+    const key = p => `${p.x},${p.y}`;
+    const edges = new Map();
+    for (let i = 0; i < cols; i++) {
+        for (let j = 0; j < rows; j++) {
+            if (!on(i, j)) continue;
+            const x0 = i * cw, x1 = x0 + cw, y0 = j * cl, y1 = y0 + cl;
+            // The outside is on the right walking a -> b, as makeWalls requires.
+            if (!on(i, j - 1)) edges.set(key({ x: x0, y: y0 }), [{ x: x0, y: y0 }, { x: x1, y: y0 }]);
+            if (!on(i + 1, j)) edges.set(key({ x: x1, y: y0 }), [{ x: x1, y: y0 }, { x: x1, y: y1 }]);
+            if (!on(i, j + 1)) edges.set(key({ x: x1, y: y1 }), [{ x: x1, y: y1 }, { x: x0, y: y1 }]);
+            if (!on(i - 1, j)) edges.set(key({ x: x0, y: y1 }), [{ x: x0, y: y1 }, { x: x0, y: y0 }]);
+        }
+    }
+    if (edges.size === 0) return [];
+    const start = edges.values().next().value[0];
+    const ring = [];
+    let at = start;
+    do {
+        const e = edges.get(key(at));
+        if (!e) break;
+        ring.push(e[0]);
+        at = e[1];
+    } while (key(at) !== key(start) && ring.length <= edges.size);
+
+    // Drop any point its two neighbours run straight through.
+    const out = [];
+    for (let i = 0; i < ring.length; i++) {
+        const a = ring[(i - 1 + ring.length) % ring.length], b = ring[i], c = ring[(i + 1) % ring.length];
+        if ((b.x - a.x) * (c.y - b.y) !== (b.y - a.y) * (c.x - b.x)) out.push(b);
+    }
+    return out;
+}
+
 // Creates a gable roof on top of a rectangular prism.
 // ox, oy, oz: origin of the prism; w, l, h: prism dimensions.
 // lengthwise: if true, ridge runs along X; if false, ridge runs along Y.
@@ -133,17 +214,27 @@ function makeHipRoof(ox, oy, oz, w, l, h, lengthwise, wallColor) {
 // centroid, every visible wall sorts nearer than that, so the near parapet paints
 // over the deck's near edge exactly as it should, while a far inner face lands
 // wholly above the deck edge it shares and can never be covered by it.
+// The general form: any footprint ring, wound the way makeWalls wants it, so a
+// tower's octagon or a bundled tube's staircase gets its roof from the same code
+// a rectangle does.
+function makeRingRoof(pts, deckZ, parapet, deckColor, innerColor) {
+    const z1 = deckZ + parapet;
+    const polys = [{ pts: pts.map(p => ({ x: p.x, y: p.y, z: deckZ })), color: deckColor }];
+    for (let i = 0; i < pts.length; i++) {
+        const a = pts[i], b = pts[(i + 1) % pts.length];
+        // Wound backwards along the edge, which is what turns the wall inward.
+        polys.push({ pts: [
+            { x: b.x, y: b.y, z: deckZ }, { x: a.x, y: a.y, z: deckZ },
+            { x: a.x, y: a.y, z: z1 },    { x: b.x, y: b.y, z: z1 },
+        ], color: innerColor });
+    }
+    return polys;
+}
+
 function makeFlatRoof(ox, oy, deckZ, w, l, parapet, deckColor, innerColor) {
-    const p = (x, y, z) => ({ x, y, z });
-    const z0 = deckZ, z1 = deckZ + parapet;
-    return [
-        { pts: [p(ox,oy,deckZ), p(ox+w,oy,deckZ), p(ox+w,oy+l,deckZ), p(ox,oy+l,deckZ)], color: deckColor },
-        // Wound inward: each is the winding the opposite wall of a prism uses.
-        { pts: [p(ox+w,oy,z0), p(ox,oy,z0), p(ox,oy,z1), p(ox+w,oy,z1)], color: innerColor },
-        { pts: [p(ox,oy+l,z0), p(ox+w,oy+l,z0), p(ox+w,oy+l,z1), p(ox,oy+l,z1)], color: innerColor },
-        { pts: [p(ox,oy,z0), p(ox,oy+l,z0), p(ox,oy+l,z1), p(ox,oy,z1)], color: innerColor },
-        { pts: [p(ox+w,oy+l,z0), p(ox+w,oy,z0), p(ox+w,oy,z1), p(ox+w,oy+l,z1)], color: innerColor },
-    ];
+    return makeRingRoof([{ x: ox, y: oy }, { x: ox + w, y: oy },
+                         { x: ox + w, y: oy + l }, { x: ox, y: oy + l }],
+                        deckZ, parapet, deckColor, innerColor);
 }
 
 // A panel on the street-facing (north) wall of a prism, at y, spanning x0..x1 and

@@ -26,6 +26,7 @@ const ROOT = path.join(__dirname, '..');
 const DEFAULT_SCRIPTS = [
     'constants.js', 'controls.js', 'drawUtils.js', 'lighting.js', 'render3d.js',
     'buildings/buildingUtils.js', 'buildings/houses.js', 'buildings/offices.js',
+    'buildings/skyscrapers.js',
     'buildings/churches.js',
     'streets.js', 'lots.js', 'drawing.js', 'streetTest.js',
 ];

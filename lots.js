@@ -20,7 +20,7 @@
 // the matching buildings/<name>s.js is what knows how to put something on the lot.
 const LOT_TYPES = {
     house: {
-        prob: 0.88,
+        prob: 0.86,
         width: [40, 90],    // along the street
         depth: [45, 70],    // away from the street
         setback: [0, 25],   // street edge of the lot to the front of the building
@@ -30,6 +30,16 @@ const LOT_TYPES = {
         width: [70, 150],
         depth: [70, 130],
         setback: [0, 25],
+    },
+    // A downtown block: square, and built on to the lot line, which is why the
+    // setback is a token few feet rather than a front garden. The building takes
+    // the smaller of the two sides as its square (see generateTower), so a lot
+    // whose depth the right of way trimmed still gets a square tower.
+    tower: {
+        prob: 0.02,
+        width: [110, 130],
+        depth: [110, 130],
+        setback: [0, 6],
     },
     church: {
         prob: 0.03,
@@ -83,6 +93,12 @@ const CURVE_LOT_GAP = 15;   // ft of slack between lots on a curve, in place of 
 const BLOCKER_ARC_STEP = 40; // ft of arc per street-blocker rect on a curve
 const LOT_TOUCH_EPS = 0.05; // rectangles closer than this to touching are not "overlapping"
 const HOUSES_MIN_ZOOM = 0.6; // below this houses are sub-pixel; skip them entirely
+// Below HOUSES_MIN_ZOOM a building is drawn only while it is still this many
+// pixels tall, so a tower survives the zoom-out that disposes of its neighbours
+// and the skyline stays where it was. SKYLINE_MIN_ZOOM is where even the tallest
+// go: 400ft of tower at 0.05 px/ft is twenty pixels.
+const SKYLINE_MIN_PX = 25;
+const SKYLINE_MIN_ZOOM = 0.05;
 // Off switch for the see-through effect, so a test page can put a solid city and
 // a see-through one side by side.
 let buildingFade = true;
@@ -140,7 +156,8 @@ function buildLot(lot, rotAngle) {
     translateDrawable(drawable, lot.cx - lot.width / 2, lot.cy - lot.depth / 2);
     // Measured once, here, so every building type is covered by whatever the
     // renderer decides to do about tall ones -- no type has to declare a height.
-    lot.tall = drawableTop(drawable) > BUILDING_FADE_MIN_HEIGHT;
+    lot.top = drawableTop(drawable);
+    lot.tall = lot.top > BUILDING_FADE_MIN_HEIGHT;
     // Which way is "away from the street" for this lot. rotAngle is defined as
     // the rotation that sends lot-local +y there, so this falls out of it, and it
     // is right on a curve as readily as on a straight block.
@@ -346,6 +363,9 @@ function generateStreetLots(s) {
     for (const side of [1, -1]) {
         s.curve ? placeCurveLots(s, side, plan, obstacles) : placeStraightLots(s, side, plan, obstacles);
     }
+    // The tallest thing on the block, which is how far past the street's own
+    // bounds its buildings can still reach on screen (see drawLots).
+    s.tallest = s.lots.reduce((m, lot) => Math.max(m, lot.top), 0);
 }
 
 // --- Drawing -----------------------------------------------------------------
@@ -353,16 +373,29 @@ function generateStreetLots(s) {
 // Draw every visible building, far-to-near. Called by drawScene() after the ground
 // layers; buildings are 3D and project themselves, so this runs in screen space.
 function drawLots(camX, camY, vl, vr, vt, vb) {
-    if (PX_PER_FT < HOUSES_MIN_ZOOM) return;
+    if (PX_PER_FT < SKYLINE_MIN_ZOOM) return;
+    // Zoomed out past the point where a house is worth drawing, the tall ones
+    // still are: a tower is a hundred pixels of skyline where a house is two.
+    // The bar is in pixels of building, so each type drops out on its own.
+    const minTop = PX_PER_FT < HOUSES_MIN_ZOOM ? SKYLINE_MIN_PX / PX_PER_FT : 0;
 
-    // Lots sit outside the street's own bounds, so pad the cull generously
+    // Lots sit outside the street's own bounds, so pad the cull generously.
+    // Height reaches further still, but only one way: a building's top is drawn
+    // PX_PER_FT * top pixels above its base, which is exactly where the ground
+    // point top / Y_SCALE feet up-screen of it lands -- so a tall street is
+    // extended toward the camera and not away from it, which is half the reach a
+    // pad in every direction would have cost. Only blocks with something tall on
+    // them pay for it at all.
     const pad = MAX_LOT_DEPTH + RIGHT_OF_WAY / 4;
+    const hx = -getSinV() / Y_SCALE, hy = -getCosV() / Y_SCALE;
     const visible = [];
     for (const s of streets) {
         if (!s.lots || s.lots.length === 0) continue;
-        const b = s.bounds;
-        if (b.mxx + pad < vl || b.mnx - pad > vr || b.mxy + pad < vt || b.mny - pad > vb) continue;
-        for (const lot of s.lots) visible.push(lot);
+        const b = s.bounds, h = s.tallest || 0;
+        const dx = hx * h, dy = hy * h;
+        if (b.mxx + Math.max(0, dx) + pad < vl || b.mnx + Math.min(0, dx) - pad > vr ||
+            b.mxy + Math.max(0, dy) + pad < vt || b.mny + Math.min(0, dy) - pad > vb) continue;
+        for (const lot of s.lots) if (lot.top >= minTop) visible.push(lot);
     }
     if (visible.length === 0) return;
 

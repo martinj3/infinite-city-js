@@ -109,19 +109,6 @@ function pickOfficeFloors(max) {
     return max;
 }
 
-// Pick from a [weight, h, s, l] palette, keeping the components so shades of the
-// same paint (the parapet's inner face, the roof deck) can be stepped off it.
-function pickPaletteColor(palette, jitter = [10, 10, 8]) {
-    let r = Math.random() * palette.reduce((sum, e) => sum + e[0], 0);
-    let e = palette[palette.length - 1];
-    for (const c of palette) { r -= c[0]; if (r <= 0) { e = c; break; } }
-    return {
-        h: e[1] + (Math.random() - 0.5) * jitter[0],
-        s: e[2] + (Math.random() - 0.5) * jitter[1],
-        l: e[3] + (Math.random() - 0.5) * jitter[2],
-    };
-}
-
 // A sign has to be legible against the wall it is bolted to as well as against
 // its own lettering, and the palettes overlap at the dark end -- a navy sign on a
 // bronze wall is a sign nobody can see. Rerolling is enough: the walls that

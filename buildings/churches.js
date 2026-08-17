@@ -45,25 +45,8 @@ const MISSION_WALLS = [
     [25, 10, 44, 46],   // brick
 ];
 
+const CHURCH_JITTER = [10, 8, 6];   // how far a church's stone strays from its palette entry
 const ARCH_SEGS = 6;    // segments approximating the half circle atop a window
-
-function weightedPick(entries) {
-    let r = Math.random() * entries.reduce((s, e) => s + e[0], 0);
-    for (const [wt, v] of entries) { r -= wt; if (r <= 0) return v; }
-    return entries[entries.length - 1][1];
-}
-
-// Pick from a [weight, h, s, l] palette, with a little jitter for variety.
-function pickChurchColor(palette) {
-    let r = Math.random() * palette.reduce((sum, e) => sum + e[0], 0);
-    let e = palette[palette.length - 1];
-    for (const c of palette) { r -= c[0]; if (r <= 0) { e = c; break; } }
-    return {
-        h: e[1] + (Math.random() - 0.5) * 10,
-        s: e[2] + (Math.random() - 0.5) * 8,
-        l: e[3] + (Math.random() - 0.5) * 6,
-    };
-}
 
 // A wall surface to hang details on: at(u, z) maps a distance u along the wall
 // (left to right as seen from outside) and a height z to a world point floated
@@ -124,19 +107,6 @@ function archedRow(at, sill, top, w, spacing, color, skip = []) {
         polys.push(archedPoly(at, c - w / 2, c + w / 2, sill, top, color));
     }
     return polys;
-}
-
-// A pyramidal spire over a rectangular base, apex centered. Fresh vertex
-// objects per face (no sharing), same as makeRectangularPrism.
-function makeSpire(ox, oy, z0, w, l, h, color) {
-    const p = (x, y, z) => ({ x, y, z });
-    const cx = [ox, ox + w, ox + w, ox], cy = [oy, oy, oy + l, oy + l];
-    const faces = [];
-    for (let i = 0; i < 4; i++) {
-        const j = (i + 1) % 4;
-        faces.push({ pts: [p(cx[i], cy[i], z0), p(cx[j], cy[j], z0), p(ox + w / 2, oy + l / 2, z0 + h)], color });
-    }
-    return faces;
 }
 
 // A simple latin cross: post and arm, thin prisms with the arm facing the street.
@@ -241,8 +211,8 @@ function generateChurch({ width: lotWidth = 100, depth: lotDepth = 110, setback:
     const mission = !twin && Math.random() < 0.18;
 
     // Palette, rolled once per church
-    const wallC = pickChurchColor(mission ? MISSION_WALLS : CHURCH_WALLS);
-    const roofC = mission ? { h: frand(10, 18), s: 55, l: 46 } : pickChurchColor(CHURCH_ROOFS);
+    const wallC = pickPaletteColor(mission ? MISSION_WALLS : CHURCH_WALLS, CHURCH_JITTER);
+    const roofC = mission ? { h: frand(10, 18), s: 55, l: 46 } : pickPaletteColor(CHURCH_ROOFS, CHURCH_JITTER);
     const spireC = !mission && Math.random() < 0.15 ? { h: 165, s: 30, l: 46 } : roofC;
     const pal = {
         wall: hsl(wallC.h, wallC.s, wallC.l),

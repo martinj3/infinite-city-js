@@ -97,6 +97,27 @@ function makeWalls(pts, z0, h, color, closeLoop = true) {
     return faces;
 }
 
+// Walls between two rings of the same point count: makeWalls where the top edge
+// need not match the bottom one. A ring is { z, pts: [{x, y}, ...] } wound the way
+// makeWalls wants its footprint, and one quad comes back per edge. Give the upper
+// ring a smaller footprint and the walls lean in (a tapering tower); rotate it and
+// they twist. No caps -- what closes the top is the caller's business, and a mass
+// built of several lofted stages only wants one.
+function makeLoft(lower, upper, color) {
+    const faces = [];
+    const n = lower.pts.length;
+    for (let i = 0; i < n; i++) {
+        const j = (i + 1) % n;
+        faces.push({ pts: [
+            { x: lower.pts[i].x, y: lower.pts[i].y, z: lower.z },
+            { x: lower.pts[j].x, y: lower.pts[j].y, z: lower.z },
+            { x: upper.pts[j].x, y: upper.pts[j].y, z: upper.z },
+            { x: upper.pts[i].x, y: upper.pts[i].y, z: upper.z },
+        ], color });
+    }
+    return faces;
+}
+
 // Check if two axis-aligned rectangular prisms overlap (interiors intersect).
 // Each prism: { x, y, z, w, l, h }
 // Touching along a face/edge is allowed; only interior overlap is rejected.
