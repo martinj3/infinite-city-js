@@ -233,8 +233,17 @@ function initDriveControls() {
     const thumb = ctlEl('div', 'ic-steer-thumb', track);
     ctlEl('div', 'ic-steer-label', steer, 'steer');
 
+    // A thumb held near centre reads as dead straight rather than a faint drift --
+    // a fingertip is wide next to the track, and a wide vehicle has no business
+    // wandering from a touch that was aiming for "straight ahead". Rescaled so the
+    // ends of the track still reach full lock rather than losing that last bit of
+    // range to the dead zone.
+    const STEER_DEAD_ZONE = 0.08;
     const setSteer = v => {
-        touchDrive.steer = Math.max(-1, Math.min(1, v));
+        v = Math.max(-1, Math.min(1, v));
+        v = Math.abs(v) < STEER_DEAD_ZONE ? 0
+            : Math.sign(v) * (Math.abs(v) - STEER_DEAD_ZONE) / (1 - STEER_DEAD_ZONE);
+        touchDrive.steer = v;
         thumb.style.left = (50 + touchDrive.steer * 50) + '%';
     };
     setSteer(0);

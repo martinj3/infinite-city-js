@@ -1,5 +1,5 @@
 // --- Constants ---
-const MIN_STREET_WIDTH = 18;
+const MIN_STREET_WIDTH = 19;
 const MAX_STREET_WIDTH = 24;
 const INTERSECTION_SIZE = MAX_STREET_WIDTH; // fixed size to accommodate widest streets
 const HALF_INTERSECTION = INTERSECTION_SIZE / 2;

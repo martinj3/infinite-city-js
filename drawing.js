@@ -199,8 +199,11 @@ function applyCamera(camX, camY) {
 
 // --- Main draw ---
 // The world as seen from (camX, camY): grass, streets, intersections, sidewalks,
-// markings. No car and no HUD, so any page can use it (see streetTest.html).
-function drawScene(camX, camY) {
+// markings, buildings and traffic. No HUD, so any page can use it (see
+// streetTest.html). `player`, if given, is a { vehicle, x, y, angle, steer } that
+// joins the same depth sort as the buildings and traffic -- a house or another car
+// can hide it exactly as it would hide anything else standing there.
+function drawScene(camX, camY, player) {
     const W = canvas.width, H = canvas.height;
     ctx.clearRect(0, 0, W, H);
     ctx.fillStyle = '#2d8a2e';
@@ -259,20 +262,16 @@ function drawScene(camX, camY) {
 
     ctx.restore();
 
-    // 6) Buildings on their lots. These are 3D and project themselves, so they are
-    // drawn in screen space once the ground layers are done.
-    if (typeof drawLots === 'function') drawLots(camX, camY, vl, vr, vt, vb);
+    // 6) Buildings and traffic (and the player, if given) on the ground. These are
+    // 3D and project themselves, so they are drawn in screen space once the ground
+    // layers are done.
+    if (typeof drawLots === 'function') drawLots(camX, camY, vl, vr, vt, vb, player);
 }
 
 // The driving game: the world, plus the car and its HUD.
 function draw() {
     const W = canvas.width, H = canvas.height;
-    drawScene(player.x, player.y);
-
-    // Player's car. Like the buildings it is 3D and projects itself, so it goes on
-    // in screen space after the ground layers rather than under the 2D camera.
-    drawVehicle(player.vehicle, player.x, player.y, player.angle, player.steer,
-                player.x, player.y);
+    drawScene(player.x, player.y, player);
 
     // HUD
     const mph = Math.abs(player.speed * 3600 / 5280);

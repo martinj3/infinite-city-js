@@ -13,7 +13,11 @@ drives the same globals the keyboard does (`PX_PER_FT`, `VIEW_ANGLE`, `Y_SCALE`)
 so drawing code never has to know it exists. A page opts in by calling
 `initPanZoom({ onPan, onReset })`; the driving game passes `pan: false` because its
 camera already follows the car. The pedals appear only on a coarse pointer --
-`?touch=1` forces them on to try them on a desktop, `?touch=0` off.
+`?touch=1` forces them on to try them on a desktop, `?touch=0` off. The steering
+slider has a small dead zone at its centre (`STEER_DEAD_ZONE`), rescaled so full
+lock is still reachable at the ends of the track -- without it a thumb held near
+"straight ahead" reads as a faint drift, because a fingertip is wide next to the
+track.
 
 With no real DOM every entry point turns into a no-op, which is what keeps
 `tools/render.js` working.
@@ -437,11 +441,15 @@ Traffic joins the buildings' depth pass (`drawLots`) rather than getting one of
 its own, so a car on the far side of a block goes behind that block's houses
 instead of being painted over them; its position fields are named `cx, cy` for
 exactly that reason, so both kinds of thing sort through the same line. The
-player's car is the deliberate exception -- still drawn last, on top of
-everything, because losing sight of your own car behind a house you are driving
-past is worse than the occlusion being right. Cars drop out at `HOUSES_MIN_ZOOM`,
-with the houses: below that only the skyline is left, and there are no cars in a
-skyline.
+player's car sorts through that same line too -- `drawScene` takes an optional
+`player`, and `drawLots` pushes it into the same `visible` array as the traffic
+and the lots, as a plain `{ vehicle, cx, cy, angle, steer }` -- so a house you
+drive past, or another car crossing in front of you, hides it exactly as it would
+hide anything else standing there; the one thing that makes it not just another
+traffic entry is that it carries `steer`, so its wheels turn with the player's
+input where a traffic car's never do (`drawGroundVehicle` falls back to 0 for
+anything that doesn't set it). Cars drop out at `HOUSES_MIN_ZOOM`, with the
+houses: below that only the skyline is left, and there are no cars in a skyline.
 
 Adding traffic changed what a given `?seed` builds. Spawning draws from
 `Math.random()`, so the stream every later street reads has moved; the city is

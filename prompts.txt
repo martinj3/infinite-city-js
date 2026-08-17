@@ -561,3 +561,13 @@ They persist and continue to be simulated as long as they are within 1500ft of t
 Player should naturally be able to turn around and chase down an interesting car they saw, even after it goes off screen.  
 
 The same probability for the players car being a certain vehicle also applies to spawning these non-player vehicles
+
+---
+
+3 little things:
+
+1. Player’s car should be drawn together with other traffic vehicles, so it can be occluded both by other cars, and by buildings.
+
+2. Minimum width for streets should be increased by 1ft, so it’s not quite so tight for big vehicles.
+
+3. On mobile, the steering slider needs a little bit of a dead zone in the center

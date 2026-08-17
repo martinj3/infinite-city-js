@@ -372,7 +372,7 @@ function generateStreetLots(s) {
 
 // Draw every visible building, far-to-near. Called by drawScene() after the ground
 // layers; buildings are 3D and project themselves, so this runs in screen space.
-function drawLots(camX, camY, vl, vr, vt, vb) {
+function drawLots(camX, camY, vl, vr, vt, vb, player) {
     if (PX_PER_FT < SKYLINE_MIN_ZOOM) return;
     // Zoomed out past the point where a house is worth drawing, the tall ones
     // still are: a tower is a hundred pixels of skyline where a house is two.
@@ -401,6 +401,13 @@ function drawLots(camX, camY, vl, vr, vt, vb) {
     // than in a pass of its own: a car on the far side of a block belongs behind
     // that block's houses. Optional, so a page can load lots.js without traffic.
     if (typeof collectTraffic === 'function') collectTraffic(visible, vl, vr, vt, vb);
+    // The player's own car sits on the ground exactly like the traffic does, and
+    // now sorts with it instead of being painted over everything afterward: a
+    // house you drive past, or another car crossing in front of you, hides it
+    // exactly as it would hide anything else standing there. Always on screen (the
+    // camera follows it), so it needs no view-bounds cull the way traffic does.
+    if (player) visible.push({ vehicle: player.vehicle, cx: player.x, cy: player.y,
+                                angle: player.angle, steer: player.steer });
     if (visible.length === 0) return;
 
     // Sort by projected screen Y of the center (far-to-near)
@@ -411,9 +418,10 @@ function drawLots(camX, camY, vl, vr, vt, vb) {
     const pDepth = (poly, ox, oy) => polyDepth(poly, ox, oy, camX, camY);
     const cosV = getCosV(), sinV = getSinV();
     for (const item of visible) {
-        // Cars share the sort but not the drawing: they move, so their polys
-        // cannot be lit once and kept the way a building's are.
-        if (item.vehicle) { drawTrafficVehicle(item, camX, camY); continue; }
+        // Cars (traffic and the player alike) share the sort but not the drawing:
+        // they move, so their polys cannot be lit once and kept the way a
+        // building's are.
+        if (item.vehicle) { drawGroundVehicle(item, camX, camY); continue; }
         // A building in the way is painted see-through rather than skipped: you
         // still want to know it is there, and its far walls showing through its
         // near ones is what makes it read as a ghost instead of flat paint.

@@ -220,6 +220,9 @@ function collectTraffic(out, vl, vr, vt, vb) {
 
 // Nothing in traffic steers: a car crosses an intersection already pointing the
 // new way, so its front wheels are always straight.
-function drawTrafficVehicle(c, camX, camY) {
-    drawVehicle(c.vehicle, c.cx, c.cy, c.angle, 0, camX, camY);
+// Shared by traffic and the player -- both are just { vehicle, cx, cy, angle } to
+// this point. Traffic never sets steer (it never turns its wheels visibly), so it
+// falls back to 0; the player's does.
+function drawGroundVehicle(c, camX, camY) {
+    drawVehicle(c.vehicle, c.cx, c.cy, c.angle, c.steer || 0, camX, camY);
 }
