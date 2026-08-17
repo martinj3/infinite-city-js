@@ -276,20 +276,6 @@ function makeFlankText(x0, x1, z0, z1, hw, text, color, eps = 0.06) {
     return quads;
 }
 
-// A flat disc facing along the x axis -- a headlight, a round taillight, a badge.
-// `facing` is +1 for a disc on a nose (normal +x) or -1 for one on a tail. Eight
-// sides read as round at vehicle scale, same as makeLatheX. The winding borrows
-// makeLatheX's caps: the (sin, cos) ring order faces -x as given and +x reversed.
-function makeDiscX(x, y, z, r, facing, color, sides = 8) {
-    const pts = [];
-    for (let j = 0; j < sides; j++) {
-        const a = (j / sides) * Math.PI * 2;
-        pts.push({ x, y: y + r * Math.sin(a), z: z + r * Math.cos(a) });
-    }
-    if (facing > 0) pts.reverse();
-    return { pts, color };
-}
-
 // Inset a quad toward its own centre, for a detail poly (a window) that has to sit
 // within the face it decorates rather than exactly on its edges.
 function insetQuad(pts, frac) {

@@ -456,6 +456,66 @@ Adding traffic changed what a given `?seed` builds. Spawning draws from
 still deterministic, just not the same city an old screenshot shows. Suppress
 `spawnStreetTraffic` and the pixels match the pre-traffic build exactly.
 
+## Signs
+
+`signs.js` is the first of what will be more than one kind of sign; for now it is
+only stop signs, and they have no effect on traffic at all -- every car in
+traffic.js still drives through every intersection exactly as before, ignoring
+every sign here entirely. This is purely what the driver sees.
+
+A sign is generated once per street end, the same moment `pushStreet` creates the
+street itself, and persists on it the way a lot does: `s.signs`, never
+regenerated, never demolished. Every street gets exactly two, one per end, each
+controlling the traffic that arrives there. `streetEndHeading(s, dir)` gives the
+tangent heading a car moving in that direction is travelling on -- dir +1 arrives
+at `(x2,y2)`, -1 at `(x1,y1)`, the same convention `traffic.js`'s own `dir` uses --
+so a curved street's sign stands square to the road it actually meets rather than
+to the chord between its ends. `placeStopSign` then sets it back from the node
+along `-heading` by `SIGN_SETBACK` (just short of the intersection box) and out to
+the right of travel by half the road width plus `SIGN_SIDE_OFFSET` -- the same
+right-of-travel side `traffic.js`'s lane offset uses -- so it reads face-on to
+that one approach and to no other.
+
+Deliberately not conditioned on how many streets actually end up meeting there:
+a node can still gain connections long after it is first resolved (`resolveNode`
+re-opens previously-false directions once a later street picks it as a target),
+so there is no moment at which "this intersection's final degree" is knowable.
+Two signs per street, unconditionally, is the rule that never has to be revisited
+-- the same trade the intersection square itself already makes, painted at every
+node whether or not a second street ever joins it.
+
+The sign is built once, in local feet, with +x the direction of the traffic it
+faces -- the same convention a vehicle is modelled in -- so the whole assembly is
+just `rotatePolys` then `translatePolys` into place, the same two calls that bake
+a building into the world. `makePole` (drawUtils.js) is the reusable post
+underneath it: a real four-walled box, not a single poly or a bare pair of
+crossed panels. One poly vanishes from behind; two single-sided panels 90 degrees
+apart still leave a gap between them, since each covers only 180 degrees of
+azimuth and two 180s set 90 apart span just 270 -- so it takes a genuine box, four
+walls in two perpendicular pairs, to always have one actually facing the camera,
+at the same four-poly cost either way. Reusable for anything else that is just a
+post at some height and thickness.
+
+The face is an octagon (`makeDiscX`, moved into drawUtils.js from vehicleUtils.js
+in the same change, since it was already generic geometry with nothing vehicle-
+specific about it): red toward the approach it serves, "STOP" lettered on a
+whisker-proud panel over it exactly the way a shop sign's lettering sits over its
+own board (`makeFrontPanel`, buildingUtils.js), plus a second, plain grey disc
+facing the other way -- a one-sided face is a vanishing act from the wrong side,
+the same lesson a windscreen with nothing behind it already taught.
+
+The sign and its lettering drop out on two different mechanisms, which is what
+gives the two-stage falloff the request asked for. The sign as a whole disappears
+below `SIGN_MIN_ZOOM` (a 2.75ft sign is 3px there), checked once per `drawLots`
+call rather than per sign. The lettering needs no cutoff of its own: it is the
+same `TEXT_MIN_PX` machinery every other panel in the game already uses, and a
+stop sign's word is so much smaller than a shop sign's that it drops out on its
+own, well before the octagon does -- at the default driving zoom most signs on
+screen show as a red shape with no legible word, and only the ones closest to
+face-on read at all, exactly the "they don't look that big from inside the car"
+the request asked for. Slowing down or zooming in resolves it. Adds 73-193
+polygons a frame at typical zooms, out of several thousand.
+
 ## Testing
 
 `streetTest.html` is the fastest way to check street generation: it grows a whole

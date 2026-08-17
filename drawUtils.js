@@ -77,6 +77,32 @@ function makeLatheX(stations, sides, color, capLo, capHi) {
     return faces;
 }
 
+// A flat disc facing along the x axis -- a headlight, a round taillight, a badge,
+// a stop sign's octagonal face (eight sides reads as round, or as an octagon, at
+// this scale, same as makeLatheX). `facing` is +1 for a disc facing +x or -1 for
+// one facing -x. The winding borrows makeLatheX's caps: the (sin, cos) ring order
+// faces -x as given and +x reversed.
+function makeDiscX(x, y, z, r, facing, color, sides = 8) {
+    const pts = [];
+    for (let j = 0; j < sides; j++) {
+        const a = (j / sides) * Math.PI * 2;
+        pts.push({ x, y: y + r * Math.sin(a), z: z + r * Math.cos(a) });
+    }
+    if (facing > 0) pts.reverse();
+    return { pts, color };
+}
+
+// A vertical post, footprint a 2r square centred at (ox, oy), from oz up by height.
+// A single poly facing one way would vanish from the others, and even two crossed
+// panels leave a gap -- a pair of single-sided rectangles 90 degrees apart covers
+// only 270 degrees of azimuth between them, not the full circle -- so this is a
+// genuine four-sided box (no top: whatever the post carries hides that face).
+// Reusable for anything else that is just a post at some height and thickness --
+// a lamppost, a sign, a hydrant.
+function makePole(ox, oy, oz, height, r, color) {
+    return makeRectangularPrism(ox - r, oy - r, oz, r * 2, r * 2, height, color, false);
+}
+
 // Side walls of an extruded footprint: one quad per edge of pts, from z0 up by h.
 // pts run in the same winding order makeRectangularPrism's footprint does
 // ((0,0) -> (w,0) -> (w,l) -> (0,l)), i.e. with the outside on the right walking

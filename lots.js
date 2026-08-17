@@ -389,13 +389,18 @@ function drawLots(camX, camY, vl, vr, vt, vb, player) {
     const pad = MAX_LOT_DEPTH + RIGHT_OF_WAY / 4;
     const hx = -getSinV() / Y_SCALE, hy = -getCosV() / Y_SCALE;
     const visible = [];
+    // A sign is tiny next to a house, so it drops out at its own, much closer
+    // SIGN_MIN_ZOOM rather than sharing minTop -- checked once here, not per sign.
+    const showSigns = typeof SIGN_MIN_ZOOM === 'number' && PX_PER_FT >= SIGN_MIN_ZOOM;
     for (const s of streets) {
-        if (!s.lots || s.lots.length === 0) continue;
+        const hasSigns = showSigns && s.signs && s.signs.length > 0;
+        if ((!s.lots || s.lots.length === 0) && !hasSigns) continue;
         const b = s.bounds, h = s.tallest || 0;
         const dx = hx * h, dy = hy * h;
         if (b.mxx + Math.max(0, dx) + pad < vl || b.mnx + Math.min(0, dx) - pad > vr ||
             b.mxy + Math.max(0, dy) + pad < vt || b.mny + Math.min(0, dy) - pad > vb) continue;
-        for (const lot of s.lots) if (lot.top >= minTop) visible.push(lot);
+        if (s.lots) for (const lot of s.lots) if (lot.top >= minTop) visible.push(lot);
+        if (hasSigns) for (const sign of s.signs) visible.push(sign);
     }
     // Traffic stands on the ground like a building does, so it sorts here rather
     // than in a pass of its own: a car on the far side of a block belongs behind

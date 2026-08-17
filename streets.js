@@ -110,6 +110,9 @@ function pushStreet(x1, y1, x2, y2, curve, props) {
     // Traffic is seeded the same way, but unlike the lots it does not stay put:
     // these cars drive off this block within the minute (see traffic.js).
     if (typeof spawnStreetTraffic === 'function') spawnStreetTraffic(s);
+    // Signs are generated once here too, and (like the lots) persist on the
+    // street for good -- see signs.js.
+    if (typeof generateStreetSigns === 'function') generateStreetSigns(s);
     return s;
 }
 
