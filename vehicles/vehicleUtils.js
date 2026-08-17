@@ -124,6 +124,21 @@ function pickVehicleColor() {
     return pickColorFrom(VEHICLE_COLORS);
 }
 
+// A weighted pick that returns the entry exactly as given, no jitter: for the
+// classic cars, whose factory colours are documented shades, not a fleet average
+// to scatter around. Entries are [weight, value]; the value can be anything --
+// colour components, a whole two-tone scheme.
+function pickWeighted(entries) {
+    let total = 0;
+    for (const [w] of entries) total += w;
+    let r = Math.random() * total;
+    for (const [w, value] of entries) {
+        r -= w;
+        if (r <= 0) return value;
+    }
+    return entries[entries.length - 1][1];
+}
+
 const TIRE_COLOR = 'hsl(0, 0%, 13%)';
 const GLASS_COLOR = 'hsl(205, 22%, 38%)';
 const BED_LINER_COLOR = 'hsl(30, 6%, 24%)';   // the open floor of a pickup bed
@@ -224,6 +239,20 @@ function makeFlankQuads(x0, x1, z0, z1, hw, color, eps = 0.04) {
         quads.push({ pts: side > 0 ? pts.reverse() : pts, color });
     }
     return quads;
+}
+
+// A flat disc facing along the x axis -- a headlight, a round taillight, a badge.
+// `facing` is +1 for a disc on a nose (normal +x) or -1 for one on a tail. Eight
+// sides read as round at vehicle scale, same as makeLatheX. The winding borrows
+// makeLatheX's caps: the (sin, cos) ring order faces -x as given and +x reversed.
+function makeDiscX(x, y, z, r, facing, color, sides = 8) {
+    const pts = [];
+    for (let j = 0; j < sides; j++) {
+        const a = (j / sides) * Math.PI * 2;
+        pts.push({ x, y: y + r * Math.sin(a), z: z + r * Math.cos(a) });
+    }
+    if (facing > 0) pts.reverse();
+    return { pts, color };
 }
 
 // Inset a quad toward its own centre, for a detail poly (a window) that has to sit

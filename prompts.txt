@@ -436,3 +436,11 @@ Classic VW Minibus.
 Also, find and show me several images of each, from a few different angles (be sure to accurately label which is which)
 
 Also check which factory colors or color schemes were most popular for each of these vehicles, throughout their production runs
+
+Ok, in this conversation Sonnet just found dimensions, reference images, and color popularity for 4 specific vehicles:  VW Beetle and Minibus, and C3 and C7 Corvette.
+
+Now Fable, your task is to add these vehicles to the game (I think skeleton implementations already exist for them, but they just draw as generic sedans, for now).
+Unlike the generic vehicle types we did before, these won't have any randomness in their dimensions or shapes, of course.  Except colors chosen randomly from their real life factory colors, according to the real life popularity of those colors.
+
+These vehicles will be quite rare to ever see in the final game, and so we'll essentially never have to draw more than one on the screen at a time (in the real game).
+This means we can spend relatively a lot of polygons getting their shapes and details accurate, making them look really nice and detailed and realistic!  Which is why I chose you, Fable, the largest model for this part, to add my favorite vehicles to the game!

@@ -26,16 +26,17 @@ shares -- the type registry (`registerVehicle` / `generateVehicle` /
 `makeTruck()` and `drawVehicle()` -- and one file per body style holds the rest:
 `sedan.js`, `pickupTruck.js`, `suv.js`, `van.js`, `policeCar.js`, `cityBus.js`,
 `schoolBus.js`, `deliveryVan.js`, `fireTruck.js`, `trashTruck.js`,
-`cementTruck.js`.
+`cementTruck.js`, `vwBeetle.js`, `vwMinibus.js`, `corvette.js`.
 The player gets one at random, weighted by the `weight` each type registers, so
-SUVs and cars are the common case and buses and work trucks the rare ones.
+SUVs and cars are the common case, buses and work trucks the rare ones, and the
+classics rarer still.
 
-Six more are registered but have no body style yet -- `vwBeetle.js`,
-`vwMinibus.js`, `corvette.js`, `craneTruck.js`, `boxTruck.js`, `semiTruck.js` --
-each a one-liner calling `registerPlaceholderVehicle(name)`, which draws it as a
-sedan at weight 0. `r -= 0` in `randomVehicleType()` can never cross zero on its
-own, so a weight-0 type can only come up once every real type is exhausted, which
-never happens: no special case anywhere has to know a placeholder is one.
+Three more are registered but have no body style yet -- `craneTruck.js`,
+`boxTruck.js`, `semiTruck.js` -- each a one-liner calling
+`registerPlaceholderVehicle(name)`, which draws it as a sedan at weight 0.
+`r -= 0` in `randomVehicleType()` can never cross zero on its own, so a weight-0
+type can only come up once every real type is exhausted, which never happens: no
+special case anywhere has to know a placeholder is one.
 
 Models are built in vehicle-local feet: **+x forward, +y the car's right, z up**,
 origin on the ground at the centre of the footprint. `drawVehicle()` rotates and
@@ -113,6 +114,26 @@ stays reserved for things above the whole vehicle (the trash truck's beacon ride
 the body's top edge, not the cab, for exactly that reason -- its body stands taller
 than its cab, which is also why a truck's glass joins the body batch instead of
 the always-on-top glass pass: the body would show through it from behind).
+
+The four classics -- the Beetle, the splitscreen Minibus, and `corvette.js`
+holding both a C3 and a C7 behind one registered type (picked 50/50, recorded in
+`v.subtype` like the van's) -- are real cars, not families: every dimension is
+the published one and nothing about the shape is random. Only the paint varies,
+via `pickWeighted()`, which unlike `pickColorFrom()` adds no jitter, from each
+car's factory palette weighted by real popularity (the C7's straight from
+production counts). What the Beetle and both Corvettes are about is body-and-
+wings: a narrow central profile carrying the greenhouse, and separate fender
+extrusions riding outboard -- the Beetle's arches under its headlights, the C3's
+peaks above its own hood line, which is the whole coke-bottle front view. The
+bus is two stacked extrusions split at the beltline, one per colour of its
+two-tone, and the nose V is a trim triangle with the roundel discs
+(`makeDiscX()`) on it. Two lessons those details taught: `polyDepth()` orders
+coplanar polys by average z, so a detail that must paint over another has to be
+*centred higher* on the face (the roundel above the V's centre, the C7's exhaust
+high in its diffuser) -- a small outward push cannot win against the z term. And
+a custom glass pane must walk its bottom edge first, the way `makeCarLike()`'s
+do; wound from the top edge its normal points into the car, and the pane shows
+through from the wrong side instead of its own.
 
 Detail is chosen by `PX_PER_FT` alone (`VEHICLE_SOLID_MIN_ZOOM`,
 `VEHICLE_WHEELS_MIN_ZOOM`, `VEHICLE_ROOF_MIN_ZOOM`, `VEHICLE_GLASS_MIN_ZOOM`), down
