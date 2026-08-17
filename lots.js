@@ -389,18 +389,27 @@ function drawLots(camX, camY, vl, vr, vt, vb, player) {
     const pad = MAX_LOT_DEPTH + RIGHT_OF_WAY / 4;
     const hx = -getSinV() / Y_SCALE, hy = -getCosV() / Y_SCALE;
     const visible = [];
-    // A sign is tiny next to a house, so it drops out at its own, much closer
-    // SIGN_MIN_ZOOM rather than sharing minTop -- checked once here, not per sign.
-    const showSigns = typeof SIGN_MIN_ZOOM === 'number' && PX_PER_FT >= SIGN_MIN_ZOOM;
     for (const s of streets) {
-        const hasSigns = showSigns && s.signs && s.signs.length > 0;
-        if ((!s.lots || s.lots.length === 0) && !hasSigns) continue;
+        if (!s.lots || s.lots.length === 0) continue;
         const b = s.bounds, h = s.tallest || 0;
         const dx = hx * h, dy = hy * h;
         if (b.mxx + Math.max(0, dx) + pad < vl || b.mnx + Math.min(0, dx) - pad > vr ||
             b.mxy + Math.max(0, dy) + pad < vt || b.mny + Math.min(0, dy) - pad > vb) continue;
-        if (s.lots) for (const lot of s.lots) if (lot.top >= minTop) visible.push(lot);
-        if (hasSigns) for (const sign of s.signs) visible.push(sign);
+        for (const lot of s.lots) if (lot.top >= minTop) visible.push(lot);
+    }
+    // Signs belong to the intersection that controls them (see updateNodeSigns in
+    // signs.js), not to any one connecting street, so they get their own small
+    // cull over the nodes rather than riding the street loop above -- the same
+    // way drawScene culls nodes separately from streets for the intersection
+    // squares. A sign is tiny next to a house, so it drops out at its own, much
+    // closer SIGN_MIN_ZOOM rather than sharing minTop -- checked once here, not
+    // per node.
+    if (typeof SIGN_MIN_ZOOM === 'number' && PX_PER_FT >= SIGN_MIN_ZOOM) {
+        for (const n of nodes.values()) {
+            if (!n.signs) continue;
+            if (n.x + pad < vl || n.x - pad > vr || n.y + pad < vt || n.y - pad > vb) continue;
+            for (const slot in n.signs) visible.push(n.signs[slot]);
+        }
     }
     // Traffic stands on the ground like a building does, so it sorts here rather
     // than in a pass of its own: a car on the far side of a block belongs behind

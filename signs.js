@@ -1,10 +1,13 @@
 // --- Signs: street furniture, currently just stop signs (all units in feet) ---
 //
-// A sign is generated once per street end, the moment the street itself is (see
-// pushStreet in streets.js), and persists on it exactly the way a lot does: it is
-// never regenerated and never moves, so driving past the same corner twice shows
-// the same sign. Traffic ignores every sign here entirely -- this is only what
-// the driver sees, never a rule anything actually drives by.
+// Signage is an intersection's decision, not a street's: it is the node
+// (streets.js) that owns which of its own connecting streets stop and which
+// don't, exactly the way it will one day own a traffic light instead. See
+// updateNodeSigns for how and when a node decides.
+//
+// A sign never moves once placed, so driving past the same corner twice shows the
+// same layout. Traffic ignores every sign here entirely -- this is only what the
+// driver sees, never a rule anything actually drives by.
 //
 // Built in local feet with +x the direction of the traffic it faces (the same
 // convention a vehicle is modelled in, see vehicleUtils.js), so one shape can be
@@ -20,6 +23,13 @@ const SIGN_SIDE_OFFSET = 3;     // ft beyond the road edge, into the verge
 const SIGN_MIN_ZOOM = 1.1;      // a 2.75ft sign is 3px below this: drop the whole thing
 const SIGN_RED = 'hsl(354, 75%, 40%)';
 const SIGN_BACK = 'hsl(60, 3%, 55%)';   // the dull side a driver who passed it sees
+
+// How a node controls itself, decided once (see updateNodeSigns): most
+// intersections are a two-way stop (the through street, fwd/back, doesn't stop;
+// the crossing one, left/right, does), fewer are a four-way, and a few are left
+// uncontrolled entirely.
+const SIGN_NONE_PROB = 0.12;
+const SIGN_TWO_WAY_PROB = 0.6;   // four-way gets the remaining 0.28
 
 // The octagon: red toward the traffic it faces (local -x) with "STOP" lettered on
 // a whisker-proud panel over it (the same lettering trick a shop sign uses over
@@ -72,11 +82,49 @@ function placeStopSign(nodeX, nodeY, h, roadWidth) {
     return { house: sign, cx: x, cy: y };
 }
 
-// Every street gets one sign per end, generated once here and kept on the street
-// the way its lots are (see pushStreet) -- nothing is ever demolished.
-function generateStreetSigns(s) {
-    s.signs = [
-        placeStopSign(s.x2, s.y2, streetEndHeading(s, 1), s.props.width),
-        placeStopSign(s.x1, s.y1, streetEndHeading(s, -1), s.props.width),
-    ];
+// Direction of a car arriving at `node` by way of `s`: the opposite of departing
+// from it, so a street whose (x1,y1) end sits at this node is arrived at from the
+// far end, dir -1, and one whose (x2,y2) end does is arrived at dir +1.
+function arrivalDirAt(s, node) {
+    return (Math.abs(s.x1 - node.x) < 1 && Math.abs(s.y1 - node.y) < 1) ? -1 : 1;
+}
+
+function pickIntersectionControl() {
+    const r = Math.random();
+    if (r < SIGN_NONE_PROB) return 'none';
+    if (r < SIGN_NONE_PROB + SIGN_TWO_WAY_PROB) return 'two-way';
+    return 'four-way';
+}
+
+// Recomputes every sign at this node from its current connections, and (the
+// first time it is worth the question) decides how this node controls itself.
+//
+// Called whenever a street attaches here -- including a second, third or fourth
+// one long after the first, since a node can keep gaining connections well after
+// it first looked resolved (see resolveNode's re-opening of previously-false
+// directions). Signs are cheap, so the simplest correct thing is to throw the
+// old set away and rebuild from scratch every time, rather than trying to patch
+// one connection in -- which also means a node doesn't lock in "no signs" just
+// because it happens to be a plain through-block when first visited.
+//
+// fwd/back is treated as the through street and left/right as the one crossing
+// it -- they usually are, since fwd continues roughly the heading back arrived
+// on -- so a two-way stop only signs the left/right slots, a four-way signs
+// whichever of the four are actually connected, and an intersection with no
+// street on the cross axis yet isn't a real intersection at all: nothing to
+// control, and nothing decided until it becomes one.
+function updateNodeSigns(node) {
+    if (!node.streets.left && !node.streets.right) { node.signs = null; return; }
+    if (!node.control) node.control = pickIntersectionControl();
+    if (node.control === 'none') { node.signs = null; return; }
+
+    const signs = {};
+    for (const slot of SLOTS) {
+        const street = node.streets[slot];
+        if (!street) continue;
+        if (node.control === 'two-way' && (slot === 'fwd' || slot === 'back')) continue;
+        const dir = arrivalDirAt(street, node);
+        signs[slot] = placeStopSign(node.x, node.y, streetEndHeading(street, dir), street.props.width);
+    }
+    node.signs = signs;
 }

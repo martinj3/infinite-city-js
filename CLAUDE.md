@@ -463,26 +463,36 @@ only stop signs, and they have no effect on traffic at all -- every car in
 traffic.js still drives through every intersection exactly as before, ignoring
 every sign here entirely. This is purely what the driver sees.
 
-A sign is generated once per street end, the same moment `pushStreet` creates the
-street itself, and persists on it the way a lot does: `s.signs`, never
-regenerated, never demolished. Every street gets exactly two, one per end, each
-controlling the traffic that arrives there. `streetEndHeading(s, dir)` gives the
-tangent heading a car moving in that direction is travelling on -- dir +1 arrives
-at `(x2,y2)`, -1 at `(x1,y1)`, the same convention `traffic.js`'s own `dir` uses --
-so a curved street's sign stands square to the road it actually meets rather than
-to the chord between its ends. `placeStopSign` then sets it back from the node
-along `-heading` by `SIGN_SETBACK` (just short of the intersection box) and out to
-the right of travel by half the road width plus `SIGN_SIDE_OFFSET` -- the same
-right-of-travel side `traffic.js`'s lane offset uses -- so it reads face-on to
-that one approach and to no other.
+A node -- not a street -- owns its own signage, the same way it will one day own
+a traffic light: `updateNodeSigns(node)` decides, once, how the intersection
+controls itself, and rebuilds `node.signs` from whichever of its streets are
+actually connected right now. It runs every time a street attaches there,
+including a second, third or fourth one long after the node first looked
+resolved (`resolveNode` re-opens previously-false directions once a later street
+picks a node as its target), so there is no fixed moment at which "this
+intersection's final shape" is knowable -- the simplest correct thing is to
+throw the old signs away and rebuild from the current connections every time,
+rather than try to patch one in.
 
-Deliberately not conditioned on how many streets actually end up meeting there:
-a node can still gain connections long after it is first resolved (`resolveNode`
-re-opens previously-false directions once a later street picks it as a target),
-so there is no moment at which "this intersection's final degree" is knowable.
-Two signs per street, unconditionally, is the rule that never has to be revisited
--- the same trade the intersection square itself already makes, painted at every
-node whether or not a second street ever joins it.
+A node with nothing yet on its cross axis (`left` and `right` both absent) isn't
+a real intersection -- it's a plain block boundary on a through street -- so it
+gets no signs and no decision is made yet. The first time a cross street
+actually attaches, `pickIntersectionControl()` rolls the node's control once and
+it stays that way for good, whatever it gains later. `fwd`/`back` stands for the
+through street and `left`/`right` for whatever crosses it, which is usually true
+since `fwd` continues roughly the heading `back` arrived on. A **two-way** stop
+(`SIGN_TWO_WAY_PROB`, 60%) signs only the `left`/`right` slots that are actually
+connected, so the through street never stops; a **four-way** (28%) signs every
+connected slot; **none** (`SIGN_NONE_PROB`, 12%) signs nothing at all -- a real,
+if slightly risky, uncontrolled crossing. `streetEndHeading(s, dir)` gives the
+tangent heading a car arriving there is travelling on, and `arrivalDirAt` works
+out which direction that is for a given street and node, so a curved street's
+sign still stands square to the road it actually meets rather than to the chord
+between its ends; `placeStopSign` then sets it back from the node along
+`-heading` by `SIGN_SETBACK` (just short of the intersection box) and out to the
+right of travel by half the road width plus `SIGN_SIDE_OFFSET` -- the same
+right-of-travel side `traffic.js`'s own lane offset uses -- so it reads face-on
+to that one approach and to no other.
 
 The sign is built once, in local feet, with +x the direction of the traffic it
 faces -- the same convention a vehicle is modelled in -- so the whole assembly is
@@ -503,6 +513,11 @@ whisker-proud panel over it exactly the way a shop sign's lettering sits over it
 own board (`makeFrontPanel`, buildingUtils.js), plus a second, plain grey disc
 facing the other way -- a one-sided face is a vanishing act from the wrong side,
 the same lesson a windscreen with nothing behind it already taught.
+
+Signs get their own small cull in `drawLots`, over the nodes directly rather than
+riding the street loop the lots use -- the same way `drawScene` culls nodes
+separately from streets for the intersection squares, since a sign belongs to
+the intersection and not to any one of the streets meeting it.
 
 The sign and its lettering drop out on two different mechanisms, which is what
 gives the two-stage falloff the request asked for. The sign as a whole disappears

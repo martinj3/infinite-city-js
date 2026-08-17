@@ -584,3 +584,9 @@ Ours can be very slightly larger than their real life counterparts for readabili
 
 The "pole" element that holds the sign should perhaps be reusable, in drawutils or elsewhere.  Various other things we add later may need a parametric pole of some height and "diameter."  
 The pole needs to be visible from all directions, so we can't quite use just a single poly.  Probably to rectangles set at 90 degrees to each other, perhaps?  So that at least once is always drawn, from all camera angles?
+
+---
+
+Ah, one change.  Not every intersection should be a 4-way stop.  Some should only be 2-way stops (only one cross street stops), and a few uncontrolled intersections with no stop signs at all.  
+
+In general, if we have an intersection object, we probably want it to manage this for all its connecting streets, especially in the future when we (someday) add traffic lights and signals and such

@@ -110,9 +110,6 @@ function pushStreet(x1, y1, x2, y2, curve, props) {
     // Traffic is seeded the same way, but unlike the lots it does not stay put:
     // these cars drive off this block within the minute (see traffic.js).
     if (typeof spawnStreetTraffic === 'function') spawnStreetTraffic(s);
-    // Signs are generated once here too, and (like the lots) persist on the
-    // street for good -- see signs.js.
-    if (typeof generateStreetSigns === 'function') generateStreetSigns(s);
     return s;
 }
 
@@ -221,6 +218,12 @@ function tryAddRoad(node, slot, nx, ny, endH, curve, props) {
     node.streets[slot] = street;
     if (targetSlot) target.streets[targetSlot] = street;
 
+    // Both ends just gained a connection (or, for the target, its first one),
+    // so both re-decide their own signage from what they're connected to now --
+    // see updateNodeSigns in signs.js for why this has to be re-run rather than
+    // decided once and left alone.
+    if (typeof updateNodeSigns === 'function') { updateNodeSigns(node); updateNodeSigns(target); }
+
     // If target is now fully resolved, re-open false directions for future generation
     if (!Object.values(target.roads).some(v => v === null)) {
         for (const d of GEN_SLOTS) {
@@ -299,6 +302,7 @@ function initMap() {
     const s = pushStreet(0, 0, 400, 0, null, props);
     a.streets.fwd = s;
     b.streets.back = s;
+    if (typeof updateNodeSigns === 'function') { updateNodeSigns(a); updateNodeSigns(b); }
 }
 
 // Grow the map by repeatedly visiting the unresolved intersection nearest the
