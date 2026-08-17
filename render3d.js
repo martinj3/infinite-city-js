@@ -33,9 +33,47 @@ function polyDepth(poly, ox, oy, camX, camY) {
     return d / poly.pts.length;
 }
 
+// Lettering painted onto a quad -- a company name down a truck's box. The
+// projection is affine, so the quad's four screen corners *are* the transform
+// from the panel's own space to the canvas, exactly, at any camera angle: no
+// perspective to approximate and nothing to re-derive per letter. The panel is
+// PANEL_EM units tall and PANEL_EM * aspect wide, aspect being its real
+// width/height in feet, so letters keep their proportions however the view
+// squashes the face they sit on.
+//
+// sp is the projected quad wound as the reader sees it -- top-left, top-right,
+// bottom-right, bottom-left -- which is also a front-facing winding, so the far
+// flank's lettering culls along with its face (see makeFlankText).
+const PANEL_EM = 100;
+
+function drawPanelText(sp, str, color, aspect) {
+    const tl = sp[0], tr = sp[1], bl = sp[3];
+    const wide = PANEL_EM * aspect;
+    ctx.save();
+    ctx.setTransform((tr[0] - tl[0]) / wide, (tr[1] - tl[1]) / wide,
+                     (bl[0] - tl[0]) / PANEL_EM, (bl[1] - tl[1]) / PANEL_EM,
+                     tl[0], tl[1]);
+    ctx.font = `bold ${PANEL_EM}px sans-serif`;
+    // Shrink a long name to the panel's width; a short one is drawn at the
+    // panel's full height. A canvas that cannot measure text (tools/render.js)
+    // reports 0 and simply gets the unshrunk size.
+    const w = ctx.measureText(str).width;
+    if (w > wide) ctx.font = `bold ${Math.max(1, Math.floor(PANEL_EM * wide / w))}px sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = color;
+    ctx.fillText(str, wide / 2, PANEL_EM / 2);
+    ctx.restore();
+}
+
+const dist3 = (a, b) => Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z);
+
 // Project, backface-cull, depth-sort, and draw a batch of polygons.
 // The sort is stable (spec-guaranteed), so exact depth ties keep their batch
 // order: a detail pushed after the face it decorates still paints over it.
+//
+// A poly carrying `text` is lettered rather than filled, but is otherwise an
+// ordinary poly: it culls, sorts and takes the light like the panel it lies on.
 //
 // staticLit: the polys are baked -- they never move or change color (buildings)
 // -- so each one's lit color is computed once and kept on the poly. Lighting is
@@ -69,12 +107,14 @@ function projectAndDraw(polys, ox, oy, camX, camY, staticLit = false) {
         const litColor = staticLit
             ? poly._lit || (poly._lit = applyLighting(poly.color, computeNormal(pts)))
             : applyLighting(poly.color, computeNormal(pts));
-        projected.push({ sp, color: litColor, depth: depth / n });
+        projected.push({ sp, color: litColor, depth: depth / n, text: poly.text,
+                         aspect: poly.text ? dist3(pts[0], pts[1]) / dist3(pts[0], pts[3]) : 0 });
     }
 
     projected.sort((a, b) => a.depth - b.depth);
 
-    for (const { sp, color } of projected) {
+    for (const { sp, color, text, aspect } of projected) {
+        if (text) { drawPanelText(sp, text, color, aspect); continue; }
         ctx.beginPath();
         ctx.moveTo(sp[0][0], sp[0][1]);
         for (let i = 1; i < sp.length; i++) ctx.lineTo(sp[i][0], sp[i][1]);

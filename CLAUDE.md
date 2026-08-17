@@ -26,14 +26,14 @@ shares -- the type registry (`registerVehicle` / `generateVehicle` /
 `makeTruck()` and `drawVehicle()` -- and one file per body style holds the rest:
 `sedan.js`, `pickupTruck.js`, `suv.js`, `van.js`, `policeCar.js`, `cityBus.js`,
 `schoolBus.js`, `deliveryVan.js`, `fireTruck.js`, `trashTruck.js`,
-`cementTruck.js`, `vwBeetle.js`, `vwMinibus.js`, `corvette.js`, `countach.js`,
-`enzo.js`, `wrangler.js`, `mustang.js`.
+`cementTruck.js`, `boxTruck.js`, `vwBeetle.js`, `vwMinibus.js`, `corvette.js`,
+`countach.js`, `enzo.js`, `wrangler.js`, `mustang.js`.
 The player gets one at random, weighted by the `weight` each type registers, so
 SUVs and cars are the common case, buses and work trucks the rare ones, and the
 classics rarer still.
 
-Three more are registered but have no body style yet -- `craneTruck.js`,
-`boxTruck.js`, `semiTruck.js` -- each a one-liner calling
+Two more are registered but have no body style yet -- `craneTruck.js` and
+`semiTruck.js` -- each a one-liner calling
 `registerPlaceholderVehicle(name)`, which draws it as a sedan at weight 0.
 `r -= 0` in `randomVehicleType()` can never cross zero on its own, so a weight-0
 type can only come up once every real type is exhausted, which never happens: no
@@ -100,7 +100,7 @@ body by construction, so painting it last is always right. `makeCarLike()` retur
 the chassis dimensions it derived in `v.frame` so a type can place such a thing
 without re-deriving them.
 
-The three work trucks are not car-likes: `makeTruck()` builds what they share -- a
+The four work trucks are not car-likes: `makeTruck()` builds what they share -- a
 cab (cab-over or conventional, recorded in `v.cab`), a heavy bumper, dark frame
 rails, and a steering front axle ahead of a rear group that can be a tandem pair --
 and each file bolts its apparatus on behind: the fire engine its compartment body,
@@ -115,6 +115,40 @@ stays reserved for things above the whole vehicle (the trash truck's beacon ride
 the body's top edge, not the cab, for exactly that reason -- its body stands taller
 than its cab, which is also why a truck's glass joins the body batch instead of
 the always-on-top glass pass: the body would show through it from behind).
+
+The frame rails go in `v.under`, painted with the wheels *before* the body, for
+the reason the wheels are: a rail is tucked inside the body's footprint, so only
+what hangs below the sill -- or shows through a gap in the apparatus, as the
+mixer's deck does -- is meant to be seen. Sorted against the body instead, a rail
+near the tail outranks a long body flank (whose footprint centroid sits
+mid-truck) and paints a bar across it.
+
+The box truck is that chassis under one plain body, so what it is really about is
+what a plain body carries. Its signature is the fairing sweeping the roof forward
+over the cab, and that has a rule attached: `spec.roofCovered` tells `makeTruck()`
+to leave the cab's roof face out, because two horizontal faces sharing a footprint
+tie in ground depth to within a rounding error at every heading and flicker
+against each other as the camera turns. Dropping the covered one is only safe
+because the fairing is a convex wedge sitting flat on the roof and overhanging it
+at both ends, so its silhouette contains the roof's from every direction and there
+is nothing left to see through. Its cab takes the ordinary fleet palette (a box
+truck's cab is as likely to be any colour a sedan is); the body is white far more
+often than anything else, and occasionally is simply painted to match the cab.
+
+Half of them carry a company name down both flanks. Lettering is a poly like any
+other -- it culls, sorts and takes the light with the panel it lies on -- but
+carries `text`, and `projectAndDraw` hands it to `drawPanelText` instead of
+filling it. Because the projection is affine, the quad's four screen corners *are*
+the transform from the panel's own space to the canvas, exactly, at any camera
+angle: no perspective to approximate and nothing to re-derive per letter. Build
+one with `makeFlankText()`, whose pts are wound in *reading* order (top-left,
+top-right, bottom-right, bottom-left as the reader sees them) -- which happens to
+be the same front-facing winding, so the far side's name culls with its own flank.
+A viewer sees the nose on their left from one flank and on their right from the
+other, so the two sides read in opposite directions along x, and the same name
+starts at opposite ends of the truck, exactly as painted lettering does on a real
+one. Names are kept to about twenty characters: one line is as wide as the box, so
+a name twice as long is drawn half as tall and stops looking like signwriting.
 
 The classics -- the Beetle, the splitscreen Minibus, `corvette.js`
 holding both a C3 and a C7 behind one registered type (picked 50/50, recorded in
@@ -137,8 +171,10 @@ than the V, the C7's exhaust prouder than its diffuser) -- an outward push is
 toward the camera exactly when that face is visible, and an exact tie keeps
 batch order, later-pushed on top, since the sort is stable. Keep any single
 face's footprint short where something overhangs its ends: one flank polygon
-spanning most of a truck sorts as mid-truck and paints over the drum hanging
-past it, which is why `makeTruck()` builds its frame rails in segments. And
+spanning most of a truck sorts as mid-truck and paints over what hangs past it,
+which is why `makeTruck()` builds its frame rails in segments -- and when the
+two things simply share a footprint, no push helps and the covered face has to
+go (`spec.roofCovered`, above). And
 a custom glass pane must walk its bottom edge first, the way `makeCarLike()`'s
 do; wound from the top edge its normal points into the car, and the pane shows
 through from the wrong side instead of its own.
@@ -186,9 +222,14 @@ Two complementary techniques, both provided by that file:
   and see the result. Layout and geometry bugs (sidewalk corner joins, for one) are
   far easier to see than to assert. The rasterizer has no antialiasing and drops
   sub-pixel-thin features, so don't trust it on hairlines -- verify those by counting.
+  It draws no glyphs either, so a truck's lettering is a blank panel here; subclass
+  `RasterCtx` with a `fillText` that blocks out each letter if you need to see where
+  text lands. (`measureText` does answer with a plausible width for the current font,
+  so code that fits text to a box behaves.)
 - **Count the calls.** `probeCtx(cb)` returns a context that draws nothing and reports
   every call, for assertions pixels answer badly: "does every street draw exactly two
-  sidewalk bands", "does any NaN reach the canvas". Pass it to `renderPage({ ctx })`.
+  sidewalk bands", "does any NaN reach the canvas", "does exactly one flank's name
+  survive culling at every heading". Pass it to `renderPage({ ctx })`.
 
 `renderPage({ search, width, height, scripts })` is also exported for custom harnesses;
 it returns `{ ctx, sandbox, run }`, where `run('expr')` evaluates inside the page, e.g.

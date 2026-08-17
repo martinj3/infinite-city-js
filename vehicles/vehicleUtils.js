@@ -241,6 +241,33 @@ function makeFlankQuads(x0, x1, z0, z1, hw, color, eps = 0.04) {
     return quads;
 }
 
+// Lettering across both flanks of a full-width body -- a company name down a box
+// truck. Bounded in side view like makeFlankQuads and pushed proud of the face
+// the same way, so it belongs in v.trim too; what differs is the winding. The
+// pts run in *reading* order (top-left, top-right, bottom-right, bottom-left as
+// the reader sees them), which is what the renderer needs to lay the text out
+// and, as it happens, is the same front-facing winding, so the far side's name
+// culls with its own flank instead of showing through backwards.
+//
+// A viewer standing at the left flank sees the nose on their left and one at the
+// right flank sees it on their right, so the two sides read in opposite
+// directions along x -- which is why the same name starts at opposite ends of
+// the truck, exactly as painted lettering does on a real one.
+function makeFlankText(x0, x1, z0, z1, hw, text, color, eps = 0.06) {
+    const quads = [];
+    for (const side of [-1, 1]) {
+        const y = (hw + eps) * side;
+        const [xl, xr] = side < 0 ? [x1, x0] : [x0, x1];
+        quads.push({ pts: [
+            { x: xl, y, z: z1 },
+            { x: xr, y, z: z1 },
+            { x: xr, y, z: z0 },
+            { x: xl, y, z: z0 },
+        ], color, text });
+    }
+    return quads;
+}
+
 // A flat disc facing along the x axis -- a headlight, a round taillight, a badge.
 // `facing` is +1 for a disc on a nose (normal +x) or -1 for one on a tail. Eight
 // sides read as round at vehicle scale, same as makeLatheX. The winding borrows
@@ -506,6 +533,8 @@ function makeCarLike(type, spec) {
 //                        below the belt (conventional only)
 //   wsRake               how far the windscreen leans back, in feet
 //   cabInset             cab sides inboard of the body flanks
+//   roofCovered          bool: something else will sit on the cab roof, so leave
+//                        the roof face out (see below)
 //   clearance            underside of cab and frame
 //   chassisZ             top of the frame rails: the deck the apparatus sits on
 //   frameWFrac           frame width as a fraction of body width (number, not a range)
@@ -551,18 +580,36 @@ function makeTruck(type, spec) {
                  { x: cabBackX,   z: cabRoofZ });
     const body = makeExtrudedProfile(profile, -cabHw, cabHw, color);
 
+    // A type that sets something down on the cab roof (a box truck's fairing)
+    // asks for the roof face itself to be left out. Two horizontal faces sharing
+    // a footprint cannot be told apart by ground depth -- they tie to within a
+    // rounding error at every heading -- so leaving the covered one in makes the
+    // pair flicker against each other as the camera turns. Dropping it is safe
+    // because the solid resting on it hides it from every direction: whatever
+    // sits there must cover the roof's whole footprint and rise from it.
+    if (spec.roofCovered) {
+        const i = body.findIndex(p => p.pts.every(q => q.z === cabRoofZ));
+        if (i >= 0) body.splice(i, 1);
+    }
+
     // Frame rails from the tail to under the cab, narrower than the body, so the
-    // gap between cab and apparatus shows chassis rather than daylight. Built in
-    // short segments, not one prism: the depth sort orders a polygon by its
-    // ground-footprint centroid, and one flank face spanning most of the truck
-    // sorts as "mid-truck", letting it paint over apparatus that overhangs its
-    // ends (the mixer's drum). Short segments keep every face's centroid local;
-    // the seams between them are interior faces nobody ever sees.
+    // gap between cab and apparatus shows chassis rather than daylight. They go
+    // in v.under, painted with the wheels before the body, for the reason the
+    // wheels are: a rail is tucked inside the body's footprint, so whatever the
+    // body covers should stay covered and only what hangs below the sill (or
+    // shows through a gap in the apparatus, as the mixer's deck does) is meant to
+    // be seen. Sorting them against the body instead lets a rail near the tail
+    // outrank a long body flank and paint a bar across it.
+    //
+    // Short segments rather than one prism, so no single rail sorts as
+    // "mid-truck" against its neighbours; the seams are interior faces nobody
+    // ever sees.
+    const under = [];
     const frameHw = hw * (spec.frameWFrac || 0.55);
     const frameX0 = -hl + 0.3, frameLen = cabBackX - frameX0 + 1.0;
     const frameSegs = Math.max(1, Math.ceil(frameLen / 8));
     for (let i = 0; i < frameSegs; i++) {
-        body.push(...makeRectangularPrism(frameX0 + frameLen * i / frameSegs, -frameHw,
+        under.push(...makeRectangularPrism(frameX0 + frameLen * i / frameSegs, -frameHw,
             clearance, frameLen / frameSegs, frameHw * 2, chassisZ - clearance, TRUCK_FRAME_COLOR));
     }
 
@@ -610,10 +657,10 @@ function makeTruck(type, spec) {
 
     return {
         type, width, length, height: cabRoofZ, color,
-        body, glass: [], wheels, trim: [], roof: [],
+        body, under, glass: [], wheels, trim: [], roof: [],
         flat: makeVehicleFootprint(width, length, color),
         frame: { hl, hw, clearance, chassisZ, beltZ, cabRoofZ, cabBackX, cabHw,
-                 wheelRadius: radius, frontX, rearXs, axleY },
+                 roofFrontX, wheelRadius: radius, frontX, rearXs, axleY },
     };
 }
 
@@ -627,9 +674,10 @@ let _vehCount = 0;
 
 function _emit(src, cos, sin, dx, dy) {
     let d = _vehScratch[_vehCount];
-    if (!d) d = _vehScratch[_vehCount] = { pts: [], color: '' };
+    if (!d) d = _vehScratch[_vehCount] = { pts: [], color: '', text: null };
     _vehCount++;
     d.color = src.color;
+    d.text = src.text;   // a lettered panel is otherwise an ordinary poly
     const sp = src.pts, dp = d.pts;
     dp.length = sp.length;
     for (let i = 0; i < sp.length; i++) {
@@ -647,12 +695,13 @@ function _emit(src, cos, sin, dx, dy) {
 // car itself). Which parts get drawn is decided by PX_PER_FT alone, so a caller
 // never has to think about zoom.
 //
-// The parts go down in separate passes -- wheels, body, trim, roof fittings, glass
-// -- for the same reason buildings hang their windows off a child drawable: depth
-// sorting compares whole polygons, so it cannot resolve a small poly that lies
-// inside a big one. The wheels are tucked within the body's footprint, so painting
-// them first lets the body cover everything but the tread showing below the sill,
-// which is exactly what should be visible; v.trim is detail lying on the body's
+// The parts go down in separate passes -- wheels and anything else under the body,
+// then the body, trim, roof fittings, glass -- for the same reason buildings hang
+// their windows off a child drawable: depth sorting compares whole polygons, so it
+// cannot resolve a small poly that lies inside a big one. The wheels and v.under
+// (a truck's frame rails) are tucked within the body's footprint, so painting them
+// first lets the body cover everything but what shows below the sill, which is
+// exactly what should be visible; v.trim is detail lying on the body's
 // own faces (a truck's compartment doors and stripes), painted right after them;
 // glass goes on last so it lands on the panel it belongs to. Anything in v.roof is
 // above every part of the body by construction, so painting it after the body is
@@ -682,6 +731,7 @@ function drawVehicle(v, wx, wy, heading, steer, camX, camY) {
             const hubY = wheel.x * sin + wheel.y * cos;
             for (const p of wheel.polys) _emit(p, wc, ws, hubX, hubY);
         }
+        if (v.under) for (const p of v.under) _emit(p, cos, sin, 0, 0);
         flush();
     }
 

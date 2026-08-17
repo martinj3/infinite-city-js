@@ -84,6 +84,7 @@ class RasterCtx {
         const s = this.stack.pop();
         if (s) { this.m = s[0]; this.fillStyle = s[1]; this.strokeStyle = s[2]; this.lineWidth = s[3]; this.globalAlpha = s[4]; }
     }
+    setTransform(a, b, c, d, e, f) { this.m = [a, b, c, d, e, f]; }
     translate(x, y) { this.m = mul(this.m, [1, 0, 0, 1, x, y]); }
     scale(x, y) { this.m = mul(this.m, [x, 0, 0, y, 0, 0]); }
     rotate(a) { const c = Math.cos(a), s = Math.sin(a); this.m = mul(this.m, [c, s, -s, c, 0, 0]); }
@@ -164,9 +165,16 @@ class RasterCtx {
             }
         }
     }
-    fillText() { }              // HUD text is not rendered
+    // No glyphs: HUD text and the lettering on a truck's box are not rendered.
+    // measureText still answers with a plausible width for the current font, so
+    // that code laying text out (render3d.js fits a name to its panel) divides by
+    // something real instead of by zero.
+    fillText() { }
     strokeText() { }
-    measureText() { return { width: 0 }; }
+    measureText(str) {
+        const m = /([\d.]+)px/.exec(this.font);
+        return { width: 0.55 * (m ? parseFloat(m[1]) : 16) * String(str).length };
+    }
 
     toPNG() {
         const stride = this.w * 3 + 1;
@@ -209,7 +217,13 @@ function probeCtx(onCall, width = 900, height = 700) {
     return new Proxy({}, {
         get(_, k) {
             if (k === 'canvas') return { width, height };
-            return (...args) => { if (onCall) onCall(String(k), args); };
+            return (...args) => {
+                if (onCall) onCall(String(k), args);
+                // Every call is reported and returns nothing -- except the one
+                // whose result callers read back. Text laid out to fit a box
+                // measures it first, and undefined.width would throw.
+                if (k === 'measureText') return { width: 0 };
+            };
         },
         set() { return true; }
     });

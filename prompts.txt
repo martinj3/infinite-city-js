@@ -500,3 +500,16 @@ Only things that won't drastically increase code complexity or add too many line
 Trade against code readability and maintainability.  If the perf win would be very tiny, then readability wins.
 
 Implement any that you find.
+
+---
+
+Ok, implement Box Trucks (may already be a stub file).  
+These are larger than delivery vans.  Ryder rental trucks, and many moving companies and movers use them.  
+
+They have more or less exactly the same frames, wheels, and cabs as trash trucks and cement trucks.  You may be able to reuse some logic there.  They can be either cab-over-engine, or regular/conventional cab.  
+
+They can have a lot of variety in cab colors, basically the same distribution as sedans.  
+But the box on the back is most often white.  
+Their overall length can vary from 21ft to 31ft.  
+
+You can maybe write a list of 30 or so plausible-sounding names for moving, storage, delivery, van line, and trucking companies.  Assign one at random to 50% of these trucks (other half are just plain).  If it's possible to use drawtext or something to show the text on the side of the box?
