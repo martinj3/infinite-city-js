@@ -426,3 +426,11 @@ All can vary their heights and widths a little, around a reasonable average for 
 
 For all 3 of these types, they are relatively rare on the road, so we'll rarely have to draw many on screen at once.  Therefore, we can spend considerably more "detail polygons" on decorating them to look nice and cool and realistic!
 I've chosen you, Fable, the largest smartest model for this reason, to make these types nice and detailed, and least when zoomed in.
+
+Don't change any code, just do some research online.  Determine the overall dimensions of these 4 vehicles:
+Classic VW beetle.
+Classic VW Minibus.
+3rd generation (C3) Corvette.
+7th generation (C7) Corvette.
+
+Also, find and show me several images of each, from a few different angles (be sure to accurately label which is which)
