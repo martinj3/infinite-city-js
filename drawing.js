@@ -266,6 +266,11 @@ function drawScene(camX, camY, player) {
     // 3D and project themselves, so they are drawn in screen space once the ground
     // layers are done.
     if (typeof drawLots === 'function') drawLots(camX, camY, vl, vr, vt, vb, player);
+
+    // 7) Honks: decorative screen-space text over cars that just leaned on the
+    // horn (see traffic.js). Drawn after everything -- a honk is heard over a
+    // house, not hidden behind one.
+    if (typeof drawHonks === 'function') drawHonks(camX, camY);
 }
 
 // The driving game: the world, plus the car and its HUD.

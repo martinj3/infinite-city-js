@@ -611,3 +611,35 @@ Enzo and C7 corvette: 3 seconds.
 Ideally with some reasonable acceleration curve (each type can simply scale the curve by a constant, to achieve roughly the desired 0 to 60).  Since 0 to 20 is typically quicker than 60 to 90, of course.  
 
 Most cars can decelerate quicker than accelerate.  Sports cars especially
+
+---
+
+Now add a real driving model, but very simple.  Traffic cars can choose to accelerate or decelerate within the limits of their vehicle's performance.  (The player still has simple on/off controls, so accelerates or brakes at the max of their vehicle's performance for now, but traffic cars have analog control over accel/decel).  
+
+The actual driving model can be very simple, doesn't need fancy realistic physics modeling or anything.  
+Instead, spend most of your time on the "AI" control for the non-player traffic cars.  
+
+I don't want to mess with real, machine learning neural net type AI.  Just a few simple old fashioned PID loops, probably.  
+Probably each car gets a number of how off-center it is compared to its lane centerline, and tries to keep centered in its lane with a steering PID loop.  
+We can increase the minimum street width just slightly, if it's difficult to get such precise control of steering.  
+
+Each car (car's driver really) gets a random preferred following distance to the car in front of it, within a reasonable range.  Probably another PID loop to control accel/decel and follow the car in front.  
+Possibly some cross talk with the steering PID loop, eg, to slow down if having difficulty staying centered in the lane around a curve, for example.  But mostly independent and simple.  
+The following distance PID loop should probably have a very small delay (2 or 3 frames maybe?) in measuring the distance to the leading vehicle, similar to human reaction times.  This will cause realistic "waves" of traffic and traffic jams, they don't all accelerate at once when a light turns green, etc (though no stoplights yet).  The steering loop doesn't need any delay, since our lanes are pretty narrow, that's probably challenging enough already.  
+
+Not sure how full-stops should be handled?  Should a stop-sign (or red traffic light, if we add those someday) should basically be treated like a stopped car ahead?  Except we don't want the velocity to come to zero too soon, or we'd end up stopped way back far from the stopsign, which is unrealistic.  
+Or full-stop things like stop-signs could be a separate mechanism from following a moving car in front, your choice.  
+
+If a head-on collision is imminent (with the player's car or another traffic car), eg maybe if an oncoming car drifts more than 1ft over the centerline, the car should try to avoid it.  Perhaps by hitting the brakes (maybe the oncoming car's pos/vel is simply now the input to the "follow the car ahead" PID loop, so it would cause aggressive braking?  It could also cause a bias to the "position in lane" input to the steering PID loop, causing it to swerve to avoid the collision.  
+
+When this logic is activated (or perhaps anytime a car brakes with near its max brake force), a little red decorative text "honk" in a funny font should appear over/near the honking car.  Please don't spend too much time polishing this!  I can have a smaller, cheaper model polish it up, just want the hook/mechanism in there mainly.  
+
+Not sure how best to handle intersections?  I'll leave that up to you mostly.  Maybe simply smoothly changing the "lane centerline" input to the steering PID loop as the car goes through the intersection would be sufficient to produce smooth, but also varied and lifelike turns?  
+Cars should probably decide early in a block which way they're going to turn, or go straight.  So their target speed input can be adjusted to slow for the turn.  
+
+Cars should have different personalities.  The target/preferred speed (when no car is in front to follow and not on a tight curve) should vary within reasonable ranges (not too fast, since we mostly have small city streets for now, not really freeways, so maybe 60mph on the very high end, and as low as 20mph in rare cases, usually 35-ish).  
+The constants defining the PID loops (proportional, integral, derivative constants) should vary randomly within reasonable ranges, so that the very worst drivers almost look drunk (occasionally failing to stay within their lane or the road), but most drivers are pretty good.  The big trucks/busses rarely get the worst drivers.  
+
+Probably need to track world coordinates for each car, likely to sub-foot precision, since deviation from lane centerline will probably range from 0 to 4ft in most cases, so maybe floats on something (plain javascript Number might work just fine).   
+
+Not sure how to deal with decided when its safe to proceed through an intersection at a stopsign, or uncontrolled intersection, or making a left turn at a stopsign, to avoid a collision?  If you have some reasonably simple idea for a mechanism for this, you can implement it.  Otherwise, feel free to leave that for another day if it's too much, and just have cars pass through each other without colliding (but nonetheless they still try to avoid head-on collisions, as detailed above, since I want them to react in interesting ways to the player car's behavior)

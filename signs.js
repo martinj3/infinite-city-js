@@ -6,8 +6,9 @@
 // updateNodeSigns for how and when a node decides.
 //
 // A sign never moves once placed, so driving past the same corner twice shows the
-// same layout. Traffic ignores every sign here entirely -- this is only what the
-// driver sees, never a rule anything actually drives by.
+// same layout. Traffic obeys these now: a driver approaching a node checks its
+// signage for their own arrival slot and comes to a genuine stop at it (see
+// stopSignAhead in traffic.js) -- though the player is still free to run them.
 //
 // Built in local feet with +x the direction of the traffic it faces (the same
 // convention a vehicle is modelled in, see vehicleUtils.js), so one shape can be

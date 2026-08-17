@@ -68,7 +68,9 @@ function update(dt) {
 
     // Traffic first, so the streets generate() is about to create are populated
     // around where the player is now rather than where they were last frame.
-    updateTraffic(player.x, player.y, dt);
+    // The player goes along too: drivers follow it, brake for it, and swerve
+    // around it exactly as they do for each other.
+    updateTraffic(player.x, player.y, dt, player);
     generate(player.x, player.y);
 }
 

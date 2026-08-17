@@ -9,8 +9,10 @@
 // road tests report for that class of vehicle, so tuning a type is picking a
 // single number -- its 0-60 time -- not shaping a curve by hand.
 //
-// This only ever drives the player's own car (see game.js); traffic still moves
-// at a flat TRAFFIC_SPEED (traffic.js) regardless of what it is simulating.
+// The player's car reads these limits through on/off pedals (see game.js);
+// traffic reads the same limits through its drivers' analog feet (traffic.js),
+// so a Countach in traffic can out-accelerate the bus in front of it exactly as
+// far as the player's own could.
 
 const G_FT_S2 = 32.174;            // one g, in ft/s^2
 const PERF_LOW_SPEED = 22;         // ft/s (~15mph): accel is flat below this
@@ -96,10 +98,17 @@ const VEHICLE_PERF_SUBTYPE = {
 };
 const DEFAULT_VEHICLE_PERF = { accel0to60: 8, brakeG: 0.80 };   // an ordinary sedan
 
-// The scale and brake figure for one generated vehicle, resolved once (see
-// game.js) rather than every frame.
+// The scale and brake figure for one generated vehicle. Memoized per
+// type:subtype, because accelScaleFor runs a bisection of simulations: fine
+// resolved once for the player, ruinous re-run for every car traffic spawns.
+const _perfCache = new Map();
 function vehiclePerf(v) {
-    const spec = (v.subtype && VEHICLE_PERF_SUBTYPE[`${v.type}:${v.subtype}`])
-        || VEHICLE_PERF[v.type] || DEFAULT_VEHICLE_PERF;
-    return { accelK: accelScaleFor(spec.accel0to60), brakeDecel: spec.brakeG * G_FT_S2 };
+    const key = v.subtype ? `${v.type}:${v.subtype}` : v.type;
+    let p = _perfCache.get(key);
+    if (!p) {
+        const spec = VEHICLE_PERF_SUBTYPE[key] || VEHICLE_PERF[v.type] || DEFAULT_VEHICLE_PERF;
+        p = { accelK: accelScaleFor(spec.accel0to60), brakeDecel: spec.brakeG * G_FT_S2 };
+        _perfCache.set(key, p);
+    }
+    return p;
 }

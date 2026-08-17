@@ -1,5 +1,8 @@
 // --- Constants ---
-const MIN_STREET_WIDTH = 19;
+// 20 rather than the original 19: traffic now actually steers to hold its lane
+// (see traffic.js), and the extra half-foot of lane is the difference between a
+// bus's ordinary wobble staying inside the paint and clipping the centerline.
+const MIN_STREET_WIDTH = 20;
 const MAX_STREET_WIDTH = 24;
 const INTERSECTION_SIZE = MAX_STREET_WIDTH; // fixed size to accommodate widest streets
 const HALF_INTERSECTION = INTERSECTION_SIZE / 2;

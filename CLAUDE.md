@@ -397,10 +397,12 @@ sorting compares whole polygons and cannot resolve the wheels tucked inside the 
 
 ### Performance
 
-`vehicles/performance.js` gives the player's own car acceleration and braking that
-vary by what they're driving; traffic still moves at `traffic.js`'s flat
-`TRAFFIC_SPEED` regardless of body style, since nothing else ever reads a vehicle's
-`perf`. Every type shares one acceleration curve shape -- flat near a stop
+`vehicles/performance.js` gives every car acceleration and braking that vary by
+what is being driven: the player reads these limits through on/off pedals, and
+traffic's drivers through analog feet (`vehiclePerf` is memoized per
+type:subtype, because the calibration below is a search -- fine run once for the
+player, ruinous re-run for every car a block spawns). Every type shares one
+acceleration curve shape -- flat near a stop
 (`PERF_REFERENCE_ACCEL` below `PERF_LOW_SPEED`, roughly traction-limited) then
 falling as `1/speed` above it, the constant-power region a real engine is in once
 it's past peak torque, which is what makes 0-20mph always come quicker than an
@@ -430,15 +432,110 @@ way `corvette.js` itself picks a body.
 
 ## Traffic
 
-`traffic.js` is the other cars. A car in traffic is not a thing standing at a
-place, the way a building is -- it is a position *on a street*: which street, how
-far along it, and which of the two ways it points. World coordinates are derived
-from that every frame and never stored as the truth. That one decision is what
-makes a curve free (the car rides a circle of a slightly different radius; the
-lane offset square to the direction of travel *is* radial on an arc, so there is
-no special case) and an intersection a single assignment. `pos` is measured from
-whichever end that car started at, so it always runs 0 to length and none of the
-arithmetic branches on direction.
+`traffic.js` is the other cars, each with a driver at the wheel. The car's world
+pose -- `cx, cy, angle, speed`, plain Numbers, so sub-foot precision comes free
+-- is the truth now, integrated exactly the way the player's is: heading and
+speed move the car and nothing snaps it to the road. The street the car is on is
+only its driver's *intention*: the lane centreline they are trying to hold and
+the route they mean to take. `pos` is kept as the true arc-length projection of
+the car onto that centreline by a cheap per-frame Newton step (advance by the
+along-track component of the offset from the current reference, re-read the
+reference there), measured from whichever end the car entered at so it runs 0 to
+length and nothing branches on direction; `dir` is +1 travelling from `(x1,y1)`
+toward `(x2,y2)`.
+
+The driver is deliberately nothing cleverer than a few old-fashioned control
+loops, each with its constants rolled per driver (`makeDriver`) so the fleet has
+personalities:
+
+- **Steering** is one PID on cross-track error `e`, the signed feet between the
+  car and its lane centreline. The derivative is taken analytically -- de/dt is
+  exactly `speed * sin(heading error)` -- which doubles as heading damping and is
+  what keeps the loop stable when e is small but the car points the wrong way.
+  Path curvature is fed forward (`speed * curv` is exactly the turn rate that
+  holds the arc), so the PID only ever corrects mistakes, and the integral term
+  trims the residual pull of a long curve. Steering authority is the player's
+  own: `MAX_TURN_RATE`, scaled away below 20 ft/s, and the command lands in
+  `c.steer` so the front wheels visibly turn. Skill maps onto the loop's damping
+  ratio (`zeta = 0.3 + skill`): the visibly drunk driver is an underdamped one,
+  plus a slow Ornstein-Uhlenbeck wander in where they believe lane-centre is.
+  Skill is skewed good, and anything longer than `HEAVY_LENGTH` gets a floor --
+  whoever is driving the bus, it is not the drunk. A driver far out of their lane
+  also slows down (the steering-to-speed crosstalk), which is both "having
+  trouble on this curve" and what stops a drunk swerving at 50.
+- **Speed** chases the minimum of everything the driver can see coming: their
+  own cruise preference (triangular around 35mph, rare tails at 20 and 60,
+  heavies capped at 45), comfortable lateral g on the arc they are riding, and
+  planned slow-downs ahead. Approaches to a corner or a stop line brake on the
+  *required* deceleration, `(vGoal^2 - v^2)/2d`, once it reaches comfort level
+  -- chasing the sqrt speed profile through the proportional loop instead always
+  lags it, and a corner entered 15 over is exited through the far hedge; braking
+  on the requirement engages at exactly the right distance, holds ~`aComf` all
+  the way down, and nobody halts 80ft short of anything. The command is finally
+  clamped to the vehicle's own performance envelope (`curveAccel` and
+  `brakeDecel`, vehicles/performance.js): analog feet, real engine and brakes,
+  so traffic's Countach genuinely out-accelerates traffic's cement truck.
+- **Following** is a PD loop on the gap to the car ahead (P on distance against
+  `minGap + headway * speed`, D on closing speed), fed measurements a beat late:
+  each driver has a reaction time and reads the gap as it was that long ago
+  (a per-car ring of timestamped samples). The delay is where stop-and-go waves
+  come from -- a queue moves off one driver at a time, not all at once. The
+  player's car is sensed geometrically (it is on no street) and joins this loop
+  as just another leader: traffic follows you, brakes behind you, queues behind
+  you when you park in a lane.
+
+Routes are decided early: `planExit` runs once on entering a street and picks
+the exit (`pickExit`, still "any street but the one I came in on", U-turns only
+at dead ends) *and* the exact corner to drive -- a fillet arc tangent to both
+lane centrelines (`makeTurnPlan`). The arc is the whole trick of intersections:
+asking the steering loop to jump straight from one street's lane to the next's
+turns every right turn into a wide J-swing, because at the handoff the new
+lane's nearest point is already past the node and the raw error points the
+wrong way. On the arc the reference is the radial projection onto the circle,
+tracked by the same PID with the same feedforward, so e stays small all the way
+round; sharp corners get tight slow arcs (never under full-lock radius,
+`R_MIN`), gentle ones fast sweeping arcs, lefts come out wider than rights and
+cross the middle of the box with nothing choosing that, and a dead-end U-turn
+is half a circle to the left that swings a whisker wide and gets reeled back
+in. Deciding at entry is also what lets the speed loop ease off half a block
+before the corner. Rolling past the arc's far end lands the car on its new
+street (`switchStreet`), pos seeded by projection.
+
+Stop signs are obeyed (see Signs): an approach whose slot is signed gets the
+required-deceleration treatment to a stop line just short of the box, a beat of
+dwell once stopped (`pause`), and then -- there being no cross-traffic logic
+yet, by choice -- the driver simply goes. Queues at a sign discharge one
+reaction time apart, which is the waves mechanism again. Cars on conflicting
+paths pass through each other in the box; merge overlaps resolve within a
+couple of seconds because the follower sees a leader at negative gap and stands
+on the brakes. The one conflict drivers do react to is the head-on: an oncoming
+car on the same street more than a foot over the centreline (`centerOff`, kept
+on every car for exactly this check), or the player pointed at them in their
+lane. The response is a bias on where lane-centre *is* (`EVADE_BIAS`, so the
+same steering loop handles dodge and recovery), emergency braking scaled by
+time-to-collision, and a honk.
+
+Honks are the decorative hook, deliberately unpolished: any evasion, and any
+braking near the vehicle's maximum, pushes `{x, y, t}` into `honks` (per-car
+cooldown), and `drawHonks` -- called by `drawScene` after everything else --
+draws rising, fading, slightly cockeyed red "HONK!" text in Comic Sans over the
+spot. Expired honks are culled in `updateTraffic`, not the draw pass, so a page
+that never draws doesn't accumulate them.
+
+Cars are born mid-block already rolling, and never faster than the corner or
+stop line already ahead of them can be comfortably braked for -- a car dropped
+at cruise speed 20ft before a 90-degree turn cannot make it, and blows through
+the intersection sideways trying. A car that ends up hopelessly far off the
+road (80ft of cross-track, a lost drunk) or runs off the edge of the built map
+is quietly forgotten.
+
+Measured over 60 simulated seconds of a 400-street city: good drivers hold
+lane to a mean 0.2ft on straights and curves and 0.4ft through corner arcs; the
+worst hold about 1ft with excursions to 10; 0.07% of car-frames are off the
+pavement entirely (the drunks, briefly); every stop-sign stop lands within
+2.4ft of the line; no NaN ever reaches a pose. The whole update is ~1.3ms at
+135 live cars, dominated by the O(n^2) sensing pass, which is fine at the
+counts `TRAFFIC_RADIUS` allows.
 
 Cars are seeded onto a block as it is built, from `pushStreet`, the same moment
 and the same way its lots are -- but unlike the lots they do not stay: a block's
@@ -449,13 +546,6 @@ two cars going opposite ways are in different lanes and cannot be in each other'
 way; within a lane, sorting the random offsets and then pushing each car past the
 ones before it by their own lengths plus a gap spaces them exactly, and the
 tightest arrangement the shuffle can reach is still one clear gap.
-
-They drive at a flat 25mph and stop for nothing -- not the turn, not the car in
-front, not the intersection, which they are simply through the far side of on the
-same frame, pointing whichever way they picked. The one rule at a node is no
-U-turns, which is just "any street here except the one I arrived on"; a dead end
-is the only place there is no other choice, and over 15,000 crossings every U-turn
-taken was at one.
 
 Everything within `TRAFFIC_RADIUS` (1500ft) of the player is simulated whether it
 is on screen or not, and everything past it is deleted outright -- which is what
@@ -478,10 +568,9 @@ player's car sorts through that same line too -- `drawScene` takes an optional
 `player`, and `drawLots` pushes it into the same `visible` array as the traffic
 and the lots, as a plain `{ vehicle, cx, cy, angle, steer }` -- so a house you
 drive past, or another car crossing in front of you, hides it exactly as it would
-hide anything else standing there; the one thing that makes it not just another
-traffic entry is that it carries `steer`, so its wheels turn with the player's
-input where a traffic car's never do (`drawGroundVehicle` falls back to 0 for
-anything that doesn't set it). Cars drop out at `HOUSES_MIN_ZOOM`, with the
+hide anything else standing there. Traffic sets `steer` too now -- its PID's own
+wheel angle -- so every car's front wheels turn (`drawGroundVehicle` still falls
+back to 0 for anything that doesn't set it). Cars drop out at `HOUSES_MIN_ZOOM`, with the
 houses: below that only the skyline is left, and there are no cars in a skyline.
 
 Adding traffic changed what a given `?seed` builds. Spawning draws from
@@ -492,9 +581,9 @@ still deterministic, just not the same city an old screenshot shows. Suppress
 ## Signs
 
 `signs.js` is the first of what will be more than one kind of sign; for now it is
-only stop signs, and they have no effect on traffic at all -- every car in
-traffic.js still drives through every intersection exactly as before, ignoring
-every sign here entirely. This is purely what the driver sees.
+only stop signs. Traffic obeys them: a driver approaching a node reads its
+signage for their own arrival slot (`stopSignAhead`, traffic.js) and genuinely
+stops at it. The player remains free to run every one.
 
 A node -- not a street -- owns its own signage, the same way it will one day own
 a traffic light: `updateNodeSigns(node)` decides, once, how the intersection
