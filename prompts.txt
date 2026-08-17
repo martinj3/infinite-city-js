@@ -444,3 +444,15 @@ Unlike the generic vehicle types we did before, these won't have any randomness 
 
 These vehicles will be quite rare to ever see in the final game, and so we'll essentially never have to draw more than one on the screen at a time (in the real game).
 This means we can spend relatively a lot of polygons getting their shapes and details accurate, making them look really nice and detailed and realistic!  Which is why I chose you, Fable, the largest model for this part, to add my favorite vehicles to the game!
+
+---
+
+Don't change any code, just do some research online.  Determine the overall dimensions of these 4 vehicles (length, width, height, wheelbase):
+Lamborghini Countach.
+Enzo Ferrari.
+Jeep Wrangler, two door "TJ" model.
+60's fastback Ford Mustang.
+
+Also, find and show me several images of each, from a few different angles (be sure to accurately label which is which).
+
+And, find the most popular factory colors for each.  Or, if definitive data isn't available on that, then make an estimate based on what colors you see most online.
