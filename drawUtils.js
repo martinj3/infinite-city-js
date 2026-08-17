@@ -145,6 +145,21 @@ function translateDrawable(drawable, dx, dy) {
     }
 }
 
+// How tall a drawable stands, in feet: the highest point anywhere in the tree.
+// Rotating and translating a tree into place never touches z, so this is the same
+// answer before and after it is baked into the world.
+function drawableTop(drawable) {
+    let top = 0;
+    for (const poly of drawable.polys) {
+        for (const p of poly.pts) if (p.z > top) top = p.z;
+    }
+    for (const child of drawable.children) {
+        const t = drawableTop(child);
+        if (t > top) top = t;
+    }
+    return top;
+}
+
 // Draw a drawable tree recursively: own polys first, then children sorted
 // by depth (far-to-near), each drawn completely before the next.
 // projectAndDrawFn(polys, ox, oy): renderer-provided function to project,

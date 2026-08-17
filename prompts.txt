@@ -529,3 +529,13 @@ Pick a realistic set of possible colors for them, with some random variation aro
 When they are 2 or more floors, the second floor facing the street can have a sign (text on a background color distinct from the building color.  They have signs 50% of the time, when a sign is possible (not blocked by an auxiliary wing prism, and 2+ floors).  
 
 For the sign text, make up a list of 50 plausible sounding corporate, store, and business and office plaza names.  Placement should be handled similarly to churches, only when there's space.  Churches are a little too common right now.  These low rise office buildings should be more common than churches, but much less common than houses.
+
+---
+
+I suspect the taller of these buildings, 4 to 6 stories high, are likely to cause problems for the player as they obscure the street the player is driving on.  
+
+So, if any building (church, house, or low rise office building) exceeds, say, 30ft in height, then make it mostly transparent (try 25% opacity maybe) when it's "below" the street from the player's perspective, given the current view rotation.  Streets that go nearly vertical up the players screen can probably fully draw them on both sides of the street.  But if it gets more than a little off from vertical, need to do this transparency effect.  
+
+Ideally this logic should be mostly shared among the different building types.  
+
+Can show this effect in streetTest.html as well, for easier testing.

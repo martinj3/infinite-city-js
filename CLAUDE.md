@@ -60,6 +60,42 @@ polygon sorting at the middle of the roof, so a unit at the far end sorts before
 it and gets painted over. A child drawable is always drawn after its parent's own
 polys, which is the fix.
 
+### Seeing past the tall ones
+
+A building on the near side of a street stands between the camera and the road,
+and once it is more than a couple of storeys it hides the street you are driving
+on. `drawLots` paints such a building at `BUILDING_FADE_ALPHA` instead. Nothing in
+this is per-type: `buildLot` measures every building the same way, with
+`drawableTop()`, so a new building type is covered the day it is written.
+
+`lotHidesStreet()` is the rule, and it is three tests, each ruling out a different
+way of being harmless. It is tall enough to reach over a road at all
+(`BUILDING_FADE_MIN_HEIGHT`, measured once at generation and kept as `lot.tall`).
+It is on the near side -- the down-screen component of "away from the street" is
+positive, so the building is painted over its own roadway rather than away from
+it. And its street runs far enough from vertical on screen (`BUILDING_FADE_MIN_SKEW`):
+a road heading straight up the screen has its buildings stacked to the left and
+right of it, never across it, however tall they are. Because the vertical squash
+pulls every heading toward the horizontal, that last one is a much tighter
+tolerance in the world than it looks -- about ten degrees either side of the one
+heading that projects straight up.
+
+All of it is screen geometry, so it turns on the view rotation and not on where
+the player is, which is what lets `streetTest.html` show the identical effect (T
+toggles it, `?fade=0` starts it off). The two directions it needs are baked into
+the lot at placement: `lot.nx, lot.ny` is "away from the street", read straight off
+the `rotAngle` the lot was rotated by, and the street's own direction is at right
+angles to that. Curves need no special case.
+
+Swept a full turn over every tall lot in a 500-street city, each one fades across
+exactly one contiguous arc -- there is no heading at which it chatters -- and
+never on the far side, and never while its street runs up the screen.
+
+Two things the see-through pass gets right by accident and shouldn't be
+"fixed": the building's far walls show through its near ones, which is what makes
+it read as a ghost rather than as flat paint, and `ctx.save()` inside
+`drawPanelText` preserves `globalAlpha`, so a faded office's sign fades with it.
+
 A sign is a board across the second storey of the front wall, on half the
 buildings that can have one (two storeys, nothing standing in front), and it is
 the same lettering machinery a box truck's flank uses -- `makeFrontPanel()` for

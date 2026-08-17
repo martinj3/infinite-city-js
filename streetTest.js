@@ -9,10 +9,15 @@
 //   ?angle=-45     initial view rotation, in degrees
 //   ?tilt=0.5      initial vertical squash (0.25 - 0.75)
 //   ?x=0&y=0       initial camera position, in feet (default: center of the city)
+//   ?fade=0        start with tall buildings solid instead of see-through
 //
 // Keys: arrows pan, +/- zoom, Q/E rotate, R/F tilt, 0 refit the whole city,
 //       G regenerate (new seed), space grow +100 streets, S save a PNG screenshot,
-//       H toggle the HUD.
+//       H toggle the HUD, T toggle see-through tall buildings (?fade=0 starts off).
+//
+// T is the one worth playing with alongside Q/E: hold Q and watch the near side of
+// each street go see-through as it swings away from vertical, which is the whole
+// point of the effect and hard to judge from a still.
 
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
@@ -35,6 +40,7 @@ let camX = numParam('x', 0), camY = numParam('y', 0);
 VIEW_ANGLE = numParam('angle', VIEW_ANGLE * 180 / Math.PI) * Math.PI / 180;
 Y_SCALE = Math.max(Y_SCALE_MIN, Math.min(Y_SCALE_MAX, numParam('tilt', Y_SCALE)));
 // Without an explicit zoom the view is fitted to the whole city once it is built
+buildingFade = numParam('fade', 1) !== 0;
 const zoomGiven = params.has('zoom');
 if (zoomGiven) PX_PER_FT = Math.max(PX_PER_FT_MIN, Math.min(PX_PER_FT_MAX, numParam('zoom', 1)));
 
@@ -118,6 +124,7 @@ addEventListener('keydown', e => {
         if (e.key === 's' || e.key === 'S') saveScreenshot();
         if (e.key === 'h' || e.key === 'H') showHud = !showHud;
         if (e.key === '0') fitToCity();
+        if (e.key === 't' || e.key === 'T') buildingFade = !buildingFade;
     }
     keys[e.key] = true;
 });
@@ -189,9 +196,10 @@ function drawHud() {
         `seed ${seed === null ? '(random)' : seed}   built in ${stats.ms.toFixed(0)}ms`,
         `zoom ${PX_PER_FT.toFixed(2)} px/ft   rot ${(normA(VIEW_ANGLE) * 180 / Math.PI).toFixed(0)}deg   tilt ${Y_SCALE.toFixed(2)}`,
         `cam ${camX.toFixed(0)}, ${camY.toFixed(0)} ft`,
+        `see-through tall buildings ${buildingFade ? 'on' : 'off'} (over ${BUILDING_FADE_MIN_HEIGHT}ft)`,
         '',
         'arrows pan   +/- zoom   Q/E rotate   R/F tilt   0 fit',
-        'G regen   space +100 streets   S screenshot   H hide'
+        'G regen   space +100 streets   S screenshot   T see-through   H hide'
     ];
     ctx.fillStyle = 'rgba(0,0,0,0.55)';
     ctx.fillRect(8, 8, 340, 18 * lines.length + 14);

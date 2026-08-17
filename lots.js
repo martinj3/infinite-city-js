@@ -83,6 +83,9 @@ const CURVE_LOT_GAP = 15;   // ft of slack between lots on a curve, in place of 
 const BLOCKER_ARC_STEP = 40; // ft of arc per street-blocker rect on a curve
 const LOT_TOUCH_EPS = 0.05; // rectangles closer than this to touching are not "overlapping"
 const HOUSES_MIN_ZOOM = 0.6; // below this houses are sub-pixel; skip them entirely
+// Off switch for the see-through effect, so a test page can put a solid city and
+// a see-through one side by side.
+let buildingFade = true;
 
 const rangeRand = ([lo, hi]) => lo + Math.random() * (hi - lo);
 
@@ -135,7 +138,41 @@ function buildLot(lot, rotAngle) {
     const drawable = generateBuilding(lot.type, lot);
     rotateDrawable(drawable, rotAngle, lot.width / 2, lot.depth / 2);
     translateDrawable(drawable, lot.cx - lot.width / 2, lot.cy - lot.depth / 2);
+    // Measured once, here, so every building type is covered by whatever the
+    // renderer decides to do about tall ones -- no type has to declare a height.
+    lot.tall = drawableTop(drawable) > BUILDING_FADE_MIN_HEIGHT;
+    // Which way is "away from the street" for this lot. rotAngle is defined as
+    // the rotation that sends lot-local +y there, so this falls out of it, and it
+    // is right on a curve as readily as on a straight block.
+    lot.nx = -Math.sin(rotAngle);
+    lot.ny = Math.cos(rotAngle);
     return drawable;
+}
+
+// Would this lot's building stand between the camera and its own street? Three
+// things have to be true, and each rules out a different way of being harmless:
+//
+//   - it is tall enough to reach over the road at all (lot.tall)
+//   - it is on the near side: its street is BEHIND it up the screen, so the
+//     building is painted over the road rather than away from it
+//   - its street runs far enough from vertical on screen. A road heading straight
+//     up the screen has its buildings stacked to the left and right of it, never
+//     across it, however tall they are.
+//
+// All of it is screen geometry -- which side of the street, and which way the
+// street runs -- so it depends on the view rotation and not on where the player
+// is. That is what lets streetTest.html show exactly the same effect.
+// The view scalars are passed in rather than read per lot: this runs for every
+// building on screen, every frame.
+function lotHidesStreet(lot, cosV = getCosV(), sinV = getSinV()) {
+    if (!lot.tall) return false;
+    // Down-screen component of "away from the street": positive means the lot is
+    // nearer the camera than its own roadway.
+    if (lot.nx * sinV + lot.ny * cosV <= 0) return false;
+    // The street runs along the lot's frontage, at right angles to that.
+    const sx = lot.ny * cosV + lot.nx * sinV;
+    const sy = (lot.ny * sinV - lot.nx * cosV) * Y_SCALE;
+    return Math.abs(sx) > BUILDING_FADE_MIN_SKEW * Math.hypot(sx, sy);
 }
 
 // The strip a street reserves for itself on each side: centerline out to where its
@@ -335,5 +372,14 @@ function drawLots(camX, camY, vl, vr, vt, vb) {
 
     const pAndD = (polys, ox, oy) => projectAndDraw(polys, ox, oy, camX, camY, true);
     const pDepth = (poly, ox, oy) => polyDepth(poly, ox, oy, camX, camY);
-    for (const lot of visible) drawDrawableTree(lot.house, 0, 0, pAndD, pDepth);
+    const cosV = getCosV(), sinV = getSinV();
+    for (const lot of visible) {
+        // A building in the way is painted see-through rather than skipped: you
+        // still want to know it is there, and its far walls showing through its
+        // near ones is what makes it read as a ghost instead of flat paint.
+        const fade = buildingFade && lotHidesStreet(lot, cosV, sinV);
+        if (fade) ctx.globalAlpha = BUILDING_FADE_ALPHA;
+        drawDrawableTree(lot.house, 0, 0, pAndD, pDepth);
+        if (fade) ctx.globalAlpha = 1;
+    }
 }

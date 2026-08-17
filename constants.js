@@ -64,6 +64,27 @@ const MAX_TURN_RATE = 3;
 // a key doing the same job, so it gets a gain the keyboard doesn't.
 const TOUCH_STEER_GAIN = 1.5;
 
+// --- Seeing past tall buildings ---
+// A building on the near side of a street stands between the camera and the road,
+// and once it is more than a couple of storeys it hides the very street you are
+// driving on. Such a building is painted see-through instead (see lotHidesStreet).
+// 35ft rather than the 30 you might guess from storey heights, because what is
+// measured is the top of the building and a house's is the tip of its roof. Over a
+// whole city: 30ft ghosts one house in nine -- ordinary two-storey ones whose gable
+// happens to peak past it, so two houses that look alike get drawn differently --
+// while taking in no more offices (a two-storey office tops out around 30 either
+// way). 35ft ghosts one house in thirty, and those really are the tallest on the
+// block. Every church is over 45ft whatever you pick.
+const BUILDING_FADE_MIN_HEIGHT = 35;
+const BUILDING_FADE_ALPHA = 0.25;
+// How far from vertical the street has to run on screen before its near side is
+// in the way at all. Measured as |sin| of the angle between the street's screen
+// direction and straight up: at zero the road runs up the screen and its
+// buildings stand to either side of it, hiding nothing. Because the view is
+// squashed vertically, this is a much smaller angle in the world than it looks --
+// about ten degrees off the one heading that projects straight up the screen.
+const BUILDING_FADE_MIN_SKEW = 0.35;
+
 const CURVE_PROB = 0.25;
 const CURVE_ANGLES = [30, 45, 60, 90].map(d => d * Math.PI / 180);
 const CURVE_RADII = [DEFAULT_BLOCK_LEN];
