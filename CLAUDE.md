@@ -26,7 +26,8 @@ shares -- the type registry (`registerVehicle` / `generateVehicle` /
 `makeTruck()` and `drawVehicle()` -- and one file per body style holds the rest:
 `sedan.js`, `pickupTruck.js`, `suv.js`, `van.js`, `policeCar.js`, `cityBus.js`,
 `schoolBus.js`, `deliveryVan.js`, `fireTruck.js`, `trashTruck.js`,
-`cementTruck.js`, `vwBeetle.js`, `vwMinibus.js`, `corvette.js`.
+`cementTruck.js`, `vwBeetle.js`, `vwMinibus.js`, `corvette.js`, `countach.js`,
+`enzo.js`, `wrangler.js`, `mustang.js`.
 The player gets one at random, weighted by the `weight` each type registers, so
 SUVs and cars are the common case, buses and work trucks the rare ones, and the
 classics rarer still.
@@ -115,9 +116,10 @@ the body's top edge, not the cab, for exactly that reason -- its body stands tal
 than its cab, which is also why a truck's glass joins the body batch instead of
 the always-on-top glass pass: the body would show through it from behind).
 
-The four classics -- the Beetle, the splitscreen Minibus, and `corvette.js`
+The classics -- the Beetle, the splitscreen Minibus, `corvette.js`
 holding both a C3 and a C7 behind one registered type (picked 50/50, recorded in
-`v.subtype` like the van's) -- are real cars, not families: every dimension is
+`v.subtype` like the van's), and the second batch below -- are real cars, not
+families: every dimension is
 the published one and nothing about the shape is random. Only the paint varies,
 via `pickWeighted()`, which unlike `pickColorFrom()` adds no jitter, from each
 car's factory palette weighted by real popularity (the C7's straight from
@@ -134,6 +136,27 @@ high in its diffuser) -- a small outward push cannot win against the z term. And
 a custom glass pane must walk its bottom edge first, the way `makeCarLike()`'s
 do; wound from the top edge its normal points into the car, and the pane shows
 through from the wrong side instead of its own.
+
+The second batch of classics runs on the same rules. The Countach (QV wide
+body, always with the V wing) and the Enzo are body-and-wings again -- the
+Countach's flares are flat-topped trapezoids, drawn with a ruler like the real
+ones, and the Enzo's central slab really is narrow because it is the F1 nose
+cone, with the pontoon fenders and the radiator dips beside it. The Mustang
+fastback is slab-sided, so its split is centre-and-shoulders instead:
+full-length shoulder slabs carry the level beltline and the quarter kick, and
+the fastback recess runs between them. The Wrangler TJ is the one with option
+axes: `v.subtype` is 'hardtop' or 'open' 50/50 (top and doors off shows the
+sport bar, the seats, and a tub whose top edge dips through the door opening,
+with a dark interior quad floating on the tub top -- the pickup-bed trick), and
+a third of them set `v.lifted`, which raises every body z by half a foot on
+bigger wheels and changes nothing else. Its grille is the hood slab's own front
+face, wearing trim slots. One more winding lesson from that build: a standing
+windscreen with nothing behind it needs a second, rear-facing pane, or from
+behind it reads as a painted metal plate -- one-sided glass is only ever enough
+when some body face closes the view through it. And the Enzo's colour table is
+nearly a census where the Countach's and the Wrangler's are estimates: 399
+documented Enzos against no production-by-colour book at all for the other two
+-- prefer real counts (Mustang's 1965 books, the C7's) whenever they exist.
 
 Detail is chosen by `PX_PER_FT` alone (`VEHICLE_SOLID_MIN_ZOOM`,
 `VEHICLE_WHEELS_MIN_ZOOM`, `VEHICLE_ROOF_MIN_ZOOM`, `VEHICLE_GLASS_MIN_ZOOM`), down
