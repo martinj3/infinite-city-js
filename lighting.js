@@ -19,15 +19,24 @@ function computeNormal(pts) {
 
 // Adjust an HSL color string based on how much the face normal aligns with the light.
 // Returns a new HSL string. Lightness is shifted by up to ±18%, clamped to [10, 95].
+//
+// The parse is memoized: this runs for every polygon every frame, and the regex +
+// parseFloat calls dominated the per-poly cost. The cache is keyed on the color
+// string alone (a small finite set), so the output stays exact per (color, normal).
+const _colorParseCache = new Map();
 function applyLighting(hslStr, normal) {
-    const m = hslStr.match(/hsl\(\s*(-?[\d.]+),\s*([\d.]+)%,\s*([\d.]+)%\s*\)/);
-    if (!m) return hslStr;
-    const h = parseFloat(m[1]);
-    const s = parseFloat(m[2]);
-    const l = parseFloat(m[3]);
+    let c = _colorParseCache.get(hslStr);
+    if (c === undefined) {
+        const m = hslStr.match(/hsl\(\s*(-?[\d.]+),\s*([\d.]+)%,\s*([\d.]+)%\s*\)/);
+        c = m && {
+            l: parseFloat(m[3]),
+            prefix: `hsl(${Math.round(parseFloat(m[1]))}, ${Math.round(parseFloat(m[2]))}%, `,
+        };
+        _colorParseCache.set(hslStr, c);
+    }
+    if (!c) return hslStr;   // not an hsl() color: pass through unlit
 
     const dot = normal.x * LIGHT_DIR[0] + normal.y * LIGHT_DIR[1] + normal.z * LIGHT_DIR[2];
-    const newL = Math.max(10, Math.min(95, l + dot * 18));
-
-    return `hsl(${Math.round(h)}, ${Math.round(s)}%, ${Math.round(newL)}%)`;
+    const newL = Math.max(10, Math.min(95, c.l + dot * 18));
+    return c.prefix + Math.round(newL) + '%)';
 }

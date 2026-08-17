@@ -468,3 +468,23 @@ Unlike the generic vehicle types we did before, these won't have any randomness 
 
 These vehicles will be quite rare to ever see in the final game, and so we'll essentially never have to draw more than one on the screen at a time (in the real game).
 This means we can spend relatively a lot of polygons getting their shapes and details accurate, making them look really nice and detailed and realistic!  Which is why I chose you, Fable, the largest model for this part
+
+---
+
+Take a look at the drawing and rendering code in render3d.js, I think is the file?
+
+There's still an issue with the Z-depth sorting, draw order, whatever, which smaller AI models have failed to find a good, simple, elegant way to perfectly fix.  Shows up most prominently with churches and two or three story houses with wings.
+
+Thinking about it myself (I'm no expert) but it seems to me, since we're drawing as a 2d isometric view (similar to 2d isometric RPG games like Diablo), it might be possible and perfect to simple ignore the height above terrain (can't remember our choice of axes, if we called that Z), and just sort based on projecting everything down onto the flat terrain/ground?
+
+Said another way, possibly equivalent:
+However the user has the camera rotated, it should always be correct to start drawing polys at the top of the user's screen, and work our way down towards the bottom of the screen?  Not sure it's possible for anything to every be drawn in an incorrect order, if we do it that way?
+Then the flat decorative "detail polygons" like windows are drawn after their parent polygon.
+
+Maybe not, you're the expert, if you know a better, more elegant fix that handles all cases, I'm all ears.
+
+Try to fix it (check a few screenshot samples to make sure you didn't break anything else in the process).
+
+Also, someday we may swap out the renderer for some real 3d game engine (not today), so try to keep the polygon generation compatible with that case (assuming it is now, if it's not, don't worry about fixing that now).
+
+Also, while you're digging into the rendering logic, see if there's any obvious opportunity for low-effort, high-reward optimization, to improve performance.  If so, do it.

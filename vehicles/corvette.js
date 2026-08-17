@@ -247,9 +247,10 @@ function generateCorvetteC7() {
         { x: -hl - 0.03, y: -2.4, z: 1.1 },
         { x: -hl - 0.03, y:  2.4, z: 1.1 },
     ], color: CORVETTE_DARK_TRIM });
-    // Centred a little high in the diffuser: the depth sort orders coplanar
-    // polys by average z (see polyDepth), so this is what keeps the exhaust
-    // painted over it from every heading.
+    // Prouder of the tail than the diffuser (-0.07 against -0.03): the depth
+    // sort orders polys by ground footprint (see polyDepth), so standing
+    // further off the face is what keeps the exhaust painted over it from
+    // every heading.
     trim.push({ pts: [
         { x: -hl - 0.07, y:  0.55, z: 0.78 },
         { x: -hl - 0.07, y: -0.55, z: 0.78 },

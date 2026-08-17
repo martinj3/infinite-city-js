@@ -69,11 +69,11 @@ function generateVwMinibus() {
     // The nose. Everything here lies on the lower front face, which runs
     // (noseX+0.3, 2.2) up to (noseBeltX, beltZ). The V is the upper colour
     // dipping below the belt; the roundel sits in its upper field with the
-    // headlights just outside its arms. The depth sort orders coplanar polys by
-    // average z (see polyDepth), so each layer that must paint over another is
-    // centred a little higher than it -- the roundel above the V's average, the
-    // blue heart a hair above the white ring -- which the real bus's face
-    // conveniently agrees with.
+    // headlights just outside its arms. The depth sort orders polys by ground
+    // footprint (see polyDepth), so each layer that must paint over another
+    // stands a little prouder of the nose than it -- the V +0.05, the roundel
+    // +0.10, the blue heart +0.15 -- an outward push is toward the camera
+    // whenever the face it decorates is visible.
     const trim = [];
     const noseAt = z => noseX + 0.3 + (noseBeltX - noseX - 0.3) * (z - 2.2) / (beltZ - 2.2);
     trim.push({ pts: [

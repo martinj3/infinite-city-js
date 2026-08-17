@@ -552,10 +552,19 @@ function makeTruck(type, spec) {
     const body = makeExtrudedProfile(profile, -cabHw, cabHw, color);
 
     // Frame rails from the tail to under the cab, narrower than the body, so the
-    // gap between cab and apparatus shows chassis rather than daylight.
+    // gap between cab and apparatus shows chassis rather than daylight. Built in
+    // short segments, not one prism: the depth sort orders a polygon by its
+    // ground-footprint centroid, and one flank face spanning most of the truck
+    // sorts as "mid-truck", letting it paint over apparatus that overhangs its
+    // ends (the mixer's drum). Short segments keep every face's centroid local;
+    // the seams between them are interior faces nobody ever sees.
     const frameHw = hw * (spec.frameWFrac || 0.55);
-    body.push(...makeRectangularPrism(-hl + 0.3, -frameHw, clearance,
-        cabBackX - (-hl + 0.3) + 1.0, frameHw * 2, chassisZ - clearance, TRUCK_FRAME_COLOR));
+    const frameX0 = -hl + 0.3, frameLen = cabBackX - frameX0 + 1.0;
+    const frameSegs = Math.max(1, Math.ceil(frameLen / 8));
+    for (let i = 0; i < frameSegs; i++) {
+        body.push(...makeRectangularPrism(frameX0 + frameLen * i / frameSegs, -frameHw,
+            clearance, frameLen / frameSegs, frameHw * 2, chassisZ - clearance, TRUCK_FRAME_COLOR));
+    }
 
     // Every truck leads with a heavy steel bumper.
     const bumper = vehRand(spec.bumper || [0.4, 0.6]);

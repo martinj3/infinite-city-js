@@ -77,8 +77,9 @@ function generateEnzo() {
     // Trim. The radiator mouths are the dips beside the cone: one dark quad on
     // each pontoon's front face. The side intakes slash the flank ahead of the
     // rear wheel. The tail gets its four round lights, the full-width diffuser,
-    // and the twin exhausts centred high in it (the depth sort orders coplanar
-    // polys by average z -- see polyDepth -- so high is what keeps them on top).
+    // and the twin exhausts prouder of it (-0.07 against the diffuser's -0.03:
+    // the depth sort orders polys by ground footprint -- see polyDepth -- so
+    // standing further off the tail is what keeps them on top).
     const trim = [];
     for (const side of [-1, 1]) {
         const yc = side * (bodyHw + (hw - bodyHw) / 2);

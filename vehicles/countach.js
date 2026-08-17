@@ -93,9 +93,10 @@ function generateCountach() {
 
     // Trim, all lying on body faces. The NACA duct slashing the door, the
     // full-width louvred engine grille on the kamm face with the taillight
-    // clusters over it and the exhausts below -- the exhausts centred a touch
-    // high in their recess, since the depth sort orders coplanar polys by
-    // average z (see polyDepth).
+    // clusters over it and the exhausts below -- the exhausts a touch prouder
+    // of the tail than the grille (-0.07 against -0.04), since the depth sort
+    // orders polys by ground footprint (see polyDepth) and prouder of the face
+    // is nearer the camera.
     const trim = [];
     for (const side of [-1, 1]) {
         const y = (bodyHw + 0.04) * side;

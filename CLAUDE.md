@@ -129,10 +129,16 @@ extrusions riding outboard -- the Beetle's arches under its headlights, the C3's
 peaks above its own hood line, which is the whole coke-bottle front view. The
 bus is two stacked extrusions split at the beltline, one per colour of its
 two-tone, and the nose V is a trim triangle with the roundel discs
-(`makeDiscX()`) on it. Two lessons those details taught: `polyDepth()` orders
-coplanar polys by average z, so a detail that must paint over another has to be
-*centred higher* on the face (the roundel above the V's centre, the C7's exhaust
-high in its diffuser) -- a small outward push cannot win against the z term. And
+(`makeDiscX()`) on it. Two lessons those details taught: the depth sort orders polys by their
+ground-footprint centroid alone (`polyDepth()` in render3d.js -- height doesn't
+count, or a tall far thing paints over a near low one), so a detail that must
+paint over another stands a little *prouder of its face* (the roundel prouder
+than the V, the C7's exhaust prouder than its diffuser) -- an outward push is
+toward the camera exactly when that face is visible, and an exact tie keeps
+batch order, later-pushed on top, since the sort is stable. Keep any single
+face's footprint short where something overhangs its ends: one flank polygon
+spanning most of a truck sorts as mid-truck and paints over the drum hanging
+past it, which is why `makeTruck()` builds its frame rails in segments. And
 a custom glass pane must walk its bottom edge first, the way `makeCarLike()`'s
 do; wound from the top edge its normal points into the car, and the pane shows
 through from the wrong side instead of its own.

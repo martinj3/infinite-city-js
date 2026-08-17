@@ -16,31 +16,54 @@ function project(wx, wy, wz, camX, camY) {
     ];
 }
 
-// Compute depth value for a single polygon (for sorting).
+// Depth value for painter's-algorithm sorting: the polygon's footprint projected
+// flat onto the ground, ignoring height entirely -- the average of the rotated
+// forward (down-screen) coordinate. In this projection a view ray only ever moves
+// AWAY along the ground as it climbs, so ground depth alone is occlusion order:
+// paint from the top of the screen downward. Height must NOT contribute, or a
+// tall far tower outsorts a near low roof (the old church/wing bug). Coplanar
+// stacked details (grilles, badges, taillights) order by their small outward
+// pushes, which move them toward the camera whenever their face is visible.
+// Units are feet of ground depth; only the ordering matters.
 function polyDepth(poly, ox, oy, camX, camY) {
-    const sp = poly.pts.map(p => project(p.x + ox, p.y + oy, p.z, camX, camY));
-    const avgScreenY = sp.reduce((s, p) => s + p[1], 0) / sp.length;
-    const avgZ = poly.pts.reduce((s, p) => s + p.z, 0) / poly.pts.length;
-    return avgScreenY + 2 * avgZ * PX_PER_FT;
+    const cosV = getCosV(), sinV = getSinV();
+    const wx = ox - camX, wy = oy - camY;
+    let d = 0;
+    for (const p of poly.pts) d += (p.x + wx) * sinV + (p.y + wy) * cosV;
+    return d / poly.pts.length;
 }
 
 // Project, backface-cull, depth-sort, and draw a batch of polygons.
+// The sort is stable (spec-guaranteed), so exact depth ties keep their batch
+// order: a detail pushed after the face it decorates still paints over it.
 function projectAndDraw(polys, ox, oy, camX, camY) {
+    const cosV = getCosV(), sinV = getSinV();
+    const halfW = canvas.width / 2, halfH = canvas.height / 2;
+    const oxc = ox - camX, oyc = oy - camY;
+
     const projected = [];
     for (const poly of polys) {
-        const sp = poly.pts.map(p => project(p.x + ox, p.y + oy, p.z, camX, camY));
+        const pts = poly.pts, n = pts.length;
+        const sp = new Array(n);
+        let depth = 0;
+        for (let i = 0; i < n; i++) {
+            const p = pts[i];
+            const dx = (p.x + oxc) * PX_PER_FT;
+            const dy = (p.y + oyc) * PX_PER_FT;
+            const ry = dx * sinV + dy * cosV;
+            sp[i] = [dx * cosV - dy * sinV + halfW,
+                     ry * Y_SCALE - p.z * PX_PER_FT + halfH];
+            depth += ry;
+        }
 
         // Backface culling: skip if screen-space cross product <= 0
         const cross = (sp[1][0] - sp[0][0]) * (sp[2][1] - sp[0][1])
                     - (sp[1][1] - sp[0][1]) * (sp[2][0] - sp[0][0]);
         if (cross <= 0) continue;
 
-        const normal = computeNormal(poly.pts);
+        const normal = computeNormal(pts);
         const litColor = applyLighting(poly.color, normal);
-        const avgScreenY = sp.reduce((s, p) => s + p[1], 0) / sp.length;
-        const avgZ = poly.pts.reduce((s, p) => s + p.z, 0) / poly.pts.length;
-        const depth = avgScreenY + 2 * avgZ * PX_PER_FT;
-        projected.push({ sp, color: litColor, depth });
+        projected.push({ sp, color: litColor, depth: depth / n });
     }
 
     projected.sort((a, b) => a.depth - b.depth);
