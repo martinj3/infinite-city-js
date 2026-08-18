@@ -761,3 +761,7 @@ For the same reason, perhaps we can shift the view centerpoint where the players
 All camera rotations should still happen about the players car, of course, and the players car should still remain in a fixed position on the screen.
 
 This last part can have a checkbox in the camera controls to toggle it on or off, but default to this new shifted player car draw position, on both mobile and desktop.
+
+Whoa, that's broken.  Camera rotation seems to apply differently to streets vs vehicles (whether the player uses the rotation controls, or the rotation during the intro sequence).  My car even ended up on the wrong side of the road, everyone was driving on the left, like in Britain!
+
+I thought that should've been a fairly simple change, just tweaking some constants mostly?  Apply the shift after the rotation maybe, and it becomes simple?  You are the larger model Opus, maybe you can do better than Sonnet...

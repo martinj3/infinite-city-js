@@ -223,34 +223,57 @@ function buildCameraFollowToggle() {
 buildCameraFollowToggle();
 
 // --- Car draw offset ---
-// Pins the car down and to the left of dead-centre rather than dead-centre
-// itself: a driver gets far more use out of a longer look at what's coming up
-// than out of the space behind the car, which is what mostly sat in the extra
-// room this claims. On by default, on both mobile and desktop, with a
-// checkbox in the camera panel (next to "follow car") to go back to
-// dead-centre. All rotation still happens about the car exactly as before --
-// this only moves where dead-centre itself sits on screen (CAM_OFFSET_X/Y,
-// added to the translate in applyCamera, drawing.js).
+// Draws the car left of, and below, dead centre rather than at it: a driver
+// gets far more use out of a longer look at what's coming up than out of the
+// space behind the car, which is mostly what sat in the room this claims. On
+// by default, on both mobile and desktop, with a checkbox in the camera panel
+// (next to "follow car") to go back to dead centre.
+//
+// Done by moving the *camera* in world space, not by nudging anything in
+// screen space. That matters: the ground and street markings are drawn through
+// the ctx transform applyCamera sets up (drawing.js), but vehicles and
+// buildings are drawn through render3d.js's project(), which computes screen
+// coordinates itself from canvas.width/2 and never sees that transform at all.
+// Offsetting one of those two paths moves the streets out from under the cars
+// -- far enough, at the driving zoom, to put every car a couple of lanes over.
+// Offsetting the camera instead is a single number both paths already read, so
+// they cannot disagree, and every existing camera consumer (the cull box, the
+// depth sort, drawHonks) stays correct for free.
+//
+// viewCamX/viewCamY are that camera: the world point sitting at true screen
+// centre, which is the car's own position shifted by however many feet put the
+// car where we want it on screen instead. dragToCamDelta (controls.js) is
+// already exactly that conversion -- screen pixels to the feet of camera
+// movement that slide the world by them -- so it does the unprojection,
+// rotation and Y_SCALE squash included.
 let carOffsetEnabled = true;
+let viewCamX = player.x, viewCamY = player.y;
 
-// Recomputed every frame rather than once, since the canvas can resize (a
-// phone rotating, a desktop window resizing) and touchDrive.shown/driveBarHeight()
-// can change once the pedal bar first appears.
-function updateCamOffset() {
-    if (!carOffsetEnabled) { CAM_OFFSET_X = 0; CAM_OFFSET_Y = 0; return; }
+// Recomputed every frame, and deliberately at the end of update(): VIEW_ANGLE,
+// Y_SCALE and PX_PER_FT all still move earlier in the same frame (the intro
+// flourish, camera-follow, the zoom/rotate/tilt keys), and all three feed the
+// unprojection below. Recomputing after they settle is what keeps the car
+// pinned to one spot on screen through a rotation instead of drifting during
+// it -- the camera swings around the car, so rotation is still about the car.
+// The canvas can resize under us too (a phone rotating), and driveBarHeight()
+// only becomes non-zero once the pedal bar exists, so neither is cached.
+function updateViewCam() {
+    if (!carOffsetEnabled) { viewCamX = player.x; viewCamY = player.y; return; }
     const W = canvas.width, H = canvas.height;
-    CAM_OFFSET_X = -CAR_OFFSET_X_FRAC * W;
-    let dy = CAR_OFFSET_Y_FRAC * H;
-    // Shifting the car down is exactly what would tuck it under the pedal bar
-    // and the street-name sign, both anchored to the bottom of a touch
-    // screen -- driveBarHeight() (drawing.js) is the pedal bar's own measured
-    // height, and the extra margin covers the street sign sitting level with
-    // it just above. Desktop has neither, so the plain fraction always applies.
+    const offX = -CAR_OFFSET_X_FRAC * W;
+    let offY = CAR_OFFSET_Y_FRAC * H;
+    // Pushing the car down the screen is exactly what would tuck it under the
+    // pedal bar and the street-name sign, both anchored to the bottom edge on
+    // a touch device -- driveBarHeight() (drawing.js) is the bar's own measured
+    // height, and the rest covers the sign sitting level with it just above.
+    // Desktop has neither, so the plain fraction always stands there.
     if (touchDrive.shown) {
         const clearance = driveBarHeight() + STREET_SIGN_FONT_TOUCH + 24;
-        dy = Math.min(dy, Math.max(0, H / 2 - clearance));
+        offY = Math.min(offY, Math.max(0, H / 2 - clearance));
     }
-    CAM_OFFSET_Y = dy;
+    const [dx, dy] = dragToCamDelta(offX, offY);
+    viewCamX = player.x + dx;
+    viewCamY = player.y + dy;
 }
 
 function buildCarOffsetToggle() {
@@ -376,8 +399,6 @@ function update(dt) {
     player.x += Math.cos(player.angle) * player.speed * dt;
     player.y += Math.sin(player.angle) * player.speed * dt;
 
-    updateCamOffset();
-
     if (elapsed < INTRO_DURATION) {
         updateIntroCamera();
     } else {
@@ -426,6 +447,11 @@ function update(dt) {
     // genFrame starts at the interval itself so the very first frame still
     // generates immediately, same as it always has.
     if (++genFrame >= GENERATE_INTERVAL_FRAMES) { genFrame = 0; generate(player.x, player.y); }
+
+    // Last, once the car has moved and the view angle, tilt and zoom above have
+    // all settled for this frame -- every one of them feeds it. See its own
+    // comment above.
+    updateViewCam();
 }
 
 // --- Game loop ---

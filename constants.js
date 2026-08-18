@@ -73,18 +73,14 @@ const Y_SCALE_MAX = 0.75;
 const TILT_SPEED = 0.4; // per second when holding R/F
 const ROTATE_SPEED = 1.2; // radians per second when holding Q/E
 
-// Driving game only: how far down-left of dead-centre the camera pins the
-// player's car (see game.js's "car draw offset" section) -- a fraction of the
-// canvas's own width/height rather than a flat pixel count, so it holds
-// steady across window sizes. CAM_OFFSET_X/Y are the live pixel values
-// game.js recomputes from these every frame; applyCamera (drawing.js) adds
-// them to the usual dead-centre translate, and left at 0 they make it a
-// no-op, which is what keeps every non-driving page (streetTest.js, the
-// building/vehicle grids) drawing exactly as it always has.
+// Driving game only: how far left of, and below, dead centre the player's car
+// sits on screen (see "Car draw offset" in game.js) -- a fraction of the
+// canvas's own width/height rather than a flat pixel count, so it holds steady
+// across window sizes. Read only by game.js, which turns them into an offset
+// of the camera's own world position; nothing in the rendering path knows
+// about them, so no other page is affected.
 const CAR_OFFSET_X_FRAC = 0.16;
 const CAR_OFFSET_Y_FRAC = 0.12;
-let CAM_OFFSET_X = 0;
-let CAM_OFFSET_Y = 0;
 
 // Driving game only: half-width of the "camera follows the car" dead zone (see
 // game.js) -- how far the car's own heading can drift from the camera's current

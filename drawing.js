@@ -191,7 +191,7 @@ function drawCurveWL(s) {
 // Leaves the transform on the stack -- callers must ctx.restore().
 function applyCamera(camX, camY) {
     ctx.save();
-    ctx.translate(canvas.width / 2 + CAM_OFFSET_X, canvas.height / 2 + CAM_OFFSET_Y);
+    ctx.translate(canvas.width / 2, canvas.height / 2);
     ctx.scale(1, Y_SCALE);
     ctx.rotate(VIEW_ANGLE);
     ctx.translate(-camX * PX_PER_FT, -camY * PX_PER_FT);
@@ -443,7 +443,11 @@ function drawStreetSign(name, left, bottom, fontPx) {
 // The driving game: the world, plus the car and its HUD.
 function draw() {
     const W = canvas.width, H = canvas.height;
-    drawScene(player.x, player.y, player);
+    // Not player.x/y: the camera sits slightly off the car so the car draws
+    // left of and below screen centre, leaving more of the view for the road
+    // ahead (see "Car draw offset" in game.js). Equal to the car's position
+    // exactly when that option is switched off.
+    drawScene(viewCamX, viewCamY, player);
 
     // HUD -- hidden through the startup intro sequence (game.js) and faded in
     // with the rest of the UI via uiAlpha, since a canvas fill has no CSS

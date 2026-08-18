@@ -171,23 +171,48 @@ startup intro (below) captures its own starting angle, and `resetCamera()`
 (`controls.js`) reads it too, so double-tapping to reset lands back on
 whichever default the device actually gets rather than always the desktop one.
 
-Separately, `CAM_OFFSET_X`/`CAM_OFFSET_Y` (`constants.js`) let the point
-`applyCamera` (`drawing.js`) pins the camera's subject to sit away from dead
-screen-centre -- added straight onto the usual `canvas.width/2, canvas.height/2`
-translate, so every rotation still happens about that same point and it stays
-fixed on screen exactly as before, just not at the middle any more. Every page
-but driving leaves both at 0, which makes the added terms a no-op -- only
-`game.js` ever writes them, via `updateCamOffset()`, called once a frame from
-`update()`. On by default (`carOffsetEnabled`, a checkbox in the camera panel
-next to "follow car", `buildCarOffsetToggle()`), it shifts the car down and
-left of centre by a fixed fraction of the canvas (`CAR_OFFSET_X_FRAC`/`_Y_FRAC`)
-on both mobile and desktop -- down trades the (mostly empty) space behind the
-car for more of what's coming up ahead, left does the same across the width.
-On a touch device the downward half is capped against `driveBarHeight()` (see
-below) plus the street sign's own height, so the shift can never tuck the car
-under either -- both anchored to the bottom of the screen, exactly where
-"down" is headed. Recomputed every frame rather than once, since the canvas
-itself can resize (a phone rotating, a desktop window resizing).
+Separately, the driving game draws the car left of and below dead centre rather
+than at it, for the same reason: down trades the (mostly empty) space behind
+the car for more of what's coming up ahead, and left does the same across the
+width. On by default on both mobile and desktop, with a "shift car view"
+checkbox in the camera panel next to "follow car" (`carOffsetEnabled`,
+`buildCarOffsetToggle()` in `game.js`).
+
+The way it's done is the part worth knowing, because the obvious way is a trap.
+There are **two** paths from world coordinates to screen pixels, and they do not
+share code: the ground, streets and markings are drawn through the `ctx`
+transform `applyCamera` (`drawing.js`) sets up, while every vehicle and building
+goes through `render3d.js`'s `project()`, which computes its own screen
+coordinates from `canvas.width / 2` directly and never sees that transform at
+all. Nudging the `applyCamera` translate -- the obvious "shift the view" move --
+therefore slides the streets out from under the cars, by the full offset: at the
+driving zoom that is tens of feet of world displacement, enough to leave every
+car parked a couple of lanes off the road it is supposed to be driving on.
+
+So the offset is applied to the **camera's own world position** instead, which
+is one number both paths already read and so cannot desync. `game.js` keeps
+`viewCamX`/`viewCamY` -- the world point sitting at true screen centre -- and
+`draw()` hands those to `drawScene` in place of `player.x, player.y`. They are
+the car's position shifted by however many feet put the car at the wanted spot
+on screen, and `dragToCamDelta()` (`controls.js`) is already exactly that
+conversion, screen pixels to camera feet, so it does the unprojection with the
+rotation and the `Y_SCALE` squash folded in. Everything downstream that takes a
+camera -- the cull box, the depth sort, `drawHonks` -- stays correct for free,
+and no other page is touched, since nothing in the rendering path knows this
+happens at all.
+
+`updateViewCam()` recomputes it once a frame, deliberately at the *end* of
+`update()`: `VIEW_ANGLE`, `Y_SCALE` and `PX_PER_FT` all still move earlier in
+the same frame (the intro flourish, camera-follow, the zoom/rotate/tilt keys)
+and all three feed the unprojection, so recomputing after they settle is what
+holds the car on one exact pixel through a rotation instead of letting it drift
+during one -- the camera swings around the car, which is what keeps rotation
+about the car. The offset itself is a fraction of the canvas
+(`CAR_OFFSET_X_FRAC`/`_Y_FRAC`, `constants.js`) rather than a pixel count so it
+holds across window sizes, and on a touch device the downward half is capped
+against `driveBarHeight()` (see below) plus the street sign's own height, so it
+can never tuck the car under either -- both are anchored to the bottom edge,
+exactly where "down" is headed.
 
 ## Full detail at the mobile default
 
