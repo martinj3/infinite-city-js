@@ -27,6 +27,7 @@ const SIGN_SIDE_OFFSET = 3;     // ft beyond the road edge, into the verge
 const SIGN_MIN_ZOOM = 1.1;      // a 2.75ft sign is 3px below this: drop the whole thing
 const SIGN_RED = 'hsl(354, 75%, 40%)';
 const SIGN_BACK = 'hsl(60, 3%, 55%)';   // the dull side a driver who passed it sees
+const SIGN_WHITE = '#f5f5f0';           // the "STOP" lettering and the face's own border
 
 // How a node controls itself, decided once (see updateNodeSigns): most
 // intersections are a two-way stop (the through street, fwd/back, doesn't stop;
@@ -35,19 +36,37 @@ const SIGN_BACK = 'hsl(60, 3%, 55%)';   // the dull side a driver who passed it 
 const SIGN_NONE_PROB = 0.12;
 const SIGN_TWO_WAY_PROB = 0.6;   // four-way gets the remaining 0.28
 
+// A regular octagon has a flat top and bottom edge, not a vertex there -- that's
+// half a segment's rotation (PI / sides) off makeDiscX's own default phase, which
+// puts a vertex at the top instead (fine for the badges and taillights that are
+// its other callers, where a round shape reads as round either way).
+const SIGN_FACE_PHASE = Math.PI / 8;
+
 // The octagon: red toward the traffic it faces (local -x) with "STOP" lettered on
 // a whisker-proud panel over it (the same lettering trick a shop sign uses over
 // its own board, see makeFrontPanel in buildingUtils.js); a plain back facing +x,
 // because a one-sided face is a vanishing act from the wrong side, not a back --
 // see makeFlankText's note on a windscreen with nothing behind it.
+//
+// The front face also carries a white border -- real stop signs have one -- drawn
+// as a genuine 1px stroke (see projectAndDraw, render3d.js) rather than a second,
+// slightly larger red-and-white polygon pair, which is both cheaper and immune to
+// the z-fighting a stacked pair of near-coplanar faces would risk. It shares the
+// text's own fate rather than outliving it: TEXT_MIN_PX / (2 * hh) is exactly the
+// zoom below which the "STOP" panel's screen height (angle-independent -- its top
+// and bottom differ only in z, which maps straight to screen y regardless of view
+// rotation) falls under drawPanelText's own floor at every angle, not just most.
+// A border with no word inside it would look like a mistake, not a design choice.
 function makeSignFace(z) {
     const r = SIGN_WIDTH / 2;
-    const front = makeDiscX(0, 0, z, r, -1, SIGN_RED, 8);
+    const front = makeDiscX(0, 0, z, r, -1, SIGN_RED, 8, SIGN_FACE_PHASE);
     const hw = SIGN_WIDTH * 0.36, hh = SIGN_WIDTH * 0.30, eps = 0.03;
+    front.stroke = SIGN_WHITE;
+    front.strokeMinZoom = TEXT_MIN_PX / (2 * hh);
     const p = (y, zz) => ({ x: -eps, y, z: zz });
     const text = { pts: [p(-hw, z + hh), p(hw, z + hh), p(hw, z - hh), p(-hw, z - hh)],
-                   color: '#f5f5f0', text: 'STOP' };
-    return [front, text, makeDiscX(0, 0, z, r, 1, SIGN_BACK, 8)];
+                   color: SIGN_WHITE, text: 'STOP' };
+    return [front, text, makeDiscX(0, 0, z, r, 1, SIGN_BACK, 8, SIGN_FACE_PHASE)];
 }
 
 function makeStopSign() {

@@ -71,8 +71,12 @@ function registerPlaceholderVehicle(name) {
 // Thresholds are in pixels per foot, the same units as PX_PER_FT.
 const VEHICLE_SOLID_MIN_ZOOM = 0.9;    // under this the whole car is one flat rectangle
 const VEHICLE_WHEELS_MIN_ZOOM = 1.6;   // a wheel is ~2ft across: under this it is 3px
-const VEHICLE_ROOF_MIN_ZOOM = 2.5;     // things bolted to the roof, like a light bar
-const VEHICLE_GLASS_MIN_ZOOM = 4;      // windows are the first detail worth dropping
+// Roof fittings and glass used to drop out well above the mobile default zoom
+// (2.5 and 4 px/ft against a 2.2 default), so a phone player driving at the
+// default zoom never saw a light bar or a window. Both now clear by the mobile
+// default itself, so every vehicle is fully detailed there and up.
+const VEHICLE_ROOF_MIN_ZOOM = 2.2;     // things bolted to the roof, like a light bar
+const VEHICLE_GLASS_MIN_ZOOM = 2.2;    // windows are the first detail worth dropping
 
 // Set true only by a preview renderer (see game.js's renderVehicleThumb, built
 // for the driving game's car switcher) to bypass every threshold above and draw

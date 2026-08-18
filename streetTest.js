@@ -174,7 +174,7 @@ function update(dt) {
     const len = Math.hypot(dx, dy);
     if (len > 0) {
         // Pan at a constant screen speed, so it stays usable at any zoom
-        const speed = CAM_SPEED * PX_PER_FT_DEFAULT / PX_PER_FT;
+        const speed = CAM_SPEED * pxPerFtDefault() / PX_PER_FT;
         camX += (dx / len) * speed * dt;
         camY += (dy / len) * speed * dt;
     }

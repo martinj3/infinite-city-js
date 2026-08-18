@@ -8,9 +8,14 @@ const INTERSECTION_SIZE = MAX_STREET_WIDTH; // fixed size to accommodate widest 
 const HALF_INTERSECTION = INTERSECTION_SIZE / 2;
 const DEFAULT_BLOCK_LEN = 500;
 let PX_PER_FT = 2;
-// Driving's own intro sequence
-// (game.js) eases the view in to this value from INTRO_ZOOM_START, below.
-const PX_PER_FT_DEFAULT = 2.4;
+// Driving's own intro sequence (game.js) eases the view in to one of these from
+// INTRO_ZOOM_START, below, and resetCamera() (controls.js) falls back to the
+// same choice. A phone's screen has much less room to read the road in, so its
+// default sits further out than desktop's closer-in one; pxPerFtDefault()
+// (controls.js) is what actually picks between them, off the same coarse-
+// pointer test every other mobile-vs-desktop HUD choice already uses.
+const PX_PER_FT_DEFAULT_MOBILE = 2.2;
+const PX_PER_FT_DEFAULT_DESKTOP = 3.0;
 const PX_PER_FT_MIN = 0.1;
 const PX_PER_FT_MAX = 20;
 const ZOOM_SPEED = 1.5; // per second (multiplier) for held keys
@@ -67,7 +72,7 @@ const CAMERA_FOLLOW_DEAD_ZONE = 25 * Math.PI / 180;
 const INTRO_DURATION = 4;       // seconds: length of the flourish; input stays locked out until it ends
 const INTRO_UI_DELAY = 1;       // further seconds of stillness before the UI starts fading in
 const UI_FADE_DURATION = 1;     // seconds the UI (panels and HUD) take to fade in once they start
-const INTRO_ZOOM_START = 1.0;   // PX_PER_FT at the start of the intro -- wider than PX_PER_FT_DEFAULT
+const INTRO_ZOOM_START = 1.0;   // PX_PER_FT at the start of the intro -- wider than either default above
 const INTRO_TILT_CYCLES = 2.5;  // tilt oscillations during the intro before it settles on Y_SCALE_DEFAULT
 
 // Driving game only: the analog speedometer (drawing.js), bottom right of the

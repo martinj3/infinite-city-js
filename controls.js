@@ -53,6 +53,14 @@ function wantsTouchControls() {
     return typeof navigator !== 'undefined' && navigator.maxTouchPoints > 0;
 }
 
+// The mobile/desktop default zoom (constants.js), picked live off the same test
+// as the touch controls themselves rather than cached, so it stays right even if
+// wantsTouchControls()'s answer could change (it can't mid-session in practice,
+// but nothing here should assume that).
+function pxPerFtDefault() {
+    return wantsTouchControls() ? PX_PER_FT_DEFAULT_MOBILE : PX_PER_FT_DEFAULT_DESKTOP;
+}
+
 function setZoom(v) {
     PX_PER_FT = Math.max(PX_PER_FT_MIN, Math.min(PX_PER_FT_MAX, v));
 }
@@ -128,7 +136,7 @@ function resetCamera() {
     VIEW_ANGLE = VIEW_ANGLE_DEFAULT;
     Y_SCALE = Y_SCALE_DEFAULT;
     if (cameraResetHook) cameraResetHook();
-    else PX_PER_FT = PX_PER_FT_DEFAULT;
+    else PX_PER_FT = pxPerFtDefault();
 }
 
 // Set once buildCameraToolbar runs, so a page loaded after controls.js (the

@@ -142,6 +142,43 @@ trick the speedometer uses; unlike the speedometer, though, the sign doesn't
 know its own width until it's measured the name, so it's anchored by its
 left and bottom edges rather than a centre a caller could hand it up front.
 
+### Mobile vs desktop default zoom
+
+The driving game's default `PX_PER_FT` is no longer one constant: a phone's
+screen has far less room to read the road ahead in than a desktop monitor
+does, so `PX_PER_FT_DEFAULT_MOBILE` (2.2) sits further out than
+`PX_PER_FT_DEFAULT_DESKTOP` (3.0), both in `constants.js`. `pxPerFtDefault()`
+(`controls.js`) is the one place that picks between them, off the exact same
+`wantsTouchControls()` coarse-pointer test (and its `?touch=` override) every
+other mobile-vs-desktop HUD choice already uses -- so a phone forced into
+desktop mode with `?touch=0` gets the desktop default too, consistently with
+everything else that test drives. Every caller that used to read the old flat
+`PX_PER_FT_DEFAULT` now calls `pxPerFtDefault()` instead: `game.js`'s intro
+flourish eases toward it (captured once, at load, as `introTargetZoom`, since
+`initDriveControls()` -- and so `touchDrive.shown` -- already runs before
+`introStartAngle` is even declared), `resetCamera()`'s no-hook fallback
+(`controls.js`) snaps to it on double-click/tap, and the three non-driving
+camera pages (`streetTest.js`, `buildings/lotGrid.js`,
+`vehicles/vehicleGrid.js`) use it as the reference zoom their own keyboard pan
+speed is scaled against -- unaffected in practice, since none of them show the
+touch pedals `touchDrive.shown` would need, but `wantsTouchControls()` still
+answers correctly for a phone visiting those pages directly.
+
+### Full detail at the mobile default
+
+`vehicles/vehicleUtils.js`'s level-of-detail thresholds used to drop roof
+fittings and glass well above the old single default zoom
+(`VEHICLE_ROOF_MIN_ZOOM` 2.5, `VEHICLE_GLASS_MIN_ZOOM` 4 against a 2.4
+default) -- a light bar or a windshield a phone player driving at the default
+zoom would never actually see. Both now sit at exactly 2.2, the mobile
+default above, so every vehicle is fully detailed from the mobile default
+zoom and up on both kinds of device; `VEHICLE_SOLID_MIN_ZOOM` (0.9) and
+`VEHICLE_WHEELS_MIN_ZOOM` (1.6) already cleared that bar. Buildings need no
+equivalent change: nothing in `buildings/` drops a window or any other detail
+by zoom at all -- a building is either fully drawn (whatever its own zoom
+cutoffs in `lots.js`, `HOUSES_MIN_ZOOM`/`SKYLINE_MIN_ZOOM`, are both well
+under 2.2) or not drawn, never partially.
+
 ### Startup intro sequence
 
 `driving.html` opens with a four-second flourish rather than dropping the
@@ -149,8 +186,9 @@ player straight into a static, one-street city: `game.js`'s `updateIntroCamera()
 sweeps `VIEW_ANGLE` through one full turn around the parked car (`introStartAngle`
 `+ TWO_PI`, landing back on the same heading it started from), eases `PX_PER_FT`
 in from a wider establishing shot (`INTRO_ZOOM_START`) to the driving default
-(`PX_PER_FT_DEFAULT`, itself nudged from 2 to 2.4 in this same change -- the old
-wider default made it easy to drift out of a lane without noticing), and swings
+(`introTargetZoom`, captured once from `pxPerFtDefault()` -- see "Mobile vs
+desktop default zoom" below -- rather than re-read every frame, since it can't
+change mid-session), and swings
 `Y_SCALE` through a couple of decaying oscillations before settling dead on
 `Y_SCALE_DEFAULT`. All three are driven off one shared `t = elapsed / INTRO_DURATION`,
 which is what keeps them visibly part of one flourish rather than three
@@ -1007,7 +1045,32 @@ specific about it): red toward the approach it serves, "STOP" lettered on a
 whisker-proud panel over it exactly the way a shop sign's lettering sits over its
 own board (`makeFrontPanel`, buildingUtils.js), plus a second, plain grey disc
 facing the other way -- a one-sided face is a vanishing act from the wrong side,
-the same lesson a windscreen with nothing behind it already taught.
+the same lesson a windscreen with nothing behind it already taught. A real
+octagon stands on a flat edge top and bottom, not a vertex, which is half a
+segment's rotation off `makeDiscX`'s own default phase (a vertex at the top --
+fine for the badges and taillights that are its other callers, where round
+reads as round either way): `SIGN_FACE_PHASE` (`Math.PI / sides`) is passed to
+both discs to square them up.
+
+The front face also carries a thin white border, real stop signs have one --
+`front.stroke`, a color `projectAndDraw` (render3d.js) checks after its
+ordinary fill and, if set, traces with a genuine `ctx.stroke()` at
+`lineWidth = 1`: always exactly one device pixel regardless of zoom or camera
+angle, since a stroke's width isn't a world size projected down the way a
+poly's own thickness would be. Reusing the disc's own fill path rather than
+building a second, slightly larger red-and-white poly pair is both cheaper and
+free of the z-fighting a stacked near-coplanar pair would risk. It carries an
+optional `strokeMinZoom` too, so a border can drop out on its own schedule
+rather than outliving whatever it was meant to frame -- the stop sign sets it
+to `TEXT_MIN_PX / (2 * hh)` (`hh` the STOP panel's own half-height), which is
+exactly the zoom below which that panel's screen height falls under
+`drawPanelText`'s legibility floor at *every* viewing angle, not just the
+face-on-only cutoff `drawPanelText` applies on its own (the panel's height in
+screen pixels is angle-independent -- its top and bottom differ only in world
+z, which maps straight to screen y whatever the camera rotation is -- so this
+one term of that same test is a plain zoom threshold with nothing further to
+compute at draw time). Below it the word could never be read regardless of
+angle, so the border comes down with it instead of circling a blank sign.
 
 Signs get their own small cull in `drawLots`, over the nodes directly rather than
 riding the street loop the lots use -- the same way `drawScene` culls nodes
@@ -1023,8 +1086,11 @@ stop sign's word is so much smaller than a shop sign's that it drops out on its
 own, well before the octagon does -- at the default driving zoom most signs on
 screen show as a red shape with no legible word, and only the ones closest to
 face-on read at all, exactly the "they don't look that big from inside the car"
-the request asked for. Slowing down or zooming in resolves it. Adds 73-193
-polygons a frame at typical zooms, out of several thousand.
+the request asked for. Slowing down or zooming in resolves it. The white border
+rides the lettering's own zoom half of that cutoff (see above), so it disappears
+alongside the word rather than lingering as a blank white ring at any zoom the
+octagon itself still clears. Adds 73-193 polygons a frame at typical zooms, out
+of several thousand.
 
 ## Testing
 

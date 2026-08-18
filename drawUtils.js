@@ -81,11 +81,14 @@ function makeLatheX(stations, sides, color, capLo, capHi) {
 // a stop sign's octagonal face (eight sides reads as round, or as an octagon, at
 // this scale, same as makeLatheX). `facing` is +1 for a disc facing +x or -1 for
 // one facing -x. The winding borrows makeLatheX's caps: the (sin, cos) ring order
-// faces -x as given and +x reversed.
-function makeDiscX(x, y, z, r, facing, color, sides = 8) {
+// faces -x as given and +x reversed. `phase` rotates the whole ring about x before
+// placement -- 0 (the default, every other caller) puts a vertex at the top, which
+// reads as round either way at badge/taillight size; a stop sign needs a flat top
+// and bottom edge instead, which is phase = PI / sides (half a segment) away.
+function makeDiscX(x, y, z, r, facing, color, sides = 8, phase = 0) {
     const pts = [];
     for (let j = 0; j < sides; j++) {
-        const a = (j / sides) * Math.PI * 2;
+        const a = (j / sides) * Math.PI * 2 + phase;
         pts.push({ x, y: y + r * Math.sin(a), z: z + r * Math.cos(a) });
     }
     if (facing > 0) pts.reverse();

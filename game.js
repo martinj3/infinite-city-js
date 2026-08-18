@@ -230,6 +230,9 @@ let introSettled = false;   // true once the flourish has hit its exact rest val
 let uiRevealed = false;     // true once body.ic-intro has been removed
 let uiAlpha = 0;            // 0..1, read by drawing.js to fade in the on-canvas HUD
 const introStartAngle = VIEW_ANGLE;
+// Captured once rather than re-read every frame: pxPerFtDefault() itself never
+// changes mid-session (see its own comment, controls.js).
+const introTargetZoom = pxPerFtDefault();
 
 // Vehicle name banner, pulsing gray/white for the length of the flourish. A
 // DOM overlay rather than a canvas draw so the pulse is just a CSS animation;
@@ -258,7 +261,7 @@ function updateIntroCamera() {
     VIEW_ANGLE = normA(introStartAngle + t * TWO_PI);
 
     const ez = 1 - Math.pow(1 - t, 3); // ease-out: reaches the new default without overshoot
-    PX_PER_FT = INTRO_ZOOM_START + (PX_PER_FT_DEFAULT - INTRO_ZOOM_START) * ez;
+    PX_PER_FT = INTRO_ZOOM_START + (introTargetZoom - INTRO_ZOOM_START) * ez;
 
     // Amplitude decays to exactly 0 by t=1, so the seesaw always lands dead on
     // Y_SCALE_DEFAULT rather than wherever the sine happened to be.
@@ -275,7 +278,7 @@ function updateIntroCamera() {
 function finishIntroCamera() {
     VIEW_ANGLE = normA(introStartAngle);
     Y_SCALE = Y_SCALE_DEFAULT;
-    PX_PER_FT = PX_PER_FT_DEFAULT;
+    PX_PER_FT = introTargetZoom;
     followAnchor = normA(player.angle + VIEW_ANGLE);
     inputLocked = false;
     if (introTextEl) {

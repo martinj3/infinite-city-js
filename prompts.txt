@@ -731,3 +731,14 @@ In driving.html, draw the name of the street segment the player is currently on,
 Draw it on a nice green background (not the exact same green as our grass background color), with a white border, white all caps text, and other stylized decorative elements, inspired by street name signs in the US.
 
 This can also have a smaller version for mobile Ux, larger for desktop
+
+---
+
+I tweaked a few constants manually myself, pushed to main, be sure to pull that before starting work.
+
+I want the default PX_PER_FT_DEFAULT to be different for mobile versus desktop browsers.
+2.2 for mobile, and 3.0 for desktop.
+
+And for all vehicle types and building types, I want all details to be drawn starting at a zoom level of 2.2+, so that all windows and details are drawn at the default mobile Zoom level.
+
+The sole exception might be the stop text on stop signs, which is just too tiny. Also, while we're talking about stop signs, the rotation for the red part of the stop sign, the octagon, is off by 22.5 degrees.  The top and bottom of the octagon should be horizontal, of course. Further, stop signs need a white line border, which hopefully can be done as a single pixel thick white line, maybe with some canvas drawline function or something. If we have some mechanism in place for that versus drawing polygons. That white line should of course disappear at the same zoom level that the stop text disappears.

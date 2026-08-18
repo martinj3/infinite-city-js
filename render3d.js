@@ -130,12 +130,13 @@ function projectAndDraw(polys, ox, oy, camX, camY, staticLit = false) {
             ? poly._lit || (poly._lit = applyLighting(poly.color, computeNormal(pts)))
             : applyLighting(poly.color, computeNormal(pts));
         projected.push({ sp, color: litColor, depth: depth / n, text: poly.text,
-                         aspect: poly.text ? dist3(pts[0], pts[1]) / dist3(pts[0], pts[3]) : 0 });
+                         aspect: poly.text ? dist3(pts[0], pts[1]) / dist3(pts[0], pts[3]) : 0,
+                         stroke: poly.stroke, strokeMinZoom: poly.strokeMinZoom });
     }
 
     projected.sort((a, b) => a.depth - b.depth);
 
-    for (const { sp, color, text, aspect } of projected) {
+    for (const { sp, color, text, aspect, stroke, strokeMinZoom } of projected) {
         if (text) { drawPanelText(sp, text, color, aspect); continue; }
         ctx.beginPath();
         ctx.moveTo(sp[0][0], sp[0][1]);
@@ -143,8 +144,16 @@ function projectAndDraw(polys, ox, oy, camX, camY, staticLit = false) {
         ctx.closePath();
         ctx.fillStyle = color;
         ctx.fill();
-        //ctx.strokeStyle = 'rgba(0,0,0,0.3)';
-        //ctx.lineWidth = 1;
-        //ctx.stroke();
+        // An outline in device pixels, always exactly 1px wide regardless of zoom
+        // or camera angle -- unlike a poly, a stroke's width isn't a world size
+        // projected down, so there's no "thin at this scale" cutoff for it to earn
+        // on its own; a poly opts in with .stroke (a color) and, since a border
+        // can still outlive whatever detail it was meant to frame (the "STOP" on a
+        // stop sign, say), an optional .strokeMinZoom to drop out alongside it.
+        if (stroke && (strokeMinZoom === undefined || PX_PER_FT >= strokeMinZoom)) {
+            ctx.strokeStyle = stroke;
+            ctx.lineWidth = 1;
+            ctx.stroke();
+        }
     }
 }
