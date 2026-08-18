@@ -501,24 +501,104 @@ in. Deciding at entry is also what lets the speed loop ease off half a block
 before the corner. Rolling past the arc's far end lands the car on its new
 street (`switchStreet`), pos seeded by projection.
 
-Stop signs are obeyed (see Signs): an approach whose slot is signed gets the
-required-deceleration treatment to a stop line just short of the box, a beat of
-dwell once stopped (`pause`), and then -- there being no cross-traffic logic
-yet, by choice -- the driver simply goes. Queues at a sign discharge one
-reaction time apart, which is the waves mechanism again. Cars on conflicting
-paths pass through each other in the box; merge overlaps resolve within a
-couple of seconds because the follower sees a leader at negative gap and stands
-on the brakes. The one conflict drivers do react to is the head-on: an oncoming
+There is one stop line and one way of holding at it, and only the reason for
+being there differs -- which is what keeps right of way from becoming a second
+control loop. A signed approach (see Signs) always takes the
+required-deceleration treatment down to a line just short of the box, dwells a
+beat once stopped (`pause`), and then goes when the intersection is actually
+theirs. An unsigned one -- the through street of a two-way, or an uncontrolled
+crossing -- runs the same machinery but only holds if somebody is coming, which
+is what makes yielding cost nothing on an empty road. Queues at a sign discharge
+one reaction time apart, which is the waves mechanism again.
+
+The line is where a car's *nose* stops, so how far back its centre keeps is its
+own length (`stopDist`): a bus stopping where a hatchback does has its front axle
+in the middle of the junction, and reads to everybody else as a vehicle standing
+in the box. Past the line the driver is committed, and has to be -- a car
+released into a box and re-blocked a moment later stops dead in the middle of it,
+where no rule about who goes first can help, because the thing in the way is a
+car that was in the right. The same reasoning is why the required deceleration is
+capped rather than computed once the line is under the wheels: `-v^2/2d` has no
+finite answer at d = 0, and the proportional loop alone only decays that last
+foot of speed asymptotically, so the car creeps into the junction for ever.
+
+### Whose turn it is
+
+`boxClear(c)` is the whole of it, and it only ever *reads*. No reservations, no
+queues, no state on the node -- nothing that has to be cleaned up when the radius
+cull deletes a car mid-junction. It walks the cars at this node, drops everyone
+whose path cannot cross this one, and of those left waits on whoever outranks it.
+
+Whether two movements conflict is pure geometry, worth doing exactly rather than
+with a table of cases. Number the arms 0-3 the way the slots already run (fwd,
+right, back, left, each a quarter turn), and give each arm two points on a ring:
+its entry lane at 2k, its exit lane at 2k+1 -- right-hand traffic is what orders
+them, since a car coming in hugs the arm's clockwise side and one going out the
+other. A movement from arm a to arm b is then exactly the chord (2a, 2b+1), and
+two movements cross iff their chords cross, which is iff exactly one endpoint of
+one lies on the arc between the other's. Eight lines, and every case falls out
+without anyone writing it down: opposing straights clear each other, opposing
+lefts pass left-to-left, a right turn ignores cross traffic from its right, a
+left yields to the oncoming straight. Two movements ending on the same arm are a
+merge into one lane -- a conflict too, and the one case the chords cannot see.
+
+Precedence (`yieldsTo`) is antisymmetric by construction, so of any two cars
+exactly one gives way: the road without the signs rules and never tests itself
+against the road that has them; at a four-way the first to have *stopped* goes
+first (`stoppedAt`); a left turn gives way to whatever is coming the other way
+whoever got there first, because it is crossing their path rather than sharing
+it; and in a dead heat, the car on the right. Two things sit above all of it,
+being about space rather than precedence: never enter a box somebody is standing
+in (whoever is in the wrong), and never enter one there is no room to leave --
+without that second rule a queue simply extends through the junction and locks it
+solid, every car in it genuinely in the right.
+
+Two traps that cost a while to find, both worth not re-introducing. The arrival
+comparison must measure both cars with the *same* formula: judge yourself by the
+launch model (`myBoxWindow`, a real `v^2 = u^2 + 2ad` on your own engine, which
+is why a loaded cement truck waits for a gap a Countach would not) and the other
+fellow by a constant speed, and the two of you can each conclude the other got
+there first -- which is not a slow junction but a frozen one. And a vehicle
+longer than the box is not a point on a lane path while it is in there; it is a
+wall across the junction, its tail sweeping ground no lane-to-lane chord accounts
+for, so while one is in the box it conflicts with everybody.
+
+Whatever the rules, patience ends it: held at a line too long (7-15s, per driver)
+and the car creeps out anyway. That is realistic, and it bounds every bug in the
+priority logic to a moment's oddity rather than a frozen junction. It is
+load-bearing for exactly one case the rules cannot break on their own -- four
+cars tied at a four-way, each giving way to the next one round. Three cannot form
+that ring, because one of them has no car on their right.
+
+The player is given no priority test at all, only geometry: anything closing on
+the box, or sitting in it, is a reason to wait, whatever the signs say. Never
+assume the player follows a rule. The two exceptions are both about not waiting
+for someone who is not coming -- a player stopped short of the box, and one
+following along behind on the same approach, which is the following loop's
+business rather than this one's.
+
+Cars still pass through each other when two do go at once; that is the accepted
+failure mode, now rare rather than constant. Measured over 90s of a 400-street
+city, overlapping cars in a junction fell by about 70% against the same city
+before any of this (31/42/52 events on three seeds against 112/176/175), stop
+compliance held at 99%, and cost went from about 2.0 to 2.2ms an update at ~180
+cars. Routes are re-picked once on the way in (`REPLAN_DIST`), which is not
+cosmetic: a block's traffic is created inside `pushStreet`, a line before the new
+street is registered at its own far node, and that node grows its other arms
+later still, so a route chosen at spawn can only be a U-turn -- a half circle
+across the whole box, arriving at what is by then a four-way. That one fix was
+worth more than half the overlap reduction.
+
+The one conflict drivers react to outside a junction is the head-on: an oncoming
 car on the same street more than a foot over the centreline (`centerOff`, kept
 on every car for exactly this check), or the player pointed at them in their
 lane. The response is a bias on where lane-centre *is* (`EVADE_BIAS`, so the
 same steering loop handles dodge and recovery), emergency braking scaled by
 time-to-collision, and a honk.
 
-What comes next -- watching for cross traffic before proceeding, taking turns
-at a four-way, left turns that yield -- is planned in `trafficPlan.txt`: one
-new "may I enter the box yet" gate on the existing stop/approach logic, never
-a new control loop.
+What comes next -- multi-lane roads, lane changing and merging, turn signals --
+is planned in `trafficPlan.txt`, whose intersection half is what the above
+implements.
 
 Honks are the decorative hook, deliberately unpolished: any evasion, and any
 braking near the vehicle's maximum, pushes `{x, y, t}` into `honks` (per-car

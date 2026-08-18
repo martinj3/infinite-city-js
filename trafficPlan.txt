@@ -1,9 +1,15 @@
-Plan: smarter intersection behavior for traffic
+Plan: smarter intersection behavior for traffic   [IMPLEMENTED -- see below]
 ================================================
 (Written by the model that built traffic.js's driving model, as a guide for a
 follow-up implementation. Read the "Traffic" section of CLAUDE.md first; every
 term here -- planExit, turnPlan, senseRoad, driveCar's speed section, aPlan,
 stopDone, waitT -- is defined there or in traffic.js itself.)
+
+This half is done. It was built as written -- one boxClear gate, pure reads, no
+node-owned state, patience as the backstop -- and the "What NOT to build" list
+held up completely. Five things came out differently, and they are in
+"Implementation notes" at the end of this section. The lane-changing plan
+further down is still unbuilt and still reads on its own.
 
 The goal: a car at a stop sign or an uncontrolled intersection should wait for
 conflicting traffic instead of driving through it. Four-way stops should take
@@ -122,6 +128,46 @@ streets meeting at one hand-built node, hand-placed cars) and assert:
   measurements quoted in CLAUDE.md's Traffic section should not move much;
   throughput (cars crossing nodes per minute) should drop only modestly.
 Watch a rendered PNG sequence of a busy four-way before trusting any numbers.
+
+Implementation notes (what actually differed)
+---------------------------------------------
+1. The conflict table isn't a table. Numbering the arms 0-3 and putting each
+   arm's entry lane at 2k and its exit lane at 2k+1 on a ring makes a movement
+   the chord (2a, 2b+1), and two movements conflict iff their chords cross --
+   eight lines that get every case right, including the ones the table would
+   have had to enumerate, plus same-exit merges as a separate line. Cheaper to
+   write and impossible to get subtly wrong in one row.
+2. Two rules had to be added that are about *space*, not precedence, and both
+   turned out to be load-bearing: never enter a box you have no room to leave
+   (without it a queue extends through the junction and locks it solid -- this
+   was the single biggest source of frozen intersections, and no priority rule
+   can unpick it), and a vehicle longer than the box conflicts with everybody
+   while it is in there, because a 40ft bus in a 24ft box is not a point on a
+   lane path.
+3. Crossing the line has to *commit* the driver. A car released into the box and
+   re-blocked a moment later stops dead in the middle of it. Related: past the
+   line, `-v^2/2d` has no finite answer, and without capping it the proportional
+   loop only decays the last foot of speed asymptotically -- the car creeps into
+   the junction for ever, which then trips every "already committed" heuristic.
+4. Judge yourself and the other car with the *same* arrival formula. The launch
+   model (real v^2 = u^2 + 2ad on the vehicle's own engine, which is what makes
+   a cement truck wait for a gap a Countach ignores) is right for "how long will
+   I take", but if the other fellow is measured at constant speed, both cars can
+   conclude the other got there first and freeze. Antisymmetry is the property
+   the whole priority scheme rests on; check it holds for every branch.
+5. The stop line is where the *nose* stops, so the distance a car's centre keeps
+   back is its own length. Otherwise a bus stops with its axle mid-junction and,
+   worse, reads to everyone else as a vehicle standing in the box -- which under
+   these rules is a thing everybody waits for.
+
+One bug found while validating this that had nothing to do with right of way,
+and was worth more than half the collision reduction: a block's traffic is
+created inside pushStreet, a line before the new street is registered at its own
+far node, and that node grows its remaining arms later still. A route picked
+then can only be a U-turn -- a half circle across the whole box, arriving at
+what is by then a four-way. Routes are now re-picked once on the way in
+(REPLAN_DIST). Expect the same class of ordering trap anywhere traffic reads the
+map at spawn time.
 
 
 Plan: multi-lane roads, lane changing and merging

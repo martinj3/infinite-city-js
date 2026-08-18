@@ -659,3 +659,5 @@ And quickly, some brief recommendations/plan for a smaller model in trafficPlan.
 We don't have large multi-lane roads yet, but may in the future.  
 
 Again focusing on a clean, maintainable solution that fits in well with existing code and is reasonably performant.  Commit/push
+
+Go ahead and implement proper right of way and turn taking at intersections, as per Fable's notes in trafficPlan.txt

@@ -9,6 +9,9 @@
 // same layout. Traffic obeys these now: a driver approaching a node checks its
 // signage for their own arrival slot and comes to a genuine stop at it (see
 // stopSignAhead in traffic.js) -- though the player is still free to run them.
+// Which slots are signed is also what decides right of way at the node, so the
+// two-way / four-way / none roll below is the difference between a through street
+// that never stops and four cars taking turns (see boxClear, traffic.js).
 //
 // Built in local feet with +x the direction of the traffic it faces (the same
 // convention a vehicle is modelled in, see vehicleUtils.js), so one shape can be

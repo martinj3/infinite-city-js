@@ -49,11 +49,26 @@
 // slow random wander in where the driver thinks lane-center is. The big
 // vehicles get a skill floor: whoever is driving the bus, it is not the drunk.
 //
-// Stop signs read from the node's own signage (signs.js): an approach with a
-// sign gets the sqrt approach curve to a stop line just short of the box, a
-// beat of dwell once stopped, and then -- there being no cross-traffic logic
-// yet -- the driver simply goes. Cars on conflicting paths pass through each
-// other, by choice; the one collision drivers do react to is the head-on, an
+// There is one stop line and one way of holding at it, and only the reason for
+// being there differs. A signed approach (signs.js) always stops, dwells a beat,
+// and then goes when the intersection is genuinely theirs; an unsigned one --
+// the through street of a two-way, or an uncontrolled crossing -- holds only if
+// somebody is coming, so yielding costs nothing on an empty road. Whether it is
+// theirs is one gate, boxClear, and not a second control loop: it reads who else
+// is at this node, throws out everyone whose path cannot cross mine, and of
+// those left waits on whoever outranks me -- the road without the signs, the car
+// that stopped first at a four-way, the oncoming traffic a left turn owes,
+// otherwise the car on the right. Two things sit above all of that, because they
+// are about space rather than precedence: never enter a box somebody is standing
+// in, and never enter one you have no room to leave. And once over the line the
+// driver is committed, because an intersection is no place to change your mind.
+// Nothing is written anywhere but on the car itself, so the radius cull can
+// delete a car mid-junction and leave nothing behind; and a patience timer means
+// no rule, right or wrong, can freeze a junction for more than a few seconds.
+// Cars on conflicting paths still pass through each other when two of them go at
+// once -- that is the accepted failure mode, now rare rather than constant.
+//
+// The one collision drivers react to outside the box is the head-on, an
 // oncoming car (or the player) more than a foot over the centerline, which gets
 // braking, a swerve toward the curb, and a honk. Honks also fire on any
 // near-max braking, and are drawn as decorative red text by drawHonks.
@@ -72,7 +87,15 @@ const TRAFFIC_SPAWN_GAP = 8;   // ft of clear road between bumpers when a block 
 
 const MPH = 5280 / 3600;                     // one mph, in ft/s
 const TRAFFIC_LOOKAHEAD = 200;               // ft: how far a driver watches the car ahead
-const STOP_LINE_BACK = HALF_INTERSECTION + 3;  // ft short of the node centre a stop is made
+// Where a car stops for a line: its *nose* just short of the intersection box,
+// so how far back its centre keeps depends on how long it is. A bus stopping
+// where a hatchback does would have its front axle in the middle of the junction
+// -- and, worse, would read to every other driver as a vehicle standing in the
+// box, which under the right of way rules below is a thing everybody waits for.
+const STOP_LINE_BACK = HALF_INTERSECTION + 2;  // ft from the node to a stopped nose
+const stopDist = c => STOP_LINE_BACK + c.hl;   // ...and to the middle of that car
+const STOP_CREEP = 1.2; // ft/s: slower than this and a car counts as stopped (0.8mph)
+const REPLAN_DIST = 200;   // ft from a node at which a car re-picks its exit (see driveCar)
 const EVADE_BIAS = 2.5;                      // ft of swerve toward the curb, dodging a head-on
 const HEAVY_LENGTH = 24;                     // ft: longer than this gets the skill floor
 
@@ -179,6 +202,11 @@ function makeDriver(v) {
         reactT: 0.15 + (1 - skill) * 0.45 + Math.random() * 0.1,   // s behind reality
         aComf: 6 + skill * 3 + Math.random(),  // ft/s^2 of braking they plan around
         pause: 0.4 + Math.random() * 1.1,      // s of dwell at a stop sign
+        // How much daylight they want between their own crossing of an
+        // intersection and the next car's: the pushy pull out on a gap the
+        // cautious would let go (see boxClear).
+        gapAccept: 0.6 + Math.random() * 1.6,  // s of margin either side of the box
+        patience: 7 + Math.random() * 8,       // s of being blocked before creeping out anyway
     };
 }
 
@@ -219,8 +247,12 @@ function planExit(c) {
     c.endNode = node || null;
     c.next = null;
     c.turnPlan = null;
-    c.waitT = 0;
+    c.inSlot = c.outSlot = null;
+    c.stoppedAt = 0;
+    c.holdT = 0;
+    c.holding = false;
     c.stopDone = false;
+    c.replanned = false;
     if (!node) return;   // half-built map edge; the car is culled when it gets there
     const street = pickExit(node, s);
     const dir = street === s ? -c.dir : dirFromNode(street, node);
@@ -292,6 +324,11 @@ function makeTurnPlan(c, s, next, ndir) {
 // both fine -- pathRefAt extrapolates, and the per-frame Newton step keeps it
 // true from here on).
 function switchStreet(c) {
+    // Remember the crossing just made. A car going straight through switches
+    // street at the node's *centre*, so for the second half of its time in the
+    // box it is already on the street beyond -- and a car waiting to pull out has
+    // to be able to see it in there (see movementAt).
+    c.prevNode = c.endNode; c.prevIn = c.inSlot; c.prevOut = c.outSlot;
     c.street = c.next.street;
     c.dir = c.next.dir;
     c.lane = laneOffset(c.street);
@@ -301,14 +338,222 @@ function switchStreet(c) {
     planExit(c);
 }
 
+// Which arms of an intersection a car comes in by and leaves by: what its right
+// of way is judged on (movesConflict) and what the node's signage is keyed by.
+//
+// Resolved late rather than with the rest of the exit plan, and then kept. A
+// block's traffic is created inside pushStreet, which runs a line *before*
+// tryAddRoad registers the new street at its own far node, so a car asking at
+// spawn time would find itself on no arm at all -- and, being on no arm, would
+// see no stop sign and be invisible to everybody else's right of way. Which arm
+// a given street sits on never changes once it is there, so one late answer is
+// as good as re-reading it forever.
+function slotOf(node, s) {
+    for (const slot of SLOTS) if (node.streets[slot] === s) return slot;
+    return null;
+}
+function inSlotOf(c) {
+    if (!c.inSlot && c.endNode) c.inSlot = slotOf(c.endNode, c.street);
+    return c.inSlot;
+}
+function outSlotOf(c) {
+    if (!c.outSlot && c.endNode && c.next) c.outSlot = slotOf(c.endNode, c.next.street);
+    return c.outSlot;
+}
+
 // Does this car's approach to its end node face a stop sign right now? Read
 // fresh each frame off the node's own signage rather than cached, because a
 // node re-decides its signs whenever a street attaches (see updateNodeSigns).
 function stopSignAhead(c) {
     const n = c.endNode;
     if (!n || !n.signs || c.stopDone) return false;
-    for (const slot of SLOTS) if (n.streets[slot] === c.street) return !!n.signs[slot];
-    return false;
+    const slot = inSlotOf(c);
+    return !!(slot && n.signs[slot]);
+}
+
+// --- Right of way: may I enter the box yet? ----------------------------------
+//
+// All of the turn-taking is this one question, asked at one place -- never a
+// second control loop, and never a word of state on the intersection itself.
+// boxClear() only ever *reads*: whose paths cross mine, who among them outranks
+// me, and whether their moment in the box overlaps the moment I want. Nothing
+// reserves anything, so nothing has to be released when the radius cull deletes
+// a car mid-junction.
+//
+// Whether two movements conflict at all is pure geometry, and it is worth doing
+// exactly rather than with a table of special cases. Number the arms of a node
+// 0-3 the way the slots already run (fwd, right, back, left -- each a quarter
+// turn round), and put two points on a ring for each arm: its entry lane at 2k
+// and its exit lane at 2k+1. Right-hand traffic is what orders them -- a car
+// coming in hugs the arm's clockwise side, one going out the other -- so a
+// movement from arm a to arm b is exactly the chord (2a, 2b+1), and two
+// movements cross iff their chords cross, which is iff exactly one endpoint of
+// the one lies on the arc between the endpoints of the other. Eight lines, and
+// it gets every case right without anybody writing them down: opposing straights
+// clear each other, opposing lefts pass left-to-left, a right turn ignores cross
+// traffic coming from its right, a left yields to the oncoming straight. Two
+// movements ending on the same arm are a merge into one lane, which is a
+// conflict too and the one case the chords can't see.
+const SLOT_IDX = { fwd: 0, right: 1, back: 2, left: 3 };
+const BOX_R = HALF_INTERSECTION;
+const YIELD_LOOK = 110;   // ft: an unsigned approach starts watching the box here
+const NEAR_NODE = 280;    // ft: further off than this, nobody reaches the box in time
+// How close two arrivals have to be to count as a dead heat and fall through to
+// the give-way-to-the-right rule. Kept small on purpose: that rule is a rotation,
+// so four cars tied at a four-way each give way to the next one round and the
+// ring has no end -- which is a real intersection's own failure mode, and what
+// the patience timer is there for, but there is no reason to walk into it over a
+// tenth of a second. Three cars cannot form the ring (one of them has no car on
+// their right), so it takes the full four.
+const TIE_STOP = 0.1;     // s: stops closer together than this count as simultaneous
+const TIE_ARRIVE = 0.25;  // s: same, for arrivals at an uncontrolled crossing
+
+// A movement packed as (entry arm << 2 | exit arm), so a conflict test is
+// arithmetic on two small integers and allocates nothing.
+const moveIn = m => m >> 2, moveOut = m => m & 3;
+// 0 straight, 1 right, 3 left, 2 U-turn: a car entering by arm a is travelling
+// on heading a+2 (in quarter turns), so its exit arm minus that is its turn.
+const turnOf = m => (moveOut(m) - moveIn(m) + 2) & 3;
+
+function movesConflict(a, b) {
+    if (moveIn(a) === moveIn(b)) return false;   // same approach: following, not crossing
+    if (moveOut(a) === moveOut(b)) return true;  // merging into one exit lane
+    const p = 2 * moveIn(a), span = (2 * moveOut(a) + 1 - p + 8) % 8;
+    const inside = x => { const d = (x - p + 8) % 8; return d > 0 && d < span; };
+    return inside(2 * moveIn(b)) !== inside(2 * moveOut(b) + 1);
+}
+
+// What `o` is doing at node n, or -1 if this node is none of its business. The
+// node it last crossed counts for as long as it is still standing in it.
+function movementAt(o, n) {
+    if (o.endNode === n) {
+        const i = inSlotOf(o), e = outSlotOf(o);
+        if (i && e) return SLOT_IDX[i] << 2 | SLOT_IDX[e];
+    }
+    if (o.prevNode === n && o.prevIn && o.prevOut) return SLOT_IDX[o.prevIn] << 2 | SLOT_IDX[o.prevOut];
+    return -1;
+}
+
+// When a car's nose reaches the box and when its tail clears it, straight-line,
+// from its distance to the node measured along its own heading -- so a car that
+// is through reads as gone (both times zero) and one standing in the box reads
+// as t0 = 0, t1 > 0. No path prediction beyond this: the driver's own
+// gapAccept margin is what absorbs the error, and it is a bigger number.
+function boxWindow(o, n, out) {
+    const v = Math.max(o.speed, 3);   // even a creeper clears eventually
+    const t = (n.x - o.cx) * Math.cos(o.angle) + (n.y - o.cy) * Math.sin(o.angle);
+    out.t0 = Math.max(0, t - o.hl - BOX_R) / v;
+    out.t1 = Math.max(0, t + o.hl + BOX_R) / v;
+}
+
+// My own window, which is the one worth getting right, and the one a constant
+// speed gets badly wrong: the driver asking is usually stationary, and how long
+// they will take to drag themselves across is their vehicle's business. So it
+// is the real launch, v^2 = u^2 + 2ad on this car's own engine -- which is why
+// a loaded cement truck waits for a gap a Countach would not bother with. The
+// turn stretches the path through the box by about a quarter.
+function myBoxWindow(c, n, out) {
+    // How every other driver sees my arrival, carried along for yieldsTo to
+    // compare like with like.
+    boxWindow(c, n, out);
+    out.peerT0 = out.t0;
+    const v = c.speed, a = Math.max(2, curveAccel(Math.max(v, 2), c.perf.accelK));
+    const t = (n.x - c.cx) * Math.cos(c.angle) + (n.y - c.cy) * Math.sin(c.angle);
+    const reach = d => (Math.sqrt(v * v + 2 * a * Math.max(0, d)) - v) / a;
+    out.t0 = reach(t - c.hl - BOX_R);
+    out.t1 = reach((t + c.hl + BOX_R) * (c.turnPlan ? 1.25 : 1));
+}
+
+// Does `o` go before `c`? Antisymmetric by construction -- of any two cars
+// exactly one yields -- which is what stops a pair freezing each other. Four
+// cars tied on four arms can still each wait on the car to their right, which
+// is a real four-way stop's own failure mode and what patience is for.
+function yieldsTo(c, o, n, myIn, oIn, myMove, oMove, mw, ow) {
+    const mySigned = !!(n.signs && n.signs[myIn]), oSigned = !!(n.signs && n.signs[oIn]);
+    // A two-way stop is the easy half of this: the road without the signs rules,
+    // and never tests itself against the road that has them.
+    if (mySigned !== oSigned) return !oSigned;
+    if (mySigned) {
+        // Four-way: first to have stopped goes first. A car that hasn't stopped
+        // yet still owes one, so it waits on the car that has.
+        if (o.stoppedAt && !c.stoppedAt) return true;
+        if (c.stoppedAt && !o.stoppedAt) return false;
+        if (c.stoppedAt && Math.abs(c.stoppedAt - o.stoppedAt) > TIE_STOP) return o.stoppedAt < c.stoppedAt;
+    }
+    // A left turn gives way to whatever is coming the other way, and does so
+    // whoever got here first: it is crossing their path, not sharing it. This
+    // sits above arrival order for exactly that reason.
+    const rel = (SLOT_IDX[oIn] - SLOT_IDX[myIn] + 4) % 4;
+    const myTurn = turnOf(myMove), oTurn = turnOf(oMove);
+    if (rel === 2 && myTurn !== oTurn) {
+        if (myTurn === 3) return true;
+        if (oTurn === 3) return false;
+    }
+    // Uncontrolled: whoever gets there first, and in a dead heat the car on the
+    // right -- which is both the real rule and, being a rotation, an order no
+    // two cars can read the same way round.
+    //
+    // Both arrivals are measured with boxWindow, never with the launch model
+    // myBoxWindow uses, and that is the whole reason this rule can be trusted.
+    // Judge yourself by one formula and the other fellow by another and the
+    // pair of you can each conclude the other got there first -- which is not a
+    // slow junction, it is a frozen one, the two of you waiting on each other
+    // until patience runs out. One formula for both sides, and the answer is
+    // antisymmetric whichever car is asking.
+    if (!mySigned && Math.abs(mw.peerT0 - ow.t0) > TIE_ARRIVE) return ow.t0 < mw.peerT0;
+    return rel === 3;
+}
+
+const _mw = { t0: 0, t1: 0, peerT0: 0 }, _ow = { t0: 0, t1: 0 };
+
+// The gate itself. Called only by cars near a node -- every frame for one
+// holding at a line, which is free, since a stopped car is doing nothing else.
+function boxClear(c, player) {
+    const n = c.endNode;
+    const myIn = inSlotOf(c), myOut = outSlotOf(c);
+    if (!n || !myIn || !myOut) return true;
+    const myMove = SLOT_IDX[myIn] << 2 | SLOT_IDX[myOut];
+    myBoxWindow(c, n, _mw);
+    const m = c.driver.gapAccept;
+
+    for (const o of traffic) {
+        if (o === c) continue;
+        const dx = o.cx - n.x, dy = o.cy - n.y;
+        if (dx * dx + dy * dy > NEAR_NODE * NEAR_NODE) continue;
+        const oMove = movementAt(o, n);
+        if (oMove < 0) continue;
+        boxWindow(o, n, _ow);
+        // Anyone actually standing in the box outranks every rule there is: you
+        // do not drive into an occupied intersection, whoever is in the wrong.
+        const occupying = _ow.t0 === 0 && _ow.t1 > 0;
+        // And a vehicle longer than the box is not a point on a lane path while
+        // it is in there -- it is a wall across the junction, its tail sweeping
+        // ground no lane-to-lane chord accounts for. A bus is 40ft; the box is
+        // 24. So while one of those is in there, it conflicts with everybody.
+        if (!(occupying && o.hl > BOX_R) && !movesConflict(myMove, oMove)) continue;
+        if (!occupying && !yieldsTo(c, o, n, myIn, SLOTS[moveIn(oMove)], myMove, oMove, _mw, _ow)) continue;
+        if (_mw.t0 - m < _ow.t1 && _ow.t0 - m < _mw.t1) return false;
+    }
+
+    // The player is on no street and follows no rule, so they are judged on
+    // geometry alone and given no priority test at all: anything closing on this
+    // box, or sitting in it, is a reason to wait, whatever the signs say. Two
+    // exceptions, both about not waiting for someone who isn't coming: a player
+    // stopped short of the box, and one following along behind me on my own
+    // approach (which is the following loop's business, not this one's).
+    if (player) {
+        const dx = n.x - player.x, dy = n.y - player.y;
+        const t = dx * Math.cos(player.angle) + dy * Math.sin(player.angle);
+        const mine = (n.x - c.cx) * Math.cos(c.angle) + (n.y - c.cy) * Math.sin(c.angle);
+        const behind = Math.cos(player.angle - c.angle) > 0.7 && t > mine;
+        if (!behind && dx * dx + dy * dy < NEAR_NODE * NEAR_NODE &&
+            !(player.speed < 1.5 && t > BOX_R + 9)) {
+            const v = Math.max(player.speed, 3);
+            const t0 = Math.max(0, t - 9 - BOX_R) / v, t1 = Math.max(0, t + 9 + BOX_R) / v;
+            if (t1 > 0 && _mw.t0 - m < t1 && t0 - m < _mw.t1) return false;
+        }
+    }
+    return true;
 }
 
 // --- Watching the road: leaders and head-ons ---------------------------------
@@ -379,12 +624,28 @@ function senseRoad(c, player, arcRem) {
 function driveCar(c, dt, player) {
     const drv = c.driver;
 
+    // Pick the route again, once, on the way in. The exits a node offers are not
+    // all there when a block's traffic is created: spawnStreetTraffic runs inside
+    // pushStreet, a line before the new street is registered at its own far end,
+    // and that node grows its other arms later still, as the player drives near
+    // enough to resolve it. A route chosen against a node that is still just a
+    // stub can only be a U-turn -- and a U-turn is a half circle across the whole
+    // box, so it arrives at what is by then a four-way and mows down everything
+    // waiting there. Asking again from close in costs one reservoir sample per
+    // street and gets the intersection that actually exists.
+    if (!c.replanned && c.endNode && !c.turn &&
+        streetLength(c.street) - c.pos < REPLAN_DIST) {
+        planExit(c);
+        c.replanned = true;
+    }
+
     // --- Which piece of path am I following: my lane, or a corner arc? A
-    // planned turn begins when the car reaches the arc's start -- unless a stop
-    // sign is still owed there, in which case the stop happens first and the
-    // corner waits for it.
+    // planned turn begins when the car reaches the arc's start -- unless the
+    // driver is still holding back at the line, for a stop sign or for somebody
+    // with the right of way, in which case that happens first and the corner
+    // waits for it.
     if (!c.turn) {
-        if (c.turnPlan && c.pos >= c.turnPlan.posS && c.waitT <= 0 && !stopSignAhead(c)) {
+        if (c.turnPlan && c.pos >= c.turnPlan.posS && !c.holding && !stopSignAhead(c)) {
             c.turn = c.turnPlan;
         } else if (!c.turnPlan && c.pos > streetLength(c.street)) {
             if (!c.next) return false;   // drove off the built map
@@ -466,19 +727,66 @@ function driveCar(c, dt, player) {
         const need = (vG * vG - c.speed * c.speed) / (2 * d);
         if (need < -0.85 * drv.aComf) aPlan = need;
     }
-    // A stop sign on my approach: the same treatment with a goal of zero at the
-    // stop line. Once stopped, dwell a beat, then (no cross-traffic logic yet,
-    // by choice) just go.
-    if (c.waitT > 0) {
-        c.waitT -= dt;
-        if (c.waitT <= 0) c.stopDone = true;
-        vT = 0;
-    } else if (!c.turn && stopSignAhead(c)) {
-        const d = Math.max(0.5, len - STOP_LINE_BACK - c.pos);
-        vT = Math.min(vT, Math.sqrt(2 * drv.aComf * Math.max(0, d - 0.5)));
-        const need = -c.speed * c.speed / (2 * d);
-        if (need < -0.85 * drv.aComf) aPlan = Math.min(aPlan, need);
-        if (d < 3.5 && c.speed < 1) c.waitT = drv.pause;
+    // A stop sign or a car with the right of way on my approach: the same
+    // treatment with a goal of zero at the stop line. There is one line and one
+    // way of holding at it; what differs is only what puts the driver there. A
+    // signed approach always stops, dwells a beat, and then goes when the box is
+    // theirs. An unsigned one -- the through street of a two-way stop, or an
+    // uncontrolled crossing -- only slows if boxClear says somebody is coming,
+    // which is what makes yielding cost nothing on an empty road.
+    c.holding = false;
+    if (!c.turn && c.endNode && !c.stopDone) {
+        const dLine = len - stopDist(c) - c.pos;
+        // A stop still owed is the one thing that outranks everything below: the
+        // driver brakes for the line whatever the box is doing, and no amount of
+        // drifting the last foot past it lets them off (which a latch on
+        // position alone would -- a car braking hard is still rolling when it
+        // crosses, and would cancel its own stop a foot short of making it).
+        const owesStop = stopSignAhead(c) && !c.stoppedAt;
+        if (owesStop || (c.stoppedAt && simT - c.stoppedAt < drv.pause)) {
+            if (owesStop && dLine < 3.5 && c.speed <= STOP_CREEP) c.stoppedAt = simT;
+            c.holding = true;    // still owing the stop itself, or the dwell after it
+        } else if (dLine < YIELD_LOOK) {
+            // Don't block the box. An intersection you cannot drive out the far
+            // side of is one you have no business driving into, and this is the
+            // rule that keeps a junction from locking solid: without it a queue
+            // simply extends through the box, every car in it standing in
+            // somebody's way and none of them able to move, and no rule about
+            // who goes first can unpick that -- each of them is genuinely in the
+            // right. What it takes is room for the box and my own length beyond
+            // it, measured with the gap senseRoad already read this frame (which
+            // counts the leader that has crossed the node ahead of me).
+            c.holding = sense.gap < 2 * (BOX_R + c.hl) || !boxClear(c, player);
+        }
+        // Patience: held too long, the driver creeps out regardless. Real, and
+        // it bounds every bug in the priority logic to a moment's oddity rather
+        // than a frozen junction -- three cars can each be waiting on the car to
+        // their right, and no rule about who goes first unpicks that.
+        if (c.holding && c.holdT > drv.patience) c.holding = false;
+        // Crossing the line is a commitment, and it has to be, or a car released
+        // into the box and blocked a moment later stops dead in the middle of
+        // the junction -- where it is now in everybody's way, and where no rule
+        // about who goes first can help, because the thing in the way is a car
+        // that was in the right. So: past the line with nothing holding you, you
+        // are going; and once your nose is genuinely inside the box you are
+        // going regardless, stop owed or not. An intersection is no place to
+        // change your mind.
+        if (dLine < (c.holding ? -1 : 2) && !owesStop) { c.stopDone = true; c.holding = false; }
+        if (c.holding) {
+            vT = Math.min(vT, Math.sqrt(2 * drv.aComf * Math.max(0, dLine - 0.5)));
+            // The deceleration needed to stop *on* the line. Once the line is
+            // under the wheels there is no finite answer, so brake at comfort
+            // and be done -- and that case is not a rounding detail: left to the
+            // proportional loop alone the last foot of speed only decays, never
+            // arrives, and the car creeps into the junction for ever, a foot
+            // every few seconds, until something else decides it has committed.
+            const need = dLine > 0.5 ? -c.speed * c.speed / (2 * dLine) : -drv.aComf;
+            if (need < -0.85 * drv.aComf) aPlan = Math.min(aPlan, need);
+            // Patience measures time spent stopped *at the line* with nothing in
+            // front but the junction -- not time spent third in a queue, which
+            // is the following loop's doing and not a reason to creep anywhere.
+            if (c.speed < 3 && dLine < 6) c.holdT += dt;
+        }
     }
     // Crosstalk from the steering loop: far out of lane or pointing well off the
     // road -- fighting a curve, recovering a swerve, or just drunk -- is not the
@@ -598,7 +906,9 @@ function placeLane(s, vehicles, dir, len) {
             // Born rolling at something sensible; the speed loop takes it from here
             speed: Math.min(driver.cruise, 40) * (0.8 + Math.random() * 0.2),
             centerOff: lane, ei: 0, wander: 0, evade: 0, turn: null,
-            gapBuf: [], waitT: 0, stopDone: false, honkOk: 0,
+            gapBuf: [], stopDone: false, honkOk: 0, replanned: false,
+            inSlot: null, outSlot: null, prevNode: null, prevIn: null, prevOut: null,
+            stoppedAt: 0, holdT: 0, holding: false,
         };
         placeCarPose(c);
         planExit(c);
@@ -609,7 +919,7 @@ function placeLane(s, vehicles, dir, len) {
         if (c.turnPlan) c.speed = Math.min(c.speed, Math.sqrt(
             c.turnPlan.vTurn * c.turnPlan.vTurn + 2 * driver.aComf * Math.max(0, c.turnPlan.posS - c.pos)));
         if (stopSignAhead(c)) c.speed = Math.min(c.speed, Math.sqrt(
-            2 * driver.aComf * Math.max(0, len - STOP_LINE_BACK - c.pos)));
+            2 * driver.aComf * Math.max(0, len - stopDist(c) - c.pos)));
         traffic.push(c);
         run += lengths[i] + TRAFFIC_SPAWN_GAP;
     }
