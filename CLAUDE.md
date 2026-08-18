@@ -131,6 +131,16 @@ frame. `playerVehicleType` is picked via `randomVehicleType()` directly, rather
 than through `generateRandomVehicle()` as before, because a generated vehicle
 carries no name of its own for the banner to read back afterward.
 
+The camera sweeps every direction during the flourish, which would otherwise
+make a tall building flicker in and out of `BUILDING_FADE_ALPHA` (see "Seeing
+past tall ones" above) as it crossed in front of whatever street it's beside --
+one more thing competing with the flourish for attention, and gone almost as
+soon as it appeared. `game.js` sets the shared `buildingFade` flag (`lots.js`)
+false for the same span the UI stays hidden, so every building draws solid
+through the whole intro, and snaps it back true -- not eased -- in the same
+`update()` branch that starts the UI's own fade-in, since that fade is already
+the transition the eye is following at that moment.
+
 ## Streets
 
 `streets.js` grows the city outward from `initMap()`'s two seed nodes,

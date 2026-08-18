@@ -208,6 +208,14 @@ buildCameraFollowToggle();
 // flourish or gets tapped by accident while the car is still being introduced.
 if (CONTROLS_DOM) document.body.classList.add('ic-intro');
 inputLocked = true;
+// Tall buildings the player would otherwise be driving past see-through (see
+// lotHidesStreet in lots.js) draw at full opacity for the same span the UI
+// stays hidden: the camera is sweeping every direction during the flourish, so
+// a building fading in and out as it crosses "in the way" would be one more
+// thing competing for attention. Snapped back on (not faded) the instant the
+// UI reappears, in update() below, rather than eased -- the fade-in of the UI
+// itself is already the transition the eye is following at that moment.
+buildingFade = false;
 let introSettled = false;   // true once the flourish has hit its exact rest values
 let uiRevealed = false;     // true once body.ic-intro has been removed
 let uiAlpha = 0;            // 0..1, read by drawing.js to fade in the on-canvas HUD
@@ -331,6 +339,7 @@ function update(dt) {
     if (!uiRevealed && uiAlpha > 0) {
         if (CONTROLS_DOM) document.body.classList.remove('ic-intro');
         uiRevealed = true;
+        buildingFade = true;
     }
 
     // Traffic first, so the streets generate() is about to create are populated

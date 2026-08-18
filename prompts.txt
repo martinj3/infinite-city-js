@@ -704,3 +704,9 @@ Keyboard controls and hot keys are naturally locked out until the sequence compl
 
 Also, throughout the intro sequence, I want to display in text the name of the vehicle type that the player's car was randomly assigned, followed by an exclamation point, in medium-ish size transparent text.  Towards the top of the screen, not dead center, or it would cover the players car.
 The text color for this should pulse from gray to white and back, for emphasis
+
+---
+
+Also during that intro sequence, any tall buildings that would otherwise draw transparent should draw at full opacity.  They can instantly switch back to transparent when the controls appear.
+
+Also a real quick change to index.html:  The link to driving.html should be a bit bigger text than the other page links, and its text should be "Click to drive in Infinite City!"
