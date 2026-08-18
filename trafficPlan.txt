@@ -122,3 +122,135 @@ streets meeting at one hand-built node, hand-placed cars) and assert:
   measurements quoted in CLAUDE.md's Traffic section should not move much;
   throughput (cars crossing nodes per minute) should drop only modestly.
 Watch a rendered PNG sequence of a busy four-way before trusting any numbers.
+
+
+Plan: multi-lane roads, lane changing and merging
+=================================================
+(Same author, same ground rules. Nothing below exists yet -- streets today are
+one lane each way and laneOffset() is a single number. Do the intersection work
+above first; lane changes reuse its gap-acceptance ideas.)
+
+Step 0: make "which lane" a first-class number
+----------------------------------------------
+Today a car's lateral intention is c.lane, a single offset in feet. Keep that
+-- the steering loop should never learn about lanes -- but derive it:
+`c.lane = laneCenter(street, dir, laneIndex)`, with c.laneIndex the driver's
+intention (0 = rightmost). Street props grow `lanesPerSide` (1 for everything
+current, so nothing changes until the generator starts making wider roads).
+laneCenter is the one function that knows road geometry; everything else deals
+in laneIndex. Grep for every reader of c.lane and laneOffset first; there are
+only a handful (spawn, pose, planExit's A/B lane points, centerOff checks) and
+each either wants laneCenter(...) or is already correct.
+
+The lane change itself: it is only a moving target
+--------------------------------------------------
+Do not add a maneuver state machine to the steering loop. A lane change is
+c.laneIndex changing by one, and c.lane easing toward the new centre --
+literally `c.lane += (laneCenter(...) - c.lane) * min(1, dt / T)` with T ~
+2-4s, or a constant-rate ramp. The PID follows the moving target and the
+result already looks like a real lane change (the evade bias proved this
+pattern: steering targets can move freely and the loop just tracks them).
+Sharpen or soften per driver with T as a personality field. The only new
+steering-adjacent code is the easing; keep it in driveCar's speed/target
+section, not inside the PID.
+
+Deciding to change: one function, same shape as boxClear
+--------------------------------------------------------
+`laneGapOk(c, dir)` -- a pure read over the same senseRoad iteration (extend
+senseRoad to also report nearest-ahead and nearest-behind in the adjacent
+lane; it already walks every car once). Accept when: gap ahead > my
+minGap + headway*v against their speed, gap behind > their headway (estimate
+with a fleet-typical constant -- do not read the other driver's brain, drivers
+can't) with margin scaled by the same gapAccept personality from the
+intersection work. Reasons to want a change, in priority order, evaluated
+rarely (every ~0.5s per car, staggered, not every frame):
+- Mandatory: my planned exit at the node needs a lane I am not in (see below).
+  Wanted with growing urgency as the node nears; urgency relaxes gapAccept
+  toward "force it slowly" (real drivers do), and below ~100ft failing that,
+  fall back to slowing on the current lane and re-planning the exit to one my
+  lane allows -- never stop dead in a live lane waiting for a gap.
+- Discretionary: leader slower than my cruise by enough, adjacent lane's
+  leader meaningfully faster, cooldown since my last change (personality:
+  some drivers never change discretionarily, some weave).
+Store almost nothing: laneIndex (intention), laneChangeT (cooldown/urgency
+bookkeeping). No reservations, no signaling between cars beyond what senseRoad
+already reads. Two cars converging on one gap resolves like merges today: the
+later one sees a leader at negative gap and brakes; with laneGapOk it becomes
+rare instead of routine.
+
+Lanes at intersections
+----------------------
+planExit already decides the exit early; extend it to also pick the lane the
+exit wants: rights from the rightmost lane (laneIndex 0), lefts from the
+leftmost, straight from any. That decision is what feeds "mandatory" above,
+and deciding it a whole block early means most cars drift over long before it
+is urgent -- which is exactly the real behavior, and it costs nothing because
+planExit already runs once per street. makeTurnPlan's A and B points become
+laneCenter(street, dir, chosenLane) instead of the single lane offset; the
+fillet geometry is unchanged. Turns should end in the matching lane of the new
+street (rights into the right lane, lefts into the left) -- that is just which
+B you hand the fillet -- and a discretionary change can move the car later.
+
+Merging (lane count drops, on-ramps someday)
+--------------------------------------------
+A merge is a mandatory lane change whose deadline is where the lane ends, so
+it is the same code path as "wrong lane for my exit": urgency ramps, gapAccept
+relaxes, and the fallback is braking on the dying lane rather than stopping in
+the through lane. If the generator ever tapers a road, mark the taper on the
+street (fromPos, laneIndex dies) and mandatory-change logic reads it exactly
+like a node deadline. Zipper politeness (the car in the through lane easing
+off) is optional polish: reuse the following loop by letting a merger with
+high urgency register as a half-weight leader for the car it is merging ahead
+of -- one multiply on the gap error, only if it proves visually necessary.
+
+Turn signals
+------------
+Purely visual, and the state already exists: signal = (laneChange in progress
+or wanted) ? its direction : (turnPlan && near the node) ? turn direction : 0.
+Compute it in driveCar (one field, c.signal = -1/0/1), never store history.
+Draw as a small emissive quad pulsing on the appropriate body corner -- not
+v.roof (that pass is for things above the whole vehicle, like the police light
+bar) but the way flank trim/lights are done (v.trim, see vehicleUtils.js): a
+2-3 poly pass gated on zoom like VEHICLE_GLASS_MIN_ZOOM, blinking on
+(simT * 1.5) % 1 < 0.5. Drivers with low skill sometimes just don't signal
+(personality bit); drunk weaving is not signaled -- only intended changes,
+i.e. anything that moved laneIndex.
+
+What NOT to build
+-----------------
+- No lateral planner, no spline paths for lane changes, no lattice of
+  positions. The moving-target trick is the whole maneuver.
+- No per-lane data structures on streets (occupancy grids, linked lists of
+  cars per lane). senseRoad's single O(n) walk per car already sees everything
+  and stays the one sensing pass; give it lane awareness by comparing
+  laneIndex, nothing more.
+- No cooperative protocols between cars. All coordination stays emergent:
+  pure reads plus the following loop.
+- Do not let the drunk's wander cross lanes "accidentally" trigger mandatory
+  logic: wander perturbs where they think the centre is, laneIndex is still
+  their intention. Off-centre is an error to correct, not a lane change.
+
+Performance
+-----------
+All new decisions are per-street or per-half-second, staggered (hash car index
+against frame count). The only per-frame additions are one easing lerp and two
+extra comparisons inside the existing senseRoad loop. If lanesPerSide stays 1
+the whole feature is dormant and costs two branches.
+
+Validation
+----------
+- Build a hand-made 2-lane street (set lanesPerSide = 2 on props) with the
+  harness; assert a car eases between lane centres in ~T seconds with lane
+  error < 1ft throughout, no oscillation at the end.
+- Slow leader in right lane, fast driver behind: passes on the left, returns
+  or doesn't per personality; never clips the leader (world-distance check,
+  like the merge-resolution test).
+- Mandatory case: car in left lane planning a right turn 400ft out crosses
+  over in time; with the gap blocked by a solid platoon, it slows and either
+  finds the gap or re-plans the exit -- assert it never stops dead in the
+  through lane and never turns from the wrong lane.
+- Signals: probeCtx pass counting blink quads only during intended changes
+  and near-node turns, never during drunk wander.
+- Regression with lanesPerSide = 1 everywhere: pixel-identical frames (the
+  dormant feature must not perturb today's cities -- same trick as the
+  "suppress spawnStreetTraffic" determinism check in CLAUDE.md).

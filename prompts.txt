@@ -651,3 +651,11 @@ Quickly, briefly, based on your experience/context with the traffic features you
 Your brief recommendations on how to implement this in an effective, accurate, but also clean, maintainable, and performant way that integrates cleanly with the code you just wrote.  
 
 This plan/advice can be committed/pushed in a trafficPlan.txt, which can be referenced from Claude.md, so as not to clutter Claude.md
+
+---
+
+And quickly, some brief recommendations/plan for a smaller model in trafficPlan.txt on how you'd suggest implementing lane switching, merging, finding gaps between cars to switch lanes, turn signals, planning to get into the correct lane ahead of an intersection, etc.  
+
+We don't have large multi-lane roads yet, but may in the future.  
+
+Again focusing on a clean, maintainable solution that fits in well with existing code and is reasonably performant.  Commit/push
