@@ -16,6 +16,15 @@ track.
 With no real DOM every entry point turns into a no-op, which is what keeps
 `tools/render.js` working.
 
+Every page that pans the camera with the keyboard (the driving game, and the
+three camera test harnesses below) accepts WASD alongside the arrow keys --
+`keys['ArrowUp'] || keys['w'] || keys['W']`, and so on for the other three
+directions, at every call site that used to check the arrow alone. The three
+test harnesses (`streetTest.js`, `buildings/lotGrid.js`,
+`vehicles/vehicleGrid.js`) each used to bind `S` to `saveScreenshot()`, which
+would have collided with `S`-to-pan-down; all three now bind that to `P`
+instead (and the on-canvas HUD hint and the file's own header comment say so).
+
 The camera toolbar's opener-above-panel trick (`ic-cam` / `ic-cam-panel ic-hidden`
 / `ic-btn`, a button that toggles a sibling panel's hidden class) is reused by two
 other floating controls, one on each side of the toolbar itself, so all three read
@@ -261,9 +270,9 @@ as before). `inputLocked` flips false the instant `finishIntroCamera()` runs, at
 player who mashes a key right at the four-second mark is already driving before
 they can see any controls to press.
 
-The UI stays hidden a further second after that (`INTRO_UI_DELAY`) and then
-fades in over `UI_FADE_DURATION`, on two different mechanisms because half the
-UI is DOM and half is canvas. `document.body` carries an `ic-intro` class from
+The UI stays hidden a further second after that (`INTRO_UI_DELAY`, or less on
+mobile -- `introUIDelay()`, below) and then fades in over `UI_FADE_DURATION`,
+on two different mechanisms because half the UI is DOM and half is canvas. `document.body` carries an `ic-intro` class from
 the moment `game.js` loads; `controls.js`'s shared CSS declares `opacity: 0;
 pointer-events: none` on `.ic-cam`/`.ic-drive` under that class and an
 unconditional `transition: opacity` on the same selectors, so the instant
@@ -290,6 +299,15 @@ frame. `playerVehicleType` is picked via `randomVehicleType()` directly, rather
 than through `generateRandomVehicle()` as before, because a generated vehicle
 carries no name of its own for the banner to read back afterward.
 
+Waiting through `INTRO_UI_DELAY` feels longer on a phone, where there's no
+keyboard hint worth protecting from an early tap, so the driving controls
+there appear `UI_DELAY_MOBILE_EARLIER` seconds sooner -- `introUIDelay()`
+(`controls.js`) is the same `wantsTouchControls()`-gated pattern as
+`pxPerFtDefault()`/`viewAngleDefault()` above, and both `update()`'s `uiAlpha`
+calculation and `loop()`'s `uiRevealTime` read it instead of the flat
+`INTRO_UI_DELAY`. `INTRO_DURATION` itself, and the flourish it drives, are
+untouched -- only the further wait after it shrinks.
+
 The camera sweeps every direction during the flourish, which would otherwise
 make a tall building flicker in and out of `BUILDING_FADE_ALPHA` (see "Seeing
 past tall ones" in `docs/buildings.md`) as it crossed in front of whatever street it's beside --
@@ -299,3 +317,77 @@ false for the same span the UI stays hidden, so every building draws solid
 through the whole intro, and snaps it back true -- not eased -- in the same
 `update()` branch that starts the UI's own fade-in, since that fade is already
 the transition the eye is following at that moment.
+
+## Mobile steering, WASD, and the driving settings panel
+
+Keyboard driving accepts WASD alongside the arrow keys -- `update()`
+(`game.js`) ORs `keys['w']/['W']` into the same gas check as `keys['ArrowUp']`,
+and likewise for the other three -- and the on-canvas hint (`drawing.js`) says
+"WASD/Arrows" rather than just "Arrows" to match. The `Q/E: rotate  R/F: tilt`
+half of that same hint was already there; nothing needed adding for it.
+
+Touch steering has two widgets sharing one slot in the drive bar, built
+together by `initDriveControls()` (`controls.js`) and toggled with `ic-hidden`
+rather than one being constructed lazily, so switching between them is instant
+and never has to tear down or rebuild any DOM:
+
+- **Digital left/right buttons** (`.ic-steer-digital`, the default) --
+  `touchDrive.steerLeft`/`steerRight`, held down like a keyboard key, released
+  back to centre the instant a finger lifts. Easier to hit accurately on a
+  small screen than dragging a thumb to an exact spot on a slider, at the cost
+  of the slider's continuous analog control.
+- **The analog slider** (`.ic-steer`, as before) -- shown instead when
+  `ANALOG_STEERING_ENABLED` (`constants.js`, off by default) is on.
+
+`setAnalogSteering(on)` (`controls.js`) flips the flag, zeroes whatever the
+previous widget had live (`touchDrive.steer`/`steerLeft`/`steerRight`) so a
+stale full-lock value or a button caught mid-press can't survive the switch,
+and re-syncs which widget is visible.
+
+`update()` builds a `digitalSteer` value (`-1`/`0`/`1`) from arrows, WASD, and
+the two on-screen buttons together -- whichever source is active, keyboard or
+touch, they all feed the same digital input, and it takes priority over the
+analog slider exactly as arrow keys always took priority over the old slider
+alone (`steer = digitalSteer; if (steer === 0) steer = touchDrive.steer *
+TOUCH_STEER_GAIN`).
+
+**Fine-steering ramp.** Digital steering -- unlike the analog slider, which
+already has continuous control of its own -- turns at `STEER_HALF_RATE_FACTOR`
+of the normal rate for the first `STEER_HALF_RATE_DURATION` seconds a
+direction is newly held, so a quick tap nudges the car gently instead of
+snapping straight to full rate. `digitalSteerSign`/`digitalSteerHoldTime`
+(`game.js`, module-level so they persist frame to frame) track how long the
+*current* direction has been held: switching from left to right resets the
+timer just as releasing and repressing the same direction would, since a
+change of direction is exactly the moment fine control matters again. The
+scale multiplies the turn-rate term directly
+(`player.angle += MAX_TURN_RATE * tf * steer * dt * steerRateScale`) rather
+than touching `player.steer`, which stays the plain -1..1 input the front
+wheels' visual turn reads from -- the ramp slows how fast the car actually
+turns, not how far the wheels appear to be cranked over.
+
+**Layout.** `STEER_WIDTH_FRAC` (`constants.js`, default 0.38) is the fraction
+of the drive bar's width the steering widget -- slider or buttons, whichever
+is showing -- takes; gas and brake split the rest evenly as they always did,
+simply by both being `flex: 1 1 50%` children of a pedals container that is
+now `100% - STEER_WIDTH_FRAC` wide instead of a flat half. `applyDriveWidths()`
+(`controls.js`) sets both as inline `flex-basis`, which wins over the
+stylesheet's own (matching) defaults, so `setSteerWidthFrac(v)` can move the
+split live without touching any CSS. `STEER_DEAD_ZONE` (default 0.08/3, a
+third of the slider's old fixed dead zone) is read live by the slider's own
+`setSteer()` on every move rather than captured once, so `setSteerDeadZone(v)`
+takes effect on the very next touch.
+
+**The settings panel** (`game.js`'s `buildSettingsPanel()`) is a second
+toolbar one slot right of the vehicle picker -- `.gm-settings { left: 114px }`,
+the same one-slot-over-from-the-last-one trick `VEH_PICKER_CSS` uses for the
+picker itself (see "Keeping the top right clear" above) -- opened by a `⚙`
+button. It holds the "analog steering" checkbox and a row per tunable constant
+above (`settingsRangeRow()`, a small helper that wires a range input to a
+getter/setter pair and a value readout). Every row shows the value it's
+currently set to, converted to whatever unit is easiest to read (a percentage
+for a fraction, seconds for a duration) rather than the raw stored number, so
+a value that feels right while dragging the slider can be read straight off
+the panel and reported back as a new default in `constants.js` -- these
+settings are session-only, not persisted, by design: the panel is a tuning
+tool, not a user preference.

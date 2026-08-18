@@ -11,8 +11,8 @@
 //   ?x=0&y=0       initial camera position, in feet (default: center of the city)
 //   ?fade=0        start with tall buildings solid instead of see-through
 //
-// Keys: arrows pan, +/- zoom, Q/E rotate, R/F tilt, 0 refit the whole city,
-//       G regenerate (new seed), space grow +100 streets, S save a PNG screenshot,
+// Keys: arrows/WASD pan, +/- zoom, Q/E rotate, R/F tilt, 0 refit the whole city,
+//       G regenerate (new seed), space grow +100 streets, P save a PNG screenshot,
 //       H toggle the HUD, T toggle see-through tall buildings (?fade=0 starts off).
 //
 // T is the one worth playing with alongside Q/E: hold Q and watch the near side of
@@ -130,7 +130,7 @@ addEventListener('keydown', e => {
     if (!keys[e.key]) {
         if (e.key === 'g' || e.key === 'G') regenerate();
         if (e.key === ' ') grow(GROW_STEP);
-        if (e.key === 's' || e.key === 'S') saveScreenshot();
+        if (e.key === 'p' || e.key === 'P') saveScreenshot();
         if (e.key === 'h' || e.key === 'H') { showHud = !showHud; syncHudToggle(); }
         if (e.key === '0') fitToCity();
         if (e.key === 't' || e.key === 'T') buildingFade = !buildingFade;
@@ -163,14 +163,14 @@ function saveScreenshot() {
 
 // --- Update ---
 function update(dt) {
-    // Arrow keys move in world space, accounting for the isometric rotation
-    // so that pressing "up" moves the camera visually upward on screen
+    // Arrow keys (or WASD) move in world space, accounting for the isometric
+    // rotation so that pressing "up" moves the camera visually upward on screen
     const cos = getCosV(), sin = getSinV();
     let dx = 0, dy = 0;
-    if (keys['ArrowUp'])    { dx -= sin; dy -= cos; }
-    if (keys['ArrowDown'])  { dx += sin; dy += cos; }
-    if (keys['ArrowLeft'])  { dx -= cos; dy += sin; }
-    if (keys['ArrowRight']) { dx += cos; dy -= sin; }
+    if (keys['ArrowUp'] || keys['w'] || keys['W'])    { dx -= sin; dy -= cos; }
+    if (keys['ArrowDown'] || keys['s'] || keys['S'])  { dx += sin; dy += cos; }
+    if (keys['ArrowLeft'] || keys['a'] || keys['A'])  { dx -= cos; dy += sin; }
+    if (keys['ArrowRight'] || keys['d'] || keys['D']) { dx += cos; dy -= sin; }
     const len = Math.hypot(dx, dy);
     if (len > 0) {
         // Pan at a constant screen speed, so it stays usable at any zoom
@@ -211,8 +211,8 @@ function drawHud() {
         `cam ${camX.toFixed(0)}, ${camY.toFixed(0)} ft`,
         `see-through tall buildings ${buildingFade ? 'on' : 'off'} (over ${BUILDING_FADE_MIN_HEIGHT}ft)`,
         '',
-        'arrows pan   +/- zoom   Q/E rotate   R/F tilt   0 fit',
-        'G regen   space +100 streets   S screenshot   T see-through   H hide'
+        'arrows/WASD pan   +/- zoom   Q/E rotate   R/F tilt   0 fit',
+        'G regen   space +100 streets   P screenshot   T see-through   H hide'
     ];
     ctx.fillStyle = 'rgba(0,0,0,0.55)';
     ctx.fillRect(8, HUD_TOP, 340, 18 * lines.length + 14);

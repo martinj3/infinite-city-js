@@ -30,7 +30,7 @@ const CONTROLS_DOM = typeof document !== 'undefined' &&
 // can read it unconditionally, whether or not the pedals were ever built. `shown`
 // says the on-screen controls are up, which is also how the HUD knows to drop its
 // keyboard hint on a device that has no keys to press.
-const touchDrive = { steer: 0, gas: false, brake: false, shown: false };
+const touchDrive = { steer: 0, gas: false, brake: false, shown: false, steerLeft: false, steerRight: false };
 
 // Set true by game.js during the driving game's own startup intro (see game.js)
 // to shut out drag/pinch gestures on the canvas for the same span keyboard input
@@ -65,6 +65,13 @@ function pxPerFtDefault() {
 // comment there for why mobile starts rotated further round.
 function viewAngleDefault() {
     return wantsTouchControls() ? VIEW_ANGLE_DEFAULT_MOBILE : VIEW_ANGLE_DEFAULT;
+}
+
+// Same pattern again, for INTRO_UI_DELAY/UI_DELAY_MOBILE_EARLIER (constants.js)
+// -- driving.html's own startup flourish (game.js) reads this for how much
+// longer to wait, after the flourish itself ends, before the UI starts fading in.
+function introUIDelay() {
+    return wantsTouchControls() ? Math.max(0, INTRO_UI_DELAY - UI_DELAY_MOBILE_EARLIER) : INTRO_UI_DELAY;
 }
 
 function setZoom(v) {
@@ -278,16 +285,55 @@ function initPanZoom(opts) {
 }
 
 // --- Driving controls (touch screens) ---
-// Steering slider on the left half, gas and brake on the right half. The slider
-// springs back to centre on release, the way a wheel does, so letting go stops
-// the turn instead of leaving it locked over.
+// Steering is either an analog slider or two digital left/right buttons, on the
+// left of the bar; gas and brake, on the right, are always the two pedals.
+// ANALOG_STEERING_ENABLED (constants.js, off by default) picks which steering
+// widget shows -- both are built up front and toggled with ic-hidden, rather
+// than one being built lazily, so the settings panel (game.js) can flip the
+// checkbox live without having to construct or tear down any DOM. The slider
+// springs back to centre on release, the way a wheel does; the buttons behave
+// like a held keyboard key instead -- turn while held, stop the instant it's
+// released -- which is the more forgiving of the two to hit accurately on a
+// small screen, hence the default.
+let steerSlotEl = null, steerAnalogEl = null, steerDigitalEl = null, pedalsEl = null;
+
+// STEER_WIDTH_FRAC (constants.js) is a live setting, not a fixed layout, so it's
+// applied as inline flex-basis (which wins over the CSS defaults below) rather
+// than baked into the stylesheet -- called once at build time and again by the
+// settings panel whenever the slider there moves.
+function applyDriveWidths() {
+    if (!steerSlotEl) return;
+    const pct = Math.max(0, Math.min(1, STEER_WIDTH_FRAC)) * 100;
+    steerSlotEl.style.flex = `0 0 ${pct}%`;
+    pedalsEl.style.flex = `0 0 ${100 - pct}%`;
+}
+function setSteerWidthFrac(v) { STEER_WIDTH_FRAC = v; applyDriveWidths(); }
+function setSteerDeadZone(v) { STEER_DEAD_ZONE = v; }
+
+function syncSteerMode() {
+    if (!steerAnalogEl) return;
+    steerAnalogEl.classList.toggle('ic-hidden', !ANALOG_STEERING_ENABLED);
+    steerDigitalEl.classList.toggle('ic-hidden', ANALOG_STEERING_ENABLED);
+}
+// Dropping whatever the previous widget had live is what keeps a stale full-lock
+// slider value (or a button caught mid-press) from surviving a mode switch.
+function setAnalogSteering(on) {
+    ANALOG_STEERING_ENABLED = on;
+    touchDrive.steer = 0; touchDrive.steerLeft = false; touchDrive.steerRight = false;
+    syncSteerMode();
+}
+
 function initDriveControls() {
     if (!CONTROLS_DOM || !wantsTouchControls()) return;
 
     const bar = ctlEl('div', 'ic-drive', document.body);
     bar.addEventListener('contextmenu', e => e.preventDefault());
 
-    const steer = ctlEl('div', 'ic-steer', bar);
+    steerSlotEl = ctlEl('div', 'ic-steer-slot', bar);
+
+    // --- Analog slider ---
+    const steer = ctlEl('div', 'ic-steer ic-hidden', steerSlotEl);
+    steerAnalogEl = steer;
     const track = ctlEl('div', 'ic-steer-track', steer);
     ctlEl('div', 'ic-steer-centre', track);
     const thumb = ctlEl('div', 'ic-steer-thumb', track);
@@ -297,12 +343,12 @@ function initDriveControls() {
     // a fingertip is wide next to the track, and a wide vehicle has no business
     // wandering from a touch that was aiming for "straight ahead". Rescaled so the
     // ends of the track still reach full lock rather than losing that last bit of
-    // range to the dead zone.
-    const STEER_DEAD_ZONE = 0.08;
+    // range to the dead zone. STEER_DEAD_ZONE (constants.js) is read live, not
+    // captured, so the settings panel's slider takes effect on the next touch.
     const setSteer = v => {
         v = Math.max(-1, Math.min(1, v));
-        v = Math.abs(v) < STEER_DEAD_ZONE ? 0
-            : Math.sign(v) * (Math.abs(v) - STEER_DEAD_ZONE) / (1 - STEER_DEAD_ZONE);
+        const dz = Math.max(0, Math.min(0.9, STEER_DEAD_ZONE));
+        v = Math.abs(v) < dz ? 0 : Math.sign(v) * (Math.abs(v) - dz) / (1 - dz);
         touchDrive.steer = v;
         thumb.style.left = (50 + touchDrive.steer * 50) + '%';
     };
@@ -335,9 +381,31 @@ function initDriveControls() {
     steer.addEventListener('pointerup', dropSteer);
     steer.addEventListener('pointercancel', dropSteer);
 
-    const pedals = ctlEl('div', 'ic-pedals', bar);
+    // --- Digital left/right buttons (the default) ---
+    const digital = ctlEl('div', 'ic-steer-digital ic-hidden', steerSlotEl);
+    steerDigitalEl = digital;
+    const steerBtn = (cls, label, key) => {
+        const b = ctlEl('button', 'ic-steer-btn ' + cls, digital, label);
+        const down = e => {
+            e.preventDefault();
+            capturePointer(b, e.pointerId);
+            touchDrive[key] = true;
+            b.classList.add('ic-held');
+        };
+        const up = () => { touchDrive[key] = false; b.classList.remove('ic-held'); };
+        b.addEventListener('pointerdown', down);
+        b.addEventListener('pointerup', up);
+        b.addEventListener('pointercancel', up);
+        return b;
+    };
+    steerBtn('ic-steer-left', '◀', 'steerLeft');
+    steerBtn('ic-steer-right', '▶', 'steerRight');
+    syncSteerMode();
+
+    // --- Gas / brake ---
+    pedalsEl = ctlEl('div', 'ic-pedals', bar);
     const pedal = (cls, label, key) => {
-        const b = ctlEl('button', 'ic-pedal ' + cls, pedals, label);
+        const b = ctlEl('button', 'ic-pedal ' + cls, pedalsEl, label);
         const down = e => {
             e.preventDefault();
             capturePointer(b, e.pointerId);
@@ -353,6 +421,7 @@ function initDriveControls() {
     pedal('ic-brake', 'BRAKE', 'brake');
     pedal('ic-gas', 'GAS', 'gas');
 
+    applyDriveWidths();
     touchDrive.shown = true;
 }
 
@@ -394,8 +463,9 @@ body.ic-intro .ic-cam, body.ic-intro .ic-drive { opacity: 0; pointer-events: non
     background: rgba(0,0,0,0.45);
     font: 15px system-ui, sans-serif; user-select: none; -webkit-user-select: none;
     -webkit-tap-highlight-color: transparent; }
-.ic-steer { flex: 1 1 50%; display: flex; flex-direction: column; justify-content: center;
-    gap: 6px; touch-action: none; }
+.ic-steer-slot { flex: 1 1 38%; display: flex; flex-direction: column; justify-content: center;
+    touch-action: none; }
+.ic-steer { display: flex; flex-direction: column; justify-content: center; gap: 6px; }
 .ic-steer-track { position: relative; height: 62px; border-radius: 31px;
     background: rgba(255,255,255,0.16); border: 1px solid rgba(255,255,255,0.35); }
 .ic-steer-centre { position: absolute; left: 50%; top: 8px; bottom: 8px; width: 2px;
@@ -403,7 +473,12 @@ body.ic-intro .ic-cam, body.ic-intro .ic-drive { opacity: 0; pointer-events: non
 .ic-steer-thumb { position: absolute; top: 4px; width: 52px; height: 52px;
     margin-left: -26px; border-radius: 26px; background: rgba(255,255,255,0.85); }
 .ic-steer-label { color: #fff; text-align: center; opacity: 0.8; font-size: 12px; }
-.ic-pedals { flex: 1 1 50%; display: flex; gap: 10px; }
+.ic-steer-digital { display: flex; gap: 10px; height: 62px; }
+.ic-steer-btn { flex: 1 1 50%; color: #fff; font: bold 24px system-ui, sans-serif;
+    background: rgba(255,255,255,0.16); border: 1px solid rgba(255,255,255,0.35);
+    border-radius: 10px; touch-action: none; -webkit-tap-highlight-color: transparent; }
+.ic-steer-btn.ic-held { background: rgba(255,255,255,0.45); }
+.ic-pedals { flex: 1 1 62%; display: flex; gap: 10px; }
 .ic-pedal { flex: 1 1 50%; min-height: 84px; color: #fff;
     border: 1px solid rgba(255,255,255,0.35); border-radius: 10px;
     font: bold 15px system-ui, sans-serif; cursor: pointer;

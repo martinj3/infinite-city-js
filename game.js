@@ -287,6 +287,80 @@ function buildCarOffsetToggle() {
 }
 buildCarOffsetToggle();
 
+// --- Driving control settings panel ---
+// A second toolbar, one slot right of the vehicle picker (see "Keeping the top
+// right clear", docs/controls.md), for the handful of steering-feel constants
+// (constants.js) that are worth tuning live rather than guessing at: mobile's
+// steering widget (slider vs. two digital buttons), the slider's own width and
+// dead zone, and the digital fine-steering ramp that also applies to keyboard
+// steering. Every row shows the value it is currently set to, so a value that
+// feels right can be read straight off the panel and reported back as a new
+// default rather than rediscovered by trial and error next time.
+const SETTINGS_CSS = `
+.gm-settings { left: 114px; right: auto; }
+.gm-settings-panel { width: 220px; align-items: stretch; }
+.gm-set-row { display: flex; align-items: center; gap: 8px; }
+.gm-set-row .ic-label { width: 72px; flex: none; }
+.gm-set-row input[type=range] { flex: 1 1 auto; min-width: 0; }
+.gm-set-val { min-width: 38px; text-align: right; color: #fff; font-size: 12px;
+    font-variant-numeric: tabular-nums; }
+`;
+
+// label/min/max/step operate on whatever integer-ish range makes a smooth drag;
+// get/set convert to and from the real value the constant is stored in, so a
+// constant that lives in fractions (0..1) or seconds still gets a slider with
+// sane step sizes instead of dragging across 0.01-wide floats.
+function settingsRangeRow(panel, label, min, max, step, get, set, fmt) {
+    const row = ctlEl('div', 'ic-row gm-set-row', panel);
+    ctlEl('span', 'ic-label', row, label);
+    const input = ctlEl('input', '', row);
+    input.type = 'range'; input.min = min; input.max = max; input.step = step;
+    input.value = get();
+    const val = ctlEl('span', 'gm-set-val', row, fmt(get()));
+    input.addEventListener('input', () => {
+        const v = parseFloat(input.value);
+        set(v);
+        val.textContent = fmt(v);
+    });
+}
+
+function buildSettingsPanel() {
+    if (!CONTROLS_DOM) return;
+    const style = document.createElement('style');
+    style.textContent = SETTINGS_CSS;
+    document.head.appendChild(style);
+
+    const wrap = ctlEl('div', 'ic-cam gm-settings', document.body);
+    const panel = ctlEl('div', 'ic-cam-panel gm-settings-panel ic-hidden', wrap);
+
+    const analogRow = ctlEl('label', 'ic-row gm-follow-row', panel);
+    const analogBox = ctlEl('input', '', analogRow);
+    analogBox.type = 'checkbox';
+    analogBox.checked = ANALOG_STEERING_ENABLED;
+    ctlEl('span', 'ic-label gm-follow-label', analogRow, 'analog steering');
+    analogBox.addEventListener('change', () => setAnalogSteering(analogBox.checked));
+
+    settingsRangeRow(panel, 'steer width', 20, 60, 1,
+        () => Math.round(STEER_WIDTH_FRAC * 100), v => setSteerWidthFrac(v / 100), v => v + '%');
+    settingsRangeRow(panel, 'deadzone', 0, 20, 1,
+        () => Math.round(STEER_DEAD_ZONE * 100), v => setSteerDeadZone(v / 100), v => v + '%');
+    settingsRangeRow(panel, 'ramp time', 0, 100, 5,
+        () => Math.round(STEER_HALF_RATE_DURATION * 100), v => { STEER_HALF_RATE_DURATION = v / 100; }, v => (v / 100).toFixed(2) + 's');
+    settingsRangeRow(panel, 'ramp rate', 10, 100, 5,
+        () => Math.round(STEER_HALF_RATE_FACTOR * 100), v => { STEER_HALF_RATE_FACTOR = v / 100; }, v => v + '%');
+    settingsRangeRow(panel, 'UI earlier', 0, 100, 5,
+        () => Math.round(UI_DELAY_MOBILE_EARLIER * 100), v => { UI_DELAY_MOBILE_EARLIER = v / 100; }, v => (v / 100).toFixed(2) + 's');
+
+    const toggle = ctlEl('button', 'ic-btn ic-cam-toggle', wrap, '⚙');
+    toggle.title = 'Driving control settings';
+    toggle.setAttribute('aria-label', 'Driving control settings');
+    toggle.addEventListener('click', () => {
+        panel.classList.toggle('ic-hidden');
+        toggle.classList.toggle('ic-held', !panel.classList.contains('ic-hidden'));
+    });
+}
+buildSettingsPanel();
+
 // --- Intro sequence ---
 // A four-second flourish on load: the camera does one full turn around the
 // parked car while the tilt oscillates and settles, and the zoom eases in from
@@ -369,17 +443,39 @@ function finishIntroCamera() {
     }
 }
 
+// Tracks how long the current digital steering direction (a held key, arrows or
+// WASD, or the on-screen left/right buttons -- never the analog slider) has been
+// held, so update() below can halve the turn rate for the first
+// STEER_HALF_RATE_DURATION seconds of it -- see constants.js.
+let digitalSteerSign = 0, digitalSteerHoldTime = 0;
+
 // --- Update ---
 function update(dt) {
-    // Keys and the touch controls feed the same three inputs. Steering is analog:
-    // a key is simply the slider pushed all the way over. Locked out for the
+    // Keys and the touch controls feed the same three inputs. Steering is analog
+    // only from the slider; arrows/WASD and the on-screen left/right buttons are
+    // digital, simply the slider pushed all the way over. Locked out for the
     // length of the intro flourish, above.
     if (!inputLocked) {
-        const gas = keys['ArrowUp'] || touchDrive.gas;
-        const brake = keys['ArrowDown'] || touchDrive.brake;
-        let steer = (keys['ArrowRight'] ? 1 : 0) - (keys['ArrowLeft'] ? 1 : 0);
+        const gas = keys['ArrowUp'] || keys['w'] || keys['W'] || touchDrive.gas;
+        const brake = keys['ArrowDown'] || keys['s'] || keys['S'] || touchDrive.brake;
+        const digitalRight = keys['ArrowRight'] || keys['d'] || keys['D'] || touchDrive.steerRight;
+        const digitalLeft = keys['ArrowLeft'] || keys['a'] || keys['A'] || touchDrive.steerLeft;
+        const digitalSteer = (digitalRight ? 1 : 0) - (digitalLeft ? 1 : 0);
+        let steer = digitalSteer;
         if (steer === 0) steer = touchDrive.steer * TOUCH_STEER_GAIN;
         player.steer = Math.max(-1, Math.min(1, steer));
+
+        // Fine-steering ramp: a direction newly held (or one just switched from
+        // the other side) turns at STEER_HALF_RATE_FACTOR of the normal rate for
+        // STEER_HALF_RATE_DURATION seconds, so a quick tap nudges the car gently
+        // instead of snapping straight to full rate. Never applies to the analog
+        // slider, which already has continuous fine control of its own.
+        if (digitalSteer !== 0) {
+            if (digitalSteer !== digitalSteerSign) { digitalSteerSign = digitalSteer; digitalSteerHoldTime = 0; }
+            else digitalSteerHoldTime += dt;
+        } else { digitalSteerSign = 0; digitalSteerHoldTime = 0; }
+        const steerRateScale = (digitalSteer !== 0 && digitalSteerHoldTime < STEER_HALF_RATE_DURATION)
+            ? STEER_HALF_RATE_FACTOR : 1;
 
         if (gas) player.speed += curveAccel(player.speed, player.perf.accelK) * dt;
         if (brake) {
@@ -393,7 +489,7 @@ function update(dt) {
         player.speed = Math.max(-REVERSE_MAX, Math.min(MAX_SPEED, player.speed));
 
         const tf = Math.min(Math.abs(player.speed) / 20, 1);
-        player.angle += MAX_TURN_RATE * tf * steer * dt;
+        player.angle += MAX_TURN_RATE * tf * steer * dt * steerRateScale;
     }
 
     player.x += Math.cos(player.angle) * player.speed * dt;
@@ -430,7 +526,8 @@ function update(dt) {
     // Drives both the DOM panels' fade-in (removing body.ic-intro lets their own
     // CSS transition run) and the on-canvas HUD's fade-in (drawing.js reads
     // uiAlpha directly, since a canvas fill has no transition of its own).
-    uiAlpha = Math.max(0, Math.min(1, (elapsed - INTRO_DURATION - INTRO_UI_DELAY) / UI_FADE_DURATION));
+    // introUIDelay() (controls.js) is shorter on mobile -- see constants.js.
+    uiAlpha = Math.max(0, Math.min(1, (elapsed - INTRO_DURATION - introUIDelay()) / UI_FADE_DURATION));
     if (!uiRevealed && uiAlpha > 0) {
         if (CONTROLS_DOM) document.body.classList.remove('ic-intro');
         uiRevealed = true;
@@ -465,7 +562,7 @@ let lastTime = performance.now(), elapsed = 0, instructionAlpha = 0;
 function loop(t) {
     const dt = Math.min((t - lastTime) / 1000, 0.05);
     lastTime = t; elapsed += dt;
-    const uiRevealTime = INTRO_DURATION + INTRO_UI_DELAY;
+    const uiRevealTime = INTRO_DURATION + introUIDelay();
     if (elapsed > uiRevealTime) instructionAlpha = Math.min(1, instructionAlpha + dt);
     if (elapsed > uiRevealTime + 4) instructionAlpha = Math.max(0, instructionAlpha - dt);
     update(dt);

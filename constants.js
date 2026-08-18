@@ -94,6 +94,11 @@ const CAMERA_FOLLOW_DEAD_ZONE = 25 * Math.PI / 180;
 // game.js on the same timing rather than each guessing a duration.
 const INTRO_DURATION = 4;       // seconds: length of the flourish; input stays locked out until it ends
 const INTRO_UI_DELAY = 1;       // further seconds of stillness before the UI starts fading in
+// On mobile the wait feels longer for no extra benefit (there's no keyboard hint
+// competing for attention), so the controls there appear this much sooner than
+// INTRO_UI_DELAY -- introUIDelay() (controls.js) is what actually picks between
+// them. INTRO_DURATION itself is untouched: only the further wait after it changes.
+let UI_DELAY_MOBILE_EARLIER = 1;
 const UI_FADE_DURATION = 1;     // seconds the UI (panels and HUD) take to fade in once they start
 const INTRO_ZOOM_START = 1.0;   // PX_PER_FT at the start of the intro -- wider than either default above
 const INTRO_TILT_CYCLES = 2.5;  // tilt oscillations during the intro before it settles on Y_SCALE_DEFAULT
@@ -129,6 +134,31 @@ const MAX_TURN_RATE = 3;
 // thumb pushed to the edge of a small on-screen track doesn't feel as sharp as
 // a key doing the same job, so it gets a gain the keyboard doesn't.
 const TOUCH_STEER_GAIN = 1.5;
+
+// --- Mobile steering controls, and the fine-steering ramp ---
+// All `let`, not `const`: the driving-only settings panel (game.js) adjusts
+// these live, and shows the current value next to each control, so a value the
+// player likes can be read straight off the panel and reported back as a new
+// default here.
+//
+// Fraction of the on-screen drive bar's width the steering control (slider or
+// left/right buttons) takes; the rest is split evenly between gas and brake.
+let STEER_WIDTH_FRAC = 0.38;
+// Dead zone at the centre of the analog steering slider (controls.js) -- a
+// thumb held near "straight ahead" shouldn't read as a faint drift.
+let STEER_DEAD_ZONE = 0.08 / 3;
+// Digital steering -- a held key (arrows/WASD) or the on-screen left/right
+// buttons, as opposed to the analog slider -- turns at half MAX_TURN_RATE for
+// this many seconds after the input first goes from centre to one side, so a
+// quick tap nudges the car only a little instead of snapping straight to full
+// rate; held past this long, steering is back to full rate as always.
+let STEER_HALF_RATE_DURATION = 0.25;
+let STEER_HALF_RATE_FACTOR = 0.5;
+// Two-button digital steering, in place of the analog slider, is the mobile
+// default -- easier to hit accurately than dragging a thumb to an exact spot,
+// at the cost of the slider's fine analog control. Off (slider) is still one
+// checkbox away in the settings panel.
+let ANALOG_STEERING_ENABLED = false;
 
 // --- Seeing past tall buildings ---
 // A building on the near side of a street stands between the camera and the road,

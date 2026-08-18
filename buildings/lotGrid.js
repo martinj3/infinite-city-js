@@ -16,8 +16,8 @@
 //   ?angle=-45     initial view rotation, in degrees
 //   ?tilt=0.5      initial vertical squash (0.25 - 0.75)
 //
-// Keys: arrows pan, +/- zoom, Q/E rotate, R/F tilt, 0 refit the grid,
-//       G regenerate (new seed), S save a PNG screenshot, H toggle the HUD.
+// Keys: arrows/WASD pan, +/- zoom, Q/E rotate, R/F tilt, 0 refit the grid,
+//       G regenerate (new seed), P save a PNG screenshot, H toggle the HUD.
 
 const canvas = document.getElementById('bldg-canvas');
 const ctx = canvas.getContext('2d');
@@ -148,7 +148,7 @@ addEventListener('keydown', e => {
     if (e.key.startsWith('Arrow') || e.key === ' ') e.preventDefault();
     if (!keys[e.key]) {
         if (e.key === 'g' || e.key === 'G') regenerate();
-        if (e.key === 's' || e.key === 'S') saveScreenshot();
+        if (e.key === 'p' || e.key === 'P') saveScreenshot();
         if (e.key === 'h' || e.key === 'H') { showHud = !showHud; syncHudToggle(); }
         if (e.key === '0') fitToGrid();
     }
@@ -179,14 +179,14 @@ function saveScreenshot() {
 }
 
 function update(dt) {
-    // Arrow keys move in world space, accounting for the isometric rotation
-    // so that pressing "up" moves the camera visually upward on screen
+    // Arrow keys (or WASD) move in world space, accounting for the isometric
+    // rotation so that pressing "up" moves the camera visually upward on screen
     const cos = getCosV(), sin = getSinV();
     let dx = 0, dy = 0;
-    if (keys['ArrowUp'])    { dx -= sin; dy -= cos; }
-    if (keys['ArrowDown'])  { dx += sin; dy += cos; }
-    if (keys['ArrowLeft'])  { dx -= cos; dy += sin; }
-    if (keys['ArrowRight']) { dx += cos; dy -= sin; }
+    if (keys['ArrowUp'] || keys['w'] || keys['W'])    { dx -= sin; dy -= cos; }
+    if (keys['ArrowDown'] || keys['s'] || keys['S'])  { dx += sin; dy += cos; }
+    if (keys['ArrowLeft'] || keys['a'] || keys['A'])  { dx -= cos; dy += sin; }
+    if (keys['ArrowRight'] || keys['d'] || keys['D']) { dx += cos; dy -= sin; }
     const len = Math.hypot(dx, dy);
     if (len > 0) {
         // Pan at a constant screen speed, so it stays usable at any zoom
@@ -233,8 +233,8 @@ function drawHud() {
         `seed ${seed === null ? '(random)' : seed}   built in ${stats.ms.toFixed(0)}ms`,
         `zoom ${PX_PER_FT.toFixed(2)} px/ft   rot ${(normA(VIEW_ANGLE) * 180 / Math.PI).toFixed(0)}deg   tilt ${Y_SCALE.toFixed(2)}`,
         '',
-        'arrows pan   +/- zoom   Q/E rotate   R/F tilt   0 fit',
-        'G regen   S screenshot   H hide'
+        'arrows/WASD pan   +/- zoom   Q/E rotate   R/F tilt   0 fit',
+        'G regen   P screenshot   H hide'
     ];
     ctx.fillStyle = 'rgba(0,0,0,0.55)';
     ctx.fillRect(8, HUD_TOP, 400, 18 * lines.length + 14);

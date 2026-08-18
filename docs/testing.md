@@ -2,7 +2,7 @@
 
 `streetTest.html` is the fastest way to check street generation: it grows a whole
 city up front (no car, camera flies around) via the same `initMap()`/`generate()`
-path the driving game uses. `?seed=123` makes it deterministic, and `S` saves a PNG.
+path the driving game uses. `?seed=123` makes it deterministic, and `P` saves a PNG.
 Traffic runs here too, with the camera standing in for the player -- but the city is
 grown before the camera has flown anywhere, so the cars are around wherever it
 *started*: fly off and it thins out, and only `space` (build more streets) or `G`

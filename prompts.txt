@@ -765,3 +765,22 @@ This last part can have a checkbox in the camera controls to toggle it on or off
 Whoa, that's broken.  Camera rotation seems to apply differently to streets vs vehicles (whether the player uses the rotation controls, or the rotation during the intro sequence).  My car even ended up on the wrong side of the road, everyone was driving on the left, like in Britain!
 
 I thought that should've been a fairly simple change, just tweaking some constants mostly?  Apply the shift after the rotation maybe, and it becomes simple?  You are the larger model Opus, maybe you can do better than Sonnet...
+
+---
+
+On mobile, controls should fade in one second earlier. I get tired of waiting for them. Intro sequence length stays the same, but controls appear one second earlier.
+
+Steering slider is a little too wide, have to move your finger a little too far. Make it 38% of the screen width, instead of ~50% it is now. The remainder is divided equally between gas and brake.
+Steering deadzone for analog is also a little too large, should be about 1/3 the current value.
+
+Also, alternate steering method for mobile, just two buttons, left and right, behaving similar to the keyboard keys on desktop, taking the place of the slider. New gear settings button beside the camera button, dropdown includes checkbox to enable analog steering. Analog off by default, for now.
+
+Also update desktop controls to allow WASD, in addition to arrow keys. Update the little controls hint that briefly appears on startup to mention "WASD/arrows". Also add rotate keys there, if we have them (if not, add plus/minus keys for this, I suppose).
+
+Also add a feature for the desktop and non-analog mobile steering, where the steering rate is halved for the first 1/4 second the button is held (for easier fine tuning with a lane)
+
+That new settings dropdown pane thing can have adjustments for all of these values (be sure to show the set value, so if I find a new value I like, we update the default).
+
+Also on index.html, below the link to driving.html add some plain text description of the controls: WASD/arrows steering/accel, zoom keys or mouse wheel or pinch to zoom, tilt keys, rotate keys.
+
+And then above the other links, add a plain text note that "all the below allow pinch to zoom or scroll wheel zoom and drag to scroll or arrow key/WASD scroll" (make sure WASD scrolling works here too, alongside arrow keys)

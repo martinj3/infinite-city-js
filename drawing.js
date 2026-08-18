@@ -503,7 +503,7 @@ function draw() {
         ctx.fillStyle = 'rgba(0,0,0,0.6)';
         ctx.fillRect(W / 2 - 200, H - 80, 400, 50);
         ctx.fillStyle = '#fff'; ctx.font = '14px monospace'; ctx.textAlign = 'center';
-        ctx.fillText('Arrows: drive  Q/E: rotate  R/F: tilt', W / 2, H - 50);
+        ctx.fillText('WASD/Arrows: drive  Q/E: rotate  R/F: tilt', W / 2, H - 50);
         ctx.textAlign = 'left'; ctx.globalAlpha = 1;
     }
 }
