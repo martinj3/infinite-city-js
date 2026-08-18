@@ -151,6 +151,26 @@ function buildCameraToolbar() {
     });
 }
 
+// --- HUD toggle (debug/test pages) ---
+// The on-canvas debug info these pages draw (streetTest.js, buildings/lotGrid.js,
+// vehicles/vehicleGrid.js) has no DOM of its own to click, and on a phone -- where
+// it takes up the most relative screen space and there is no H key to press -- is
+// exactly where it's most in the way. One floating button, mirroring the camera
+// toggle on the opposite corner, that flips whatever boolean the page already uses
+// for the H key; the page's own drawHud() decides what "hidden" looks like, this
+// only calls set(). Returns a sync() the caller's own H-key handler should call
+// too, so the button's glyph still matches after a keyboard toggle.
+function initHudToggle(get, set) {
+    if (!CONTROLS_DOM) return () => {};
+    const btn = ctlEl('button', 'ic-btn ic-hud-toggle', document.body, '');
+    btn.title = 'Toggle debug info (H)';
+    btn.setAttribute('aria-label', 'Toggle debug info');
+    const sync = () => { btn.textContent = get() ? '✕' : 'ℹ'; };
+    btn.addEventListener('click', () => { set(!get()); sync(); });
+    sync();
+    return sync;
+}
+
 // --- Drag to scroll / pinch to zoom ---
 // Pointer events cover mouse and touch with one set of handlers, which is the
 // whole reason drag-to-scroll works on the desktop for free.
@@ -319,6 +339,8 @@ const CONTROLS_CSS = `
 .ic-btn.ic-held { background: rgba(255,255,255,0.45); }
 .ic-wide { width: 100%; font-size: 14px; }
 .ic-cam-toggle { background: rgba(12,12,12,0.94); }
+.ic-hud-toggle { position: fixed; top: 10px; left: 10px; z-index: 10;
+    background: rgba(12,12,12,0.94); }
 
 .ic-drive { position: fixed; left: 0; right: 0; bottom: 0; z-index: 10;
     display: flex; gap: 10px; padding: 10px;

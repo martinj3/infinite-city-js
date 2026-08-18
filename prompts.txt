@@ -667,3 +667,9 @@ This means the player doesn't know whether it's safe to go fast, they can't plan
 
 We need to advance this by one block.  Essentially, as soon as the player turns onto a street segment, we need to generate/visit the unvisited intersection at the far end of that street segment.  Stay about one block ahead of the player car, in other words.
 So the player can see earlier what their options are (can they go straight, can they turn right, what traffic is ahead, etc)
+
+In the debug pages like vehicles.html, the debug info pane in the top left is inconveniently large, particularly on mobile.  It's fine, but we need a way to hide it, a button to hide it (and then a button to show it again).
+
+I also want a new dropdown menu button, in the top right next to the camera button, for the player to switch cars.  Each option in the dropdown should have a small pic of the vehicle, and the vehicle name text.
+
+Also check that all debug HTML pages we have are linked on index.html (don't make any new ones, just verify all existing ones are there)

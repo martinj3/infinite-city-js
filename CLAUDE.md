@@ -22,6 +22,25 @@ track.
 With no real DOM every entry point turns into a no-op, which is what keeps
 `tools/render.js` working.
 
+The camera toolbar's opener-above-panel trick (`ic-cam` / `ic-cam-panel ic-hidden`
+/ `ic-btn`, a button that toggles a sibling panel's hidden class) is reused by two
+other floating controls, one on each side of the toolbar itself, so all three read
+as one family without sharing any more code than the CSS:
+
+- `initHudToggle(get, set)` is a small button pinned to the opposite corner
+  (top left) of whichever page calls it -- `streetTest.js`, `buildings/lotGrid.js`
+  and `vehicles/vehicleGrid.js` each already have a `showHud`/`drawHud()` pair
+  behind the H key, and this is just a way to flip the same boolean from a
+  touchscreen, where the on-canvas debug pane is proportionally biggest and there
+  is no keyboard to press H on. It only calls `set()`; the page's own `drawHud()`
+  still decides what "hidden" looks like. It returns a `sync()` the page's H-key
+  handler calls too, so the button's glyph (`ℹ`/`✕`) still matches after a
+  keyboard toggle. Each of the three pages nudges its debug pane's own draw
+  origin down (`HUD_TOP`) so it starts clear of the button instead of under it.
+- The driving game's own car-switcher (see below) sits one slot to the left of
+  the camera toggle, built the same way but by `game.js` rather than `controls.js`,
+  since it is driving-game-only.
+
 ## Streets
 
 `streets.js` grows the city outward from `initMap()`'s two seed nodes,
@@ -242,7 +261,22 @@ shares -- the type registry (`registerVehicle` / `generateVehicle` /
 `countach.js`, `enzo.js`, `wrangler.js`, `mustang.js`.
 The player gets one at random, weighted by the `weight` each type registers, so
 SUVs and cars are the common case, buses and work trucks the rare ones, and the
-classics rarer still.
+classics rarer still -- and can swap it for any other registered type mid-drive
+from the switcher `game.js` builds next to the camera toolbar (see Controls):
+one dropdown row per type, sorted by display name, each carrying a small live
+thumbnail (`renderVehicleThumb`) rendered with `drawVehicle()` itself, so a
+preview can never drift from what driving the car actually looks like. The trick
+is that `render3d.js`'s `project()`/`projectAndDraw()` read `canvas`/`ctx` as
+plain globals rather than taking them as arguments -- so `game.js` declares both
+`let` instead of `const` and the thumbnail renderer briefly points them at an
+offscreen canvas, draws one vehicle, and points them back, all synchronously
+within one call, so there is never a frame in which the wrong canvas is "live".
+A placeholder type (`registerPlaceholderVehicle`, weight 0) is left out of the
+list the same way it's left out of the player's random spawn and of traffic --
+it would just be a sedan wearing someone else's name tag. Switching carries the
+car's position and speed over untouched and only replaces `vehicle` and `perf`,
+so stepping into something slower doesn't teleport or stall the car, it just now
+has a slower car's physics under it.
 
 Two more are registered but have no body style yet -- `craneTruck.js` and
 `semiTruck.js` -- each a one-liner calling

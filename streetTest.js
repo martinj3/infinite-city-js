@@ -131,7 +131,7 @@ addEventListener('keydown', e => {
         if (e.key === 'g' || e.key === 'G') regenerate();
         if (e.key === ' ') grow(GROW_STEP);
         if (e.key === 's' || e.key === 'S') saveScreenshot();
-        if (e.key === 'h' || e.key === 'H') showHud = !showHud;
+        if (e.key === 'h' || e.key === 'H') { showHud = !showHud; syncHudToggle(); }
         if (e.key === '0') fitToCity();
         if (e.key === 't' || e.key === 'T') buildingFade = !buildingFade;
     }
@@ -193,6 +193,8 @@ function update(dt) {
 
 // --- HUD ---
 let showHud = true;
+const syncHudToggle = initHudToggle(() => showHud, v => { showHud = v; });
+const HUD_TOP = 60;   // clears the toggle button pinned over this same corner
 
 function drawHud() {
     if (!showHud) return;
@@ -213,10 +215,10 @@ function drawHud() {
         'G regen   space +100 streets   S screenshot   T see-through   H hide'
     ];
     ctx.fillStyle = 'rgba(0,0,0,0.55)';
-    ctx.fillRect(8, 8, 340, 18 * lines.length + 14);
+    ctx.fillRect(8, HUD_TOP, 340, 18 * lines.length + 14);
     ctx.fillStyle = '#fff';
     ctx.font = '13px monospace';
-    lines.forEach((l, i) => ctx.fillText(l, 18, 30 + i * 18));
+    lines.forEach((l, i) => ctx.fillText(l, 18, HUD_TOP + 22 + i * 18));
 }
 
 // --- Loop ---
