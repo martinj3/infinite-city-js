@@ -90,7 +90,11 @@ function pushStreet(x1, y1, x2, y2, curve, props) {
     props = props || generateStreetProps();
     const sw = props.sidewalk;
     const hw = Math.max(props.width / 2, (sw.left || sw.right) ? sw.outer : 0); // cull bounds include sidewalks
-    const s = { x1, y1, x2, y2, curve, props };
+    // Cosmetic only, and not tracked per logical street: a fresh pick every
+    // segment, so the "same" street is free to change names block to block
+    // (streetNames.js), same as it would crossing a real town line.
+    const name = typeof randomStreetName === 'function' ? randomStreetName() : null;
+    const s = { x1, y1, x2, y2, curve, props, name };
     if (curve) {
         const b = arcBounds(curve);
         s.bounds = {
@@ -127,6 +131,27 @@ function distToStreetPath(px, py, s) {
     const vx = s.x2 - s.x1, vy = s.y2 - s.y1;
     const t = Math.max(0, Math.min(1, ((px - s.x1) * vx + (py - s.y1) * vy) / (vx * vx + vy * vy)));
     return Math.hypot(px - (s.x1 + t * vx), py - (s.y1 + t * vy));
+}
+
+// Which street a point is "on", for the driving game's street-name sign
+// (drawing.js) -- called once a frame for wherever the player currently is, so
+// bounds are checked first (cheap) before the real distance (distToStreetPath,
+// above) is bothered with. A generous tolerance rather than the street's exact
+// paved width: a player drifted onto the shoulder or a sidewalk should still
+// read as "on" that street, not suddenly on none at all. Returns null off the
+// edge of any street -- cutting across a lot, say -- rather than snapping to
+// whatever happens to be nearest.
+const CURRENT_STREET_TOLERANCE = 25;
+function currentStreetAt(px, py) {
+    let best = null, bestD = Infinity;
+    for (const s of streets) {
+        const b = s.bounds;
+        if (px < b.mnx - CURRENT_STREET_TOLERANCE || px > b.mxx + CURRENT_STREET_TOLERANCE ||
+            py < b.mny - CURRENT_STREET_TOLERANCE || py > b.mxy + CURRENT_STREET_TOLERANCE) continue;
+        const d = distToStreetPath(px, py, s);
+        if (d < bestD) { bestD = d; best = s; }
+    }
+    return bestD <= CURRENT_STREET_TOLERANCE ? best : null;
 }
 
 // Points along a proposed street's path -- the chord a->b, or the real arc when

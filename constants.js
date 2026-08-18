@@ -83,6 +83,12 @@ const SPEEDO_LABEL_STEP = 20;              // text labels only at 20/40/60
 const SPEEDO_RADIUS_DESKTOP = 52;
 const SPEEDO_RADIUS_TOUCH = 36;            // smaller on phones -- screen real estate is tighter
 
+// Driving game only: the current-street sign (drawing.js), bottom left, styled
+// after a real US street-name blade sign. Larger on desktop, smaller on a
+// touch device, the same reasoning as the speedometer above.
+const STREET_SIGN_FONT_DESKTOP = 19;
+const STREET_SIGN_FONT_TOUCH = 13;
+
 // Live-computed from current VIEW_ANGLE (changes when user rotates)
 function getCosV() { return Math.cos(VIEW_ANGLE); }
 function getSinV() { return Math.sin(VIEW_ANGLE); }

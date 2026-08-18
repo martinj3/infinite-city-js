@@ -720,3 +720,14 @@ So swap the debug info button to the top right corner (since it doesn't appear i
 The speedometer and streets counter can move to bottom right (just above the control bar on mobile).
 Design a cool, stylish analog speedometer (from 0 to 80mph with text labels at 20, 40, and 60), and tiny tick marks every 5 mph.  It can draw a little larger on desktop, smaller on mobile due to screen real estate constraints.
 Keep the streets counter, just below this new speedometer.
+
+---
+
+Now a fun little feature.  Give each street segment a name (can change with each block, that's fine, and don't need to be strictly unique).
+
+You use your imagination and cook up a list/library of 200 street names.  Some that are common in the US (Maple street), some famous ones (constitution ave, Madison ave, 5th ave, etc, or from Monopoly the board game).  But also many that are common in the UK and Canada (eg King George VII avenue or something), and some that are common in other English speaking countries.  Some cutesy ones like "Happy Hollow."  Finally, add some mildly humorous, playful street names.
+
+In driving.html, draw the name of the street segment the player is currently on, in the bottom left corner, just above the control bar.
+Draw it on a nice green background (not the exact same green as our grass background color), with a white border, white all caps text, and other stylized decorative elements, inspired by street name signs in the US.
+
+This can also have a smaller version for mobile Ux, larger for desktop

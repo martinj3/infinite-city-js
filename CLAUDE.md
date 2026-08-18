@@ -120,6 +120,28 @@ math caring which. A digital reading of the exact mph sits in the dial's lower
 third, the one part of the circle the 270-degree sweep never reaches into, so
 it never competes with a tick or the needle for space.
 
+The bottom-left corner carries the current street's name (`drawStreetSign()`),
+level with the speedometer's own bottom edge (both sit on the same `streetsY`
+line) so the two corners read as a matched pair rather than one HUD element
+floating higher than the other. `currentStreetAt(player.x, player.y)` (see
+"Street names" above) supplies the name each frame; the sign simply doesn't
+draw when it returns `null` -- cutting across a lot, say -- rather than
+showing a stale or guessed one. Styled after a real US street-name blade sign
+rather than a plain label, because the name itself is the fun part of this
+feature and a flat text box would have undersold it: a green field
+(`#0b5e3a`, deliberately not `drawScene`'s grass green, so the two are never
+confused at a glance), a white border, white all-caps text, a fainter inner
+keyline standing in for the reflective sheeting margin a real sign carries,
+and a small bolt near each end where a blade sign would actually be
+through-bolted to its mount. The corners are clipped rather than rounded
+(`clippedRectPath()`, shared with the border and the keyline so both nest
+around the same shape at different insets) -- diagonal cuts read as stamped
+sheet metal, round ones read as a UI panel. Sized off `fontPx`
+(`STREET_SIGN_FONT_DESKTOP`/`_TOUCH`) alone, the same one-function-two-sizes
+trick the speedometer uses; unlike the speedometer, though, the sign doesn't
+know its own width until it's measured the name, so it's anchored by its
+left and bottom edges rather than a centre a caller could hand it up front.
+
 ### Startup intro sequence
 
 `driving.html` opens with a four-second flourish rather than dropping the
@@ -227,6 +249,42 @@ so the amount of city held ready ahead of the player stays exactly one block,
 however fast they're going, rather than snowballing into an ever-growing
 lookahead radius that would cost more every frame the longer a drive runs.
 
+### Street names
+
+Every street segment gets a name, purely cosmetic, stamped on in `pushStreet`
+(`s.name = randomStreetName()`) alongside everything else generated once per
+segment. It's a fresh pick each time rather than a name tracked per logical
+street through every node it grows from, which is deliberate, not a shortcut:
+a real street changes names crossing a town line too, and a driver crossing a
+dozen intersections in one straight run is more interesting with the odd name
+change than without one. `streetNames.js` holds the list -- about 200 entries,
+one flat array (`STREET_NAMES`) rather than picked category-by-category, since
+a real town's naming doesn't cluster that way either -- spanning ordinary
+American suburb names (Maple Street, Elm Court), a few genuinely famous ones
+(Fifth Avenue, Bourbon Street), the entire Monopoly board, a set of UK and
+Canadian names, a few from elsewhere in the English-speaking world, a run of
+cutesy ones (Happy Hollow, Firefly Trail), and a batch that are just jokes
+(Speed Bump Street, Backseat Driver Boulevard). `randomStreetName()` is one
+line: pick an index. The file loads before `streets.js` on both pages that use
+it (`driving.html`, `streetTest.html`); `pushStreet` calls it through the same
+`typeof randomStreetName === 'function'` guard the lots/traffic hooks already
+use, so a page that loads `streets.js` without it still works, just with every
+`s.name` left `null`.
+
+`currentStreetAt(px, py)`, alongside `distToStreetPath` since it's built on
+it, answers "which street is this point on" for the driving game's street-name
+sign (`drawing.js`, below) -- the one thing the player's car needs that
+traffic's cars get for free by actually living on a street (`pos`/`dir`, see
+Traffic). It isn't: `player` carries only `x, y, angle`, sensed geometrically
+the same way traffic senses it as another vehicle to react to. Called once a
+frame, so every street's already-computed `bounds` bbox is checked first --
+cheap arithmetic -- before `distToStreetPath` is bothered with the real
+distance, and only the closest street within `CURRENT_STREET_TOLERANCE` (25ft,
+generous next to the ~20-24ft `MIN_STREET_WIDTH`/`MAX_STREET_WIDTH` range, so
+drifting onto the shoulder doesn't read as leaving the street) is returned --
+`null` off the edge of anything, which is what makes the sign disappear
+gracefully while cutting across a lot instead of naming whatever street
+happens to be nearest.
 
 ## Buildings
 

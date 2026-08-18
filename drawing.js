@@ -376,6 +376,70 @@ function drawSpeedometer(mph, r) {
     ctx.fillText('mph', 0, r * 0.44 + digitPx * 0.8);
 }
 
+// A rounded/clipped-corner rectangle path -- diagonally cut corners rather than
+// arcs, which is what makes it read as a stamped metal blade sign rather than a
+// rounded UI panel. Caller does beginPath()/fill()/stroke(); this only walks
+// the path, so the same shape can be stroked twice at different insets (the
+// sign's outer border and its inner reflective keyline, below).
+function clippedRectPath(l, t, r, b, clip) {
+    ctx.moveTo(l + clip, t);
+    ctx.lineTo(r - clip, t);
+    ctx.lineTo(r, t + clip);
+    ctx.lineTo(r, b - clip);
+    ctx.lineTo(r - clip, b);
+    ctx.lineTo(l + clip, b);
+    ctx.lineTo(l, b - clip);
+    ctx.lineTo(l, t + clip);
+    ctx.closePath();
+}
+
+// A US-style street-name blade sign: green field (deliberately not the grass
+// green drawScene fills the ground with -- this one leans dark and a little
+// blue so the two never get mistaken for each other), a white border, white
+// all-caps text, a fainter inner keyline standing in for the reflective
+// sheeting margin a real sign carries, and a bolt near each clipped-off end
+// where a blade sign would actually be through-bolted to its mount. Anchored
+// by its left edge and its bottom edge -- the caller doesn't know the sign's
+// width or height up front, since both depend on the name and the font size,
+// so "sits with its bottom on this line" is the one placement a caller can
+// specify without having already done this function's own measuring.
+function drawStreetSign(name, left, bottom, fontPx) {
+    const label = name.toUpperCase();
+    ctx.font = `bold ${fontPx}px system-ui, sans-serif`;
+    const textW = ctx.measureText(label).width;
+    const padX = fontPx * 0.7, padY = fontPx * 0.5;
+    const w = textW + padX * 2, h = fontPx + padY * 2;
+    const clip = h * 0.22;
+    const t = bottom - h, bo = bottom, r = left + w, cy = bottom - h / 2;
+
+    ctx.beginPath();
+    clippedRectPath(left, t, r, bo, clip);
+    ctx.fillStyle = '#0b5e3a';
+    ctx.fill();
+    const borderW = Math.max(2, fontPx * 0.11);
+    ctx.lineWidth = borderW;
+    ctx.strokeStyle = '#fff';
+    ctx.stroke();
+
+    const inset = borderW * 1.7;
+    ctx.beginPath();
+    clippedRectPath(left + inset, t + inset, r - inset, bo - inset, Math.max(1, clip - inset));
+    ctx.lineWidth = Math.max(1, borderW * 0.35);
+    ctx.strokeStyle = 'rgba(255,255,255,0.6)';
+    ctx.stroke();
+
+    const boltR = Math.max(1.4, fontPx * 0.085);
+    ctx.fillStyle = 'rgba(255,255,255,0.8)';
+    for (const bx of [left + clip * 0.95, r - clip * 0.95]) {
+        ctx.beginPath(); ctx.arc(bx, cy, boltR, 0, TWO_PI); ctx.fill();
+    }
+
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#fff';
+    ctx.fillText(label, left + w / 2, cy + fontPx * 0.03);
+    ctx.textAlign = 'left';
+}
+
 // The driving game: the world, plus the car and its HUD.
 function draw() {
     const W = canvas.width, H = canvas.height;
@@ -415,6 +479,16 @@ function draw() {
         ctx.fillStyle = '#fff';
         ctx.fillText(label, cx, streetsY);
         ctx.textAlign = 'left';
+
+        // Bottom left, mirroring the speedometer's bottom-right corner and
+        // sharing its bottom line (streetsY) so the two sit level with each
+        // other -- both clear of the pedal bar by the same marginBottom.
+        const cur = typeof currentStreetAt === 'function' ? currentStreetAt(player.x, player.y) : null;
+        if (cur && cur.name) {
+            const signFont = touchDrive.shown ? STREET_SIGN_FONT_TOUCH : STREET_SIGN_FONT_DESKTOP;
+            const marginLeft = touchDrive.shown ? 10 : 18;
+            drawStreetSign(cur.name, marginLeft, streetsY, signFont);
+        }
 
         ctx.globalAlpha = 1;
     }
