@@ -273,6 +273,109 @@ function drawScene(camX, camY, player) {
     if (typeof drawHonks === 'function') drawHonks(camX, camY);
 }
 
+// Height in CSS px of the on-screen pedal bar (controls.js), so the speedometer
+// can sit clear of it on a touch device instead of behind it. Queried from the
+// real element rather than guessed, so it accounts for the safe-area inset a
+// notched phone adds to the bar's own bottom padding. Cached: the bar's height
+// never changes after it's built, and it doesn't exist at all off a touch
+// device or in the headless test harness (CONTROLS_DOM), where this is just 0.
+let driveBarEl;
+function driveBarHeight() {
+    if (!touchDrive.shown || typeof document === 'undefined') return 0;
+    if (driveBarEl === undefined) driveBarEl = document.querySelector('.ic-drive');
+    return driveBarEl ? driveBarEl.getBoundingClientRect().height : 0;
+}
+
+// A real analog gauge rather than a flat number: a dark bezel, a 270-degree
+// sweep of tick marks (SPEEDO_SWEEP*, constants.js) with labels at 20/40/60 and
+// a red zone past 70, a needle, and a digital readout in the lower half of the
+// dial where the sweep leaves it empty. Drawn in gauge-local pixels around
+// (0,0) -- translate/rotate do the placement -- so every measurement below is
+// simply a fraction of r and never needs to know where on screen it landed.
+function drawSpeedometer(mph, r) {
+    const clamped = Math.max(0, Math.min(SPEEDO_MAX_MPH, mph));
+    const angleFor = v => SPEEDO_SWEEP_START + SPEEDO_SWEEP * (v / SPEEDO_MAX_MPH);
+
+    const bezel = ctx.createRadialGradient(-r * 0.25, -r * 0.3, r * 0.15, 0, 0, r);
+    bezel.addColorStop(0, 'rgba(52,52,60,0.94)');
+    bezel.addColorStop(1, 'rgba(8,8,12,0.94)');
+    ctx.beginPath();
+    ctx.arc(0, 0, r, 0, TWO_PI);
+    ctx.fillStyle = bezel;
+    ctx.fill();
+    ctx.lineWidth = Math.max(1.5, r * 0.04);
+    ctx.strokeStyle = 'rgba(255,255,255,0.35)';
+    ctx.stroke();
+
+    // Red zone over the last stretch of the sweep -- decorative, but it's the
+    // one glance-readable thing a plain number can't give you.
+    ctx.beginPath();
+    ctx.arc(0, 0, r * 0.87, angleFor(SPEEDO_MAX_MPH * 0.875), angleFor(SPEEDO_MAX_MPH));
+    ctx.strokeStyle = 'rgba(220,55,45,0.85)';
+    ctx.lineWidth = Math.max(2, r * 0.07);
+    ctx.stroke();
+
+    for (let v = 0; v <= SPEEDO_MAX_MPH; v += SPEEDO_TICK_STEP) {
+        const a = angleFor(v), major = v % SPEEDO_LABEL_STEP === 0;
+        const rOuter = r * 0.93, rInner = r * (major ? 0.75 : 0.83);
+        ctx.beginPath();
+        ctx.moveTo(Math.cos(a) * rOuter, Math.sin(a) * rOuter);
+        ctx.lineTo(Math.cos(a) * rInner, Math.sin(a) * rInner);
+        ctx.strokeStyle = major ? '#fff' : 'rgba(255,255,255,0.55)';
+        ctx.lineWidth = major ? Math.max(1.5, r * 0.045) : Math.max(1, r * 0.022);
+        ctx.stroke();
+
+        // Only the three interior major ticks get a number -- 0 and 80 are the
+        // sweep's own ends and need no label to read as "empty" and "full".
+        if (major && v !== 0 && v !== SPEEDO_MAX_MPH) {
+            const rt = r * 0.58;
+            ctx.fillStyle = '#fff';
+            ctx.font = `${Math.max(9, Math.round(r * 0.19))}px system-ui, sans-serif`;
+            ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+            ctx.fillText(String(v), Math.cos(a) * rt, Math.sin(a) * rt);
+        }
+    }
+
+    const na = angleFor(clamped);
+    ctx.save();
+    ctx.rotate(na);
+    ctx.beginPath();
+    ctx.moveTo(-r * 0.16, -r * 0.05);
+    ctx.lineTo(r * 0.80, 0);
+    ctx.lineTo(-r * 0.16, r * 0.05);
+    ctx.closePath();
+    ctx.fillStyle = '#ff5a3c';
+    ctx.shadowColor = 'rgba(255,90,60,0.75)';
+    ctx.shadowBlur = r * 0.18;
+    ctx.fill();
+    ctx.restore();
+
+    ctx.beginPath();
+    ctx.arc(0, 0, r * 0.11, 0, TWO_PI);
+    ctx.fillStyle = '#ddd';
+    ctx.fill();
+    ctx.lineWidth = Math.max(1, r * 0.02);
+    ctx.strokeStyle = 'rgba(0,0,0,0.5)';
+    ctx.stroke();
+
+    // Digital readout, centred in the empty lower third of the dial (the sweep
+    // never reaches straight down, so nothing else is drawn there). The gap
+    // between the two lines is measured off the digit line's own font size
+    // rather than off r directly -- at a small r (SPEEDO_RADIUS_TOUCH) both
+    // fonts are floor-clamped well above what r*scale would give them, and a
+    // gap that only scaled with r stayed too tight for the floored size,
+    // crowding "mph" up into the digits above it.
+    ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
+    const digitPx = Math.max(12, Math.round(r * 0.32));
+    const unitPx = Math.max(8, Math.round(r * 0.15));
+    ctx.fillStyle = '#fff';
+    ctx.font = `bold ${digitPx}px monospace`;
+    ctx.fillText(clamped.toFixed(0), 0, r * 0.44);
+    ctx.font = `${unitPx}px monospace`;
+    ctx.fillStyle = 'rgba(255,255,255,0.75)';
+    ctx.fillText('mph', 0, r * 0.44 + digitPx * 0.8);
+}
+
 // The driving game: the world, plus the car and its HUD.
 function draw() {
     const W = canvas.width, H = canvas.height;
@@ -280,17 +383,39 @@ function draw() {
 
     // HUD -- hidden through the startup intro sequence (game.js) and faded in
     // with the rest of the UI via uiAlpha, since a canvas fill has no CSS
-    // transition of its own to lean on the way the DOM panels do.
+    // transition of its own to lean on the way the DOM panels do. Bottom right
+    // rather than top left: top right is deliberately left clear (see
+    // controls.js/game.js) so nothing sits over the direction the player is
+    // most likely driving toward, and the speedometer follows it to the
+    // opposite bottom corner rather than splitting the two corners the HUD used.
     if (uiAlpha > 0) {
         ctx.globalAlpha = uiAlpha;
         const mph = Math.abs(player.speed * 3600 / 5280);
-        ctx.fillStyle = 'rgba(0,0,0,0.5)';
-        ctx.fillRect(8, 8, 140, 52);
+        const r = touchDrive.shown ? SPEEDO_RADIUS_TOUCH : SPEEDO_RADIUS_DESKTOP;
+        const barH = driveBarHeight();
+        const marginRight = touchDrive.shown ? 10 : 18;
+        const marginBottom = barH > 0 ? barH + 10 : (touchDrive.shown ? 14 : 18);
+        const streetsFont = touchDrive.shown ? 10 : 12;
+
+        const cx = W - marginRight - r;
+        const streetsY = H - marginBottom;
+        const cy = streetsY - streetsFont - r - 6;
+
+        ctx.save();
+        ctx.translate(cx, cy);
+        drawSpeedometer(mph, r);
+        ctx.restore();
+
+        ctx.font = `${streetsFont}px monospace`;
+        ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
+        const label = `Streets: ${streets.length}`;
+        const tw = ctx.measureText(label).width;
+        ctx.fillStyle = 'rgba(10,10,14,0.7)';
+        ctx.fillRect(cx - tw / 2 - 6, streetsY - streetsFont, tw + 12, streetsFont + 6);
         ctx.fillStyle = '#fff';
-        ctx.font = 'bold 18px monospace';
-        ctx.fillText(`${mph.toFixed(0)} mph`, 16, 32);
-        ctx.font = '13px monospace';
-        ctx.fillText(`Streets: ${streets.length}`, 16, 52);
+        ctx.fillText(label, cx, streetsY);
+        ctx.textAlign = 'left';
+
         ctx.globalAlpha = 1;
     }
 

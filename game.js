@@ -100,7 +100,16 @@ function renderVehicleThumb(type, w, h) {
 }
 
 const VEH_PICKER_CSS = `
-.gm-veh { right: 62px; }
+/* Driving only: the camera toolbar (controls.js) and this picker both carry
+   .ic-cam, and controls.js's own stylesheet pins that to the top right by
+   default -- fine on the test pages, but the top right here is where an
+   oncoming car or a turn the player is about to take needs to be read at a
+   glance, so nothing should sit over it. Moved to the top left instead, which
+   this page has spare: this override only ever loads on driving.html, so no
+   other page's layout changes. The picker keeps its "one slot over from the
+   camera toggle" spot, just mirrored to the other side of it. */
+.ic-cam { left: 10px; right: auto; align-items: flex-start; }
+.gm-veh { left: 62px; right: auto; }
 .gm-veh-panel { max-height: 70vh; overflow-y: auto; align-items: stretch; }
 .gm-veh-row { display: flex; align-items: center; gap: 8px; padding: 6px;
     border-radius: 6px; cursor: pointer; color: #fff; white-space: nowrap; }
@@ -122,7 +131,8 @@ function buildVehiclePicker() {
         (a, b) => vehicleDisplayName(a).localeCompare(vehicleDisplayName(b)));
 
     // Mirrors controls.js's own camera toolbar (ic-cam / ic-cam-panel / ic-btn),
-    // one slot to its left, so the two toolbars read as one family.
+    // one slot over from it (see VEH_PICKER_CSS above), so the two toolbars
+    // read as one family.
     const wrap = ctlEl('div', 'ic-cam gm-veh', document.body);
     const panel = ctlEl('div', 'ic-cam-panel gm-veh-panel ic-hidden', wrap);
 

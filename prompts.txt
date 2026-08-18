@@ -710,3 +710,13 @@ The text color for this should pulse from gray to white and back, for emphasis
 Also during that intro sequence, any tall buildings that would otherwise draw transparent should draw at full opacity.  They can instantly switch back to transparent when the controls appear.
 
 Also a real quick change to index.html:  The link to driving.html should be a bit bigger text than the other page links, and its text should be "Click to drive in Infinite City!"
+
+---
+
+Some Ux changes.  In the driving game, we don't want anything in the top right, since user will likely choose to drive in that direction, and need to clearly see what's coming.
+
+So swap the debug info button to the top right corner (since it doesn't appear in driving.html anyway) and put the camera and car selector buttons in the top left.
+
+The speedometer and streets counter can move to bottom right (just above the control bar on mobile).
+Design a cool, stylish analog speedometer (from 0 to 80mph with text labels at 20, 40, and 60), and tiny tick marks every 5 mph.  It can draw a little larger on desktop, smaller on mobile due to screen real estate constraints.
+Keep the streets counter, just below this new speedometer.

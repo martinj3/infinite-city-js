@@ -37,9 +37,11 @@ as one family without sharing any more code than the CSS:
   handler calls too, so the button's glyph (`ℹ`/`✕`) still matches after a
   keyboard toggle. Each of the three pages nudges its debug pane's own draw
   origin down (`HUD_TOP`) so it starts clear of the button instead of under it.
-- The driving game's own car-switcher (see below) sits one slot to the left of
-  the camera toggle, built the same way but by `game.js` rather than `controls.js`,
-  since it is driving-game-only.
+- The driving game's own car-switcher (see below) sits one slot over from the
+  camera toggle, built the same way but by `game.js` rather than `controls.js`,
+  since it is driving-game-only. On `driving.html` specifically both toolbars
+  live in the top left rather than controls.js's own top-right default -- see
+  "Keeping the top right clear", below.
 
 The camera panel itself gains one more row on the driving page only: a "follow
 car" checkbox (on by default), added by `game.js` reaching into the already-built
@@ -70,6 +72,53 @@ last set, however it got there. Flipping the checkbox off doesn't blank
 `followAnchor` -- it stops being read at all until the checkbox comes back on, at
 which point it is recomputed fresh from the car's current heading (`setCameraFollow`),
 so turning the option on or off never itself causes a jump.
+
+### Keeping the top right clear
+
+Every other page is happy with `controls.js`'s own default -- camera toolbar
+top right, `initHudToggle`'s debug button top left -- but driving is the one
+page where that default actively works against the player: the top right of
+the screen is exactly where a turn or an oncoming car most needs to be read at
+a glance, so nothing should sit over it there. `game.js`'s `VEH_PICKER_CSS`
+carries a small override, `.ic-cam { left: 10px; right: auto; ... }`, that
+moves both the camera toolbar and the car-switcher (`.gm-veh`, one slot over
+from it) to the top left instead. It's scoped by nothing more than which page
+loads it -- `VEH_PICKER_CSS` only ever reaches the DOM from `game.js`, so this
+never touches `streetTest.html` or the building/vehicle grid pages, which keep
+`controls.js`'s stock layout (and its debug-button/HUD-pane pairing, which
+depends on the button staying in the same corner the on-canvas pane starts
+clear of -- see `initHudToggle` above). The debug button itself is simply
+never built on `driving.html` at all (`initHudToggle` is only ever called by
+the three debug pages), so there is nothing there to move in the first place.
+
+The on-canvas HUD follows the same rule to the opposite corner: the
+speedometer and streets counter (`drawing.js`) sit bottom right rather than
+top left, so the whole driving HUD collects into the two corners furthest from
+the one the player needs clearest -- instead of splitting across both top
+corners the way the flat "NN mph" box used to. `driveBarHeight()` measures the
+real `.ic-drive` pedal bar (via `getBoundingClientRect()`, which folds in
+whatever safe-area inset a notched phone adds to the bar's own bottom padding)
+so the HUD sits just clear of it on a touch device instead of drawing under it
+where the bar covers it, and simply falls back to a small fixed margin when
+there's no bar at all (`touchDrive.shown` false, including the whole headless
+render harness, where it's always 0). Read once and cached: the bar's own
+height never changes after `initDriveControls()` builds it.
+
+The speedometer itself (`drawSpeedometer()`) is an analog dial rather than the
+old flat number: a dark bezel, a 270-degree tick sweep (`SPEEDO_SWEEP_START`
+to `+SPEEDO_SWEEP`, constants.js -- bottom left, up over the top, to bottom
+right, the standard automotive layout) from 0 to `SPEEDO_MAX_MPH`, a tick
+every `SPEEDO_TICK_STEP` (5mph) with the three interior multiples of
+`SPEEDO_LABEL_STEP` (20/40/60) numbered -- 0 and 80 are the sweep's own ends
+and don't need a label to read as empty and full -- a red arc over the last
+12.5% of the sweep, and a needle. All of it is drawn in gauge-local pixels
+around `(0,0)` as a fraction of the radius `r`, with placement left entirely
+to a `ctx.translate` the caller does first, which is what lets the one
+function serve both the larger desktop dial (`SPEEDO_RADIUS_DESKTOP`) and the
+smaller one on a touch device (`SPEEDO_RADIUS_TOUCH`) without any of its own
+math caring which. A digital reading of the exact mph sits in the dial's lower
+third, the one part of the circle the 270-degree sweep never reaches into, so
+it never competes with a tick or the needle for space.
 
 ### Startup intro sequence
 

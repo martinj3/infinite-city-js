@@ -71,6 +71,18 @@ const UI_FADE_DURATION = 1;     // seconds the UI (panels and HUD) take to fade 
 const INTRO_ZOOM_START = 1.3;   // PX_PER_FT at the start of the intro -- wider than PX_PER_FT_DEFAULT
 const INTRO_TILT_CYCLES = 2.5;  // tilt oscillations during the intro before it settles on Y_SCALE_DEFAULT
 
+// Driving game only: the analog speedometer (drawing.js), bottom right of the
+// canvas HUD. The needle sweeps 270 degrees -- from bottom-left, up over the
+// top, to bottom-right -- which is the standard automotive gauge layout, so it
+// reads as a real instrument rather than an arbitrary dial.
+const SPEEDO_MAX_MPH = 80;
+const SPEEDO_SWEEP_START = Math.PI * 0.75; // 135deg: bottom-left, the 0mph end
+const SPEEDO_SWEEP = Math.PI * 1.5;        // 270deg total sweep, through the top
+const SPEEDO_TICK_STEP = 5;                // a tick every 5mph
+const SPEEDO_LABEL_STEP = 20;              // text labels only at 20/40/60
+const SPEEDO_RADIUS_DESKTOP = 52;
+const SPEEDO_RADIUS_TOUCH = 36;            // smaller on phones -- screen real estate is tighter
+
 // Live-computed from current VIEW_ANGLE (changes when user rotates)
 function getCosV() { return Math.cos(VIEW_ANGLE); }
 function getSinV() { return Math.sin(VIEW_ANGLE); }
