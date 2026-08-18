@@ -1,15 +1,14 @@
 // --- Constants ---
-// 20 rather than the original 19: traffic now actually steers to hold its lane
-// (see traffic.js), and the extra half-foot of lane is the difference between a
+// 22 rather than the original 19: traffic now actually steers to hold its lane
+// (see traffic.js), and the extra couple feet of lane is the difference between a
 // bus's ordinary wobble staying inside the paint and clipping the centerline.
-const MIN_STREET_WIDTH = 20;
-const MAX_STREET_WIDTH = 24;
+const MIN_STREET_WIDTH = 22;
+const MAX_STREET_WIDTH = 26;
 const INTERSECTION_SIZE = MAX_STREET_WIDTH; // fixed size to accommodate widest streets
 const HALF_INTERSECTION = INTERSECTION_SIZE / 2;
 const DEFAULT_BLOCK_LEN = 500;
 let PX_PER_FT = 2;
-// A bit more zoomed in than the original 2: at the old default it was easy to
-// wander out of a 20-24ft lane without noticing. Driving's own intro sequence
+// Driving's own intro sequence
 // (game.js) eases the view in to this value from INTRO_ZOOM_START, below.
 const PX_PER_FT_DEFAULT = 2.4;
 const PX_PER_FT_MIN = 0.1;
@@ -37,9 +36,9 @@ const TWO_PI = Math.PI * 2;
 
 // --- Sidewalks (live inside the right of way, alongside each street) ---
 const MIN_SIDEWALK_WIDTH = 3;
-const MAX_SIDEWALK_WIDTH = 5;
+const MAX_SIDEWALK_WIDTH = 6;
 const MIN_SIDEWALK_GAP = 0; // ft of space between road edge and sidewalk (0 happens in real life)
-const MAX_SIDEWALK_GAP = 6;
+const MAX_SIDEWALK_GAP = 7;
 const SIDEWALK_CONTRAST = 12; // min grey-level difference from the parent street's color
 // Which sides of a street get a sidewalk: 60% both, 20% none, 10% right only, 10% left only
 const SIDEWALK_BOTH_PROB = 0.6;
@@ -68,7 +67,7 @@ const CAMERA_FOLLOW_DEAD_ZONE = 25 * Math.PI / 180;
 const INTRO_DURATION = 4;       // seconds: length of the flourish; input stays locked out until it ends
 const INTRO_UI_DELAY = 1;       // further seconds of stillness before the UI starts fading in
 const UI_FADE_DURATION = 1;     // seconds the UI (panels and HUD) take to fade in once they start
-const INTRO_ZOOM_START = 1.3;   // PX_PER_FT at the start of the intro -- wider than PX_PER_FT_DEFAULT
+const INTRO_ZOOM_START = 1.0;   // PX_PER_FT at the start of the intro -- wider than PX_PER_FT_DEFAULT
 const INTRO_TILT_CYCLES = 2.5;  // tilt oscillations during the intro before it settles on Y_SCALE_DEFAULT
 
 // Driving game only: the analog speedometer (drawing.js), bottom right of the
@@ -124,7 +123,10 @@ const BUILDING_FADE_ALPHA = 0.25;
 // about ten degrees off the one heading that projects straight up the screen.
 const BUILDING_FADE_MIN_SKEW = 0.35;
 
-const CURVE_PROB = 0.25;
+const STREET_CONTINUE_STRAIGHT_PROB = 0.9;
+const INTERSECTION_HAS_LEFT_RIGHT_PROB = 0.83;
+
+const CURVE_PROB = 0.23;
 const CURVE_ANGLES = [30, 45, 60, 90].map(d => d * Math.PI / 180);
 const CURVE_RADII = [DEFAULT_BLOCK_LEN];
 const ANGLE_TOL = 0.02; // ~1 degree

@@ -281,7 +281,7 @@ function resolveNode(node) {
 
     for (const slot of GEN_SLOTS) {
         if (node.roads[slot] !== null) continue;
-        const prob = slot === 'fwd' ? 0.87 : 0.8;
+        const prob = slot === 'fwd' ? STREET_CONTINUE_STRAIGHT_PROB : INTERSECTION_HAS_LEFT_RIGHT_PROB;
         if (Math.random() >= prob) { node.roads[slot] = false; continue; }
 
         const props = propagateProps(sourceProps, slot);
