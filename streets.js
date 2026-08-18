@@ -293,37 +293,19 @@ function resolveNode(node) {
     }
 }
 
-// The far end of the street leaving `node` in `slot`, or null if that slot is
-// unconnected. Streets are stored with their exact endpoint coordinates, and a
-// node's own x/y are already rounded (see addNode), so the same tolerance test
-// arrivalDirAt (signs.js) uses is enough to tell which end is "here".
-function farNode(node, slot) {
-    const s = node.streets[slot];
-    if (!s) return null;
-    return (Math.abs(s.x1 - node.x) < 1 && Math.abs(s.y1 - node.y) < 1) ? getNode(s.x2, s.y2) : getNode(s.x1, s.y1);
-}
-
+// Called only every GENERATE_INTERVAL_FRAMES frames (game.js), not every one, so
+// it can afford to scan every node outright rather than track which ones are
+// anywhere near the player. The bounding-box test (plain abs, no sqrt or squared
+// distance) is a GENERATE_RADIUS square, not a circle -- cheaper, and the
+// difference is invisible at this radius. The box is generous enough that it
+// already reaches a couple of blocks past the player in every direction, which is
+// what used to take a separate "resolve one hop ahead" pass keyed off the single
+// intersection the player was standing on; a wide periodic sweep makes that
+// special case unnecessary; anything unresolved in range just gets resolved.
 function generate(px, py) {
-    // Runs over every node every frame, so compare squared distances: hypot is
-    // slow enough to matter by the time a long drive has built thousands of nodes.
-    const r2 = GENERATE_DIST * GENERATE_DIST;
     for (const node of nodes.values()) {
-        const dx = node.x - px, dy = node.y - py;
-        if (dx * dx + dy * dy >= r2) continue;
+        if (Math.abs(node.x - px) > GENERATE_RADIUS || Math.abs(node.y - py) > GENERATE_RADIUS) continue;
         if (nodeUnresolved(node)) resolveNode(node);
-        // Stay one block ahead: the player is at this intersection right now, so
-        // also resolve whatever sits at the far end of every street leaving it --
-        // including whichever one they are about to drive down -- the same frame,
-        // rather than waiting for them to arrive there themselves. That is what
-        // lets a driver see, before committing to a block, what their options are
-        // at its far end and whether there's traffic -- real streets and lots
-        // already standing rather than a stub. Same call either way: this is
-        // exactly what driving up to a node has always triggered, just one hop
-        // earlier.
-        for (const slot of SLOTS) {
-            const far = farNode(node, slot);
-            if (far && nodeUnresolved(far)) resolveNode(far);
-        }
     }
 }
 
@@ -337,7 +319,8 @@ function resetMap() {
     if (typeof resetTraffic === 'function') resetTraffic();
 }
 
-// Seed the map: two intersections joined by one east-west street.
+// Seed the map: two intersections joined by one east-west street. Returns that
+// street, which game.js uses to spawn the player centered in its lane.
 function initMap() {
     const props = generateStreetProps();
     const a = addNode(0, 0, 0);   // orientation = east
@@ -350,6 +333,7 @@ function initMap() {
     a.streets.fwd = s;
     b.streets.back = s;
     if (typeof updateNodeSigns === 'function') { updateNodeSigns(a); updateNodeSigns(b); }
+    return s;
 }
 
 // Grow the map by repeatedly visiting the unresolved intersection nearest the

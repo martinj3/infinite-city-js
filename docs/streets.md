@@ -1,39 +1,37 @@
 # Streets
 
-`streets.js` grows the city outward from `initMap()`'s two seed nodes,
-one intersection at a time, and never anywhere else: `generate(px, py)` runs
-every frame over every node (comparing squared distances, since `hypot` is
-slow enough to matter once a long drive has built thousands of them) and
-resolves any node within `GENERATE_DIST` (30ft) that still has an unrolled
-slot -- `resolveNode` rolls each of `fwd`/`left`/`right` into a real street or
-a dead end, `back` always being pre-set by whichever street created the node.
-`growCity(maxStreets)` is the same call in a loop, repeatedly picking the
-unresolved node nearest the origin, for building a whole city up front rather
-than one drive at a time (`streetTest.html`, `tools/render.js`).
+`streets.js` grows the city outward from `initMap()`'s two seed nodes, and
+`generate(px, py)` (game.js) is what decides which intersections exist yet.
+It's a plain sweep: every node in the map is tested against a `GENERATE_RADIUS`
+(500ft) square centered on the player -- `Math.abs(node.x - px) > GENERATE_RADIUS`,
+same for y, no `hypot` and no squared distance either, just two `abs` and two
+comparisons -- and whatever falls inside and still has an unrolled slot gets
+`resolveNode`'d, which rolls each of `fwd`/`left`/`right` into a real street or
+a dead end (`back` is always pre-set by whichever street created the node).
+A square rather than a circle is deliberately the cheaper, slightly-too-generous
+shape: the difference only shows up in the corners, where it resolves a few
+intersections a bit before a true 500ft radius would have, which is invisible
+in play. Because this scan is a flat cost regardless of how close the player is
+to anything, it doesn't run every frame -- only every `GENERATE_INTERVAL_FRAMES`
+(50) frames, about once a second or two, called from `update()` in game.js. The
+radius is generous next to how far a car can travel in that span, so nothing
+outruns it at any real driving speed, and there's no need to special-case "the
+block right ahead" the way a tighter, more-frequent trigger once did: a 500ft
+sweep already reaches a couple of blocks past the player in every direction,
+so whatever the next corner offers -- straight, turn, or dead end, and any
+traffic already on it -- is generated well before the player arrives, without
+requiring them to actually reach an intersection to trigger it (which used to
+misfire if they drifted even slightly off the paved street).
+
+`growCity(maxStreets)` is the same per-node resolution in a loop, repeatedly
+picking the unresolved node nearest the origin, for building a whole city up
+front rather than one drive at a time (`streetTest.html`, `tools/render.js`).
 `growCityRandom(count)` is the same loop with one thing changed: it picks the
 unresolved node at *random* on every visit rather than always the nearest one,
 which is what `game.js` calls (ten visits) right after `initMap()` so
 driving.html's first frame is a handful of scattered blocks around the seed
 street rather than a single lonely segment -- nearest-first would instead grow
 one dense patch outward in whatever direction happened to resolve first.
-
-A node the player is standing at gets resolved this way regardless of which
-way they came from or are headed, which is what used to make every
-intersection a surprise: nothing about the block ahead existed until the
-player was within 30ft of its far end. `generate` now also resolves one hop
-further -- for every node it just found within range, it walks that node's
-own `streets` (already set, whether they were just rolled this frame or
-resolved on some earlier pass) and resolves whichever far end isn't resolved
-yet (`farNode`, using the same endpoint tolerance test `arrivalDirAt` in
-signs.js uses). So the moment a player reaches an intersection, every street
-leaving it -- including whichever one they are about to drive down -- already
-has real streets, lots and signs at its own far end, not a stub, which is
-what lets a driver see a block ahead of themselves: whether the next corner
-lets them go straight or turn, and whether anything is coming. It stops at
-one hop on purpose -- the newly-resolved far nodes are not chased further --
-so the amount of city held ready ahead of the player stays exactly one block,
-however fast they're going, rather than snowballing into an ever-growing
-lookahead radius that would cost more every frame the longer a drive runs.
 
 ## Street names
 

@@ -23,7 +23,12 @@ const ZOOM_WHEEL = 1.1; // per wheel tick
 // Below this zoom the 1px lane markings would be wider than the roads themselves,
 // so they are skipped and only the road surfaces are drawn
 const MARKINGS_MIN_ZOOM = 0.5;
-const GENERATE_DIST = 30;
+// How far around the player (each axis, a square not a circle -- see generate(),
+// streets.js) to keep intersections resolved, and how often to bother checking.
+// Once every couple of seconds is plenty: the radius is generous next to how far
+// a car can travel between checks, so nothing outruns it at any real driving speed.
+const GENERATE_RADIUS = 500;
+const GENERATE_INTERVAL_FRAMES = 50;
 const PROXIMITY_THRESHOLD = 50;
 // The "right of way" is the space on each side of a street reserved for sidewalks, buildings, houses, etc. At intersections, this will naturally overlap for the intersecting streets.  
 // It's measured from the centerline of the street, I believe?  RIGHT_OF_WAY is for one side, so 2*RIGHT_OF_WAY for the whole street with buildings on both sides.  

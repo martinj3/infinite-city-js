@@ -3,7 +3,7 @@
 // it grows a whole city up front, then lets you fly the camera over it.
 //
 // URL parameters (all optional):
-//   ?streets=500   how many streets to generate up front (default 500)
+//   ?streets=1500  how many streets to generate up front (default 1500)
 //   ?seed=123      deterministic city -- the same seed always builds the same map
 //   ?zoom=2        initial pixels per foot (default: fit the whole city on screen)
 //   ?angle=-45     initial view rotation, in degrees
@@ -38,7 +38,7 @@ const numParam = (k, dflt) => {
     return Number.isFinite(v) ? v : dflt;
 };
 
-const MAX_STREETS = Math.max(1, numParam('streets', 500));
+const MAX_STREETS = Math.max(1, numParam('streets', 1500));
 const GROW_STEP = 100;      // streets added per press of space
 const CAM_SPEED = 400;      // feet per second at default zoom
 

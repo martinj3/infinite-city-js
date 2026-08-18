@@ -25,13 +25,24 @@ initPanZoom({ pan: false });
 initDriveControls();
 
 // --- Player ---
+// Built here, before growCityRandom below, so the seed street already exists to
+// spawn the player onto.
+const seedStreet = initMap();
+// Frame counter for the periodic generate() sweep -- see update() below. Starts
+// at the interval itself so the first frame generates immediately rather than
+// waiting a couple of seconds for the counter to catch up.
+let genFrame = GENERATE_INTERVAL_FRAMES;
+
 // steer is kept on the player because the car is drawn from it too: the front
 // wheels turn to match whatever is steering the car.
 // Picked as a type name rather than through generateRandomVehicle() so the intro
 // sequence below can display it -- a generated vehicle carries no name of its
 // own to read back (see vehicles/vehicleUtils.js).
 const playerVehicleType = randomVehicleType();
-const player = { x: 200, y: 0, angle: 0, speed: 0, steer: 0, vehicle: generateVehicle(playerVehicleType) };
+// Spawn centered in the lane, not straddling the yellow line: the same offset
+// traffic places itself with (laneOffset/placeCarPose, traffic.js), for a car
+// travelling the seed street's own heading (0, due east).
+const player = { x: 200, y: laneOffset(seedStreet), angle: 0, speed: 0, steer: 0, vehicle: generateVehicle(playerVehicleType) };
 // Resolved from the vehicle's type (see vehicles/performance.js) whenever the
 // player's car changes -- at spawn, and again from the picker below.
 player.perf = vehiclePerf(player.vehicle);
@@ -360,7 +371,11 @@ function update(dt) {
     // The player goes along too: drivers follow it, brake for it, and swerve
     // around it exactly as they do for each other.
     updateTraffic(player.x, player.y, dt, player);
-    generate(player.x, player.y);
+    // generate() now scans every node in the map (see streets.js), so it only
+    // runs once every GENERATE_INTERVAL_FRAMES frames rather than every one --
+    // genFrame starts at the interval itself so the very first frame still
+    // generates immediately, same as it always has.
+    if (++genFrame >= GENERATE_INTERVAL_FRAMES) { genFrame = 0; generate(player.x, player.y); }
 }
 
 // --- Game loop ---
@@ -381,7 +396,6 @@ function loop(t) {
     draw();
     requestAnimationFrame(loop);
 }
-initMap();
 // A little more than the bare seed street for a first impression: visit ten
 // more unresolved intersections, picked at random (growCityRandom, streets.js)
 // rather than nearest-origin, so the small extra neighborhood this builds reads

@@ -742,3 +742,15 @@ I want the default PX_PER_FT_DEFAULT to be different for mobile versus desktop b
 And for all vehicle types and building types, I want all details to be drawn starting at a zoom level of 2.2+, so that all windows and details are drawn at the default mobile Zoom level.
 
 The sole exception might be the stop text on stop signs, which is just too tiny. Also, while we're talking about stop signs, the rotation for the red part of the stop sign, the octagon, is off by 22.5 degrees.  The top and bottom of the octagon should be horizontal, of course. Further, stop signs need a white line border, which hopefully can be done as a single pixel thick white line, maybe with some canvas drawline function or something. If we have some mechanism in place for that versus drawing polygons. That white line should of course disappear at the same zoom level that the stop text disappears.
+
+First, one minor thing:
+The player's vehicle currently starts in the middle of the road, right on top the yellow line, and so often immediately gets honked at, and the player has to adjust right away.
+Instead the player's vehicle should start perfectly centered in the lane, ready to go.
+
+Second minor thing: Expand considerably the number of streets generated in streetTest.html.  Triple it probably.
+
+Third, the bigger change I want you to focus on:
+Street generation.  Today, I think the player has to pass through an intersection to trigger generation, which doesn't work great if the player goes even slightly offroad.  And the code to detect that might be mildly complex.
+
+Instead, I thought of a new, hopefully simpler idea:  Once every second or two (don't have to time it exactly, could be every 50 frames or something, whatever is easy and efficient to track and calculate), look for any unvisited/ungenerated intersections within a 500ft radius of the player, and generate all of those (one at at time, each immediately after the last).
+Try to do the search in an efficient manner.  Maybe you can skip the square root and do the manhattan distance rather than cartesian distance or whatever (1000ft per side square centered on the player, rather than a 500ft radius circle).  Doesn't need to be precise.
