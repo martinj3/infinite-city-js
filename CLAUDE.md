@@ -22,6 +22,38 @@ track.
 With no real DOM every entry point turns into a no-op, which is what keeps
 `tools/render.js` working.
 
+## Streets
+
+`streets.js` grows the city outward from `initMap()`'s two seed nodes,
+one intersection at a time, and never anywhere else: `generate(px, py)` runs
+every frame over every node (comparing squared distances, since `hypot` is
+slow enough to matter once a long drive has built thousands of them) and
+resolves any node within `GENERATE_DIST` (30ft) that still has an unrolled
+slot -- `resolveNode` rolls each of `fwd`/`left`/`right` into a real street or
+a dead end, `back` always being pre-set by whichever street created the node.
+`growCity(maxStreets)` is the same call in a loop, repeatedly picking the
+unresolved node nearest the origin, for building a whole city up front rather
+than one drive at a time (`streetTest.html`, `tools/render.js`).
+
+A node the player is standing at gets resolved this way regardless of which
+way they came from or are headed, which is what used to make every
+intersection a surprise: nothing about the block ahead existed until the
+player was within 30ft of its far end. `generate` now also resolves one hop
+further -- for every node it just found within range, it walks that node's
+own `streets` (already set, whether they were just rolled this frame or
+resolved on some earlier pass) and resolves whichever far end isn't resolved
+yet (`farNode`, using the same endpoint tolerance test `arrivalDirAt` in
+signs.js uses). So the moment a player reaches an intersection, every street
+leaving it -- including whichever one they are about to drive down -- already
+has real streets, lots and signs at its own far end, not a stub, which is
+what lets a driver see a block ahead of themselves: whether the next corner
+lets them go straight or turn, and whether anything is coming. It stops at
+one hop on purpose -- the newly-resolved far nodes are not chased further --
+so the amount of city held ready ahead of the player stays exactly one block,
+however fast they're going, rather than snowballing into an ever-growing
+lookahead radius that would cost more every frame the longer a drive runs.
+
+
 ## Buildings
 
 `buildings/` works the way `vehicles/` does: `buildingUtils.js` holds what every

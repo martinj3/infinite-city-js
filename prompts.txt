@@ -661,3 +661,9 @@ We don't have large multi-lane roads yet, but may in the future.
 Again focusing on a clean, maintainable solution that fits in well with existing code and is reasonably performant.  Commit/push
 
 Go ahead and implement proper right of way and turn taking at intersections, as per Fable's notes in trafficPlan.txt
+
+Currently we don't generate the next streets until the player car enters the intersection at the end of a street segment.
+This means the player doesn't know whether it's safe to go fast, they can't plan in advance, because they can't see very far ahead of them.
+
+We need to advance this by one block.  Essentially, as soon as the player turns onto a street segment, we need to generate/visit the unvisited intersection at the far end of that street segment.  Stay about one block ahead of the player car, in other words.
+So the player can see earlier what their options are (can they go straight, can they turn right, what traffic is ahead, etc)
