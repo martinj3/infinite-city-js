@@ -1,0 +1,124 @@
+Plan: smarter intersection behavior for traffic
+================================================
+(Written by the model that built traffic.js's driving model, as a guide for a
+follow-up implementation. Read the "Traffic" section of CLAUDE.md first; every
+term here -- planExit, turnPlan, senseRoad, driveCar's speed section, aPlan,
+stopDone, waitT -- is defined there or in traffic.js itself.)
+
+The goal: a car at a stop sign or an uncontrolled intersection should wait for
+conflicting traffic instead of driving through it. Four-way stops should take
+turns. Left turns should yield to oncoming cars. Everything else about the
+driving model already works and should not change.
+
+The one new concept: "may I enter the box yet?"
+-----------------------------------------------
+All of this is a single new gate, not a new control loop. driveCar already has
+exactly one place where a stopped car decides to go: waitT expires and sets
+stopDone. Replace "dwell then go" with "dwell, then go only when clear", and add
+the same clearness test for cars that never stop (uncontrolled crossings, and
+the through street at a two-way). Concretely:
+
+1. Write one function, `boxClear(c)`, that answers: will any conflicting car be
+   in the intersection during my crossing window? Keep it a pure read -- no
+   state on other cars, no reservations, no negotiation (see "what not to
+   build" below).
+
+2. Call it from two places in driveCar's speed section:
+   - At a stop sign: when waitT expires, only set stopDone if boxClear(c);
+     otherwise hold vT = 0 and re-test each frame (cheap; the car is stopped).
+   - Unsigned approaches (no sign for my slot): if !boxClear(c) treat the node
+     like a stop line -- reuse the existing required-deceleration branch with a
+     goal of 0 at STOP_LINE_BACK. This gives yielding at uncontrolled
+     crossings and two-way through streets for free, using code that already
+     exists. Gate it on distance (only test within ~100ft of the node) so
+     mid-block cars never pay for it.
+
+How boxClear should judge conflicts
+-----------------------------------
+Work per approaching car o at my endNode (find them by iterating traffic once:
+o.endNode === c.endNode, or o already in a turn whose plan came from this node
+-- store node on the turnPlan when you build it). For each, estimate arrival
+and clearing times from what is already known: distance to node = len - o.pos
+(or arcRem mid-turn), speed = o.speed. My own crossing time = (distance through
+box + my length) / max(my vTurn or approach speed, 5). Conflict if the time
+windows overlap, with a safety margin that is a driver personality field
+(aggressive drivers accept smaller gaps -- add `gapAccept`, ~1.5-3.5s, to
+makeDriver).
+
+Prune hard before doing any arithmetic:
+- A car whose path cannot cross mine is not a conflict. Compute this from
+  slots, not geometry: my entry slot and exit slot are knowable at planExit
+  time (store them on turnPlan/next); same for others. A right turn conflicts
+  only with traffic entering from my left and oncoming lefts; straight-through
+  conflicts with cross traffic and oncoming lefts; a left conflicts with
+  everything except a right from my right. Encode this as a small static table
+  keyed by (myEntry->myExit, theirEntry->theirExit) relative slot pairs --
+  fifteen-ish entries, write it once, test it once.
+- A car that is itself held at a stop (waitT > 0, or speed < 1 with a sign)
+  is not a conflict unless it has priority over me (below).
+
+Priority rules, in order of simplicity:
+- Two-way stop: signed approaches yield to everything unsigned. The unsigned
+  through street never tests boxClear against signed cars at all.
+- Left turn (signed or not): also yield to oncoming straight/right traffic.
+  This is just one more row of the conflict table plus "they arrive first".
+- Four-way stop: first-stopped goes first. Give each car a `stoppedAt = simT`
+  when waitT starts; boxClear yields to any car at the same node with an
+  earlier stoppedAt that is still waiting or crossing. Ties (within ~0.3s):
+  yield to the car on your right -- their entry slot is one step clockwise
+  from yours. This is both the real rule and a total order, so it cannot
+  deadlock two cars; see deadlock note anyway.
+
+Deadlock and livelock insurance
+-------------------------------
+Whatever the rules, add a per-car patience timer: if a car has been held at a
+node for more than ~8-15s (personality again), it goes anyway. This is
+realistic (people creep out eventually), it bounds every bug in the priority
+logic to a temporary oddity instead of a frozen intersection, and it means the
+conflict table can be wrong in a corner case without anyone ever noticing.
+Cars still pass through each other if two decide to go at once -- keep that;
+it is the existing, accepted failure mode, now rare instead of constant.
+
+What NOT to build
+-----------------
+- No reservation/ticket system on the node, no per-node queues, no state that
+  outlives a frame anywhere but on the car itself (stoppedAt, patience).
+  Node-owned state has to be cleaned up when cars are deleted by the radius
+  cull -- a whole class of stale-reference bugs the pure-read design cannot
+  have. This is the main architectural instruction: boxClear reads, never
+  writes.
+- No path prediction beyond straight-line time-to-node. The windows plus
+  margin absorb the error.
+- No changes to the steering loop, the arcs, or following. If an intersection
+  interaction seems to need steering changes, it doesn't; it needs a better
+  hold decision.
+- Don't make the player special. The player is already sensed geometrically in
+  senseRoad; give boxClear the same treatment (a pseudo-approach built from
+  the player's position/heading/speed toward the node) and traffic will yield
+  to a player barreling through a four-way exactly as it should. Never assume
+  the player follows any rule.
+
+Performance
+-----------
+boxClear is O(cars at my node) and runs only for cars within ~100ft of a node,
+plus every frame for cars holding at one. That is a handful of cars testing a
+handful of cars; nothing here needs an index. If profiling ever disagrees,
+bucket traffic by endNode once per frame in updateTraffic and hand each car
+its bucket -- but measure first; the O(n^2) senseRoad pass at 135 cars costs
+1.3ms and this is far smaller.
+
+How to validate (use tools/render.js, see CLAUDE.md's Testing section)
+----------------------------------------------------------------------
+Build the controlled two-street scenario from the turn tests (two or four
+streets meeting at one hand-built node, hand-placed cars) and assert:
+- A signed car waits while a cross car passes, then goes: order of node exit
+  matches priority, no frame where both are inside the box.
+- Four cars arriving at a four-way in a known order leave in that order.
+- Two cars arriving simultaneously do not deadlock (patience or right-hand
+  rule resolves it) -- run 60s, assert both eventually cross.
+- A left-turner yields to an oncoming straight car but not to an oncoming
+  right-turner leaving before the conflict point.
+- City-wide regression: mean lane error, stop counts and honk rate from the
+  measurements quoted in CLAUDE.md's Traffic section should not move much;
+  throughput (cars crossing nodes per minute) should drop only modestly.
+Watch a rendered PNG sequence of a busy four-way before trusting any numbers.

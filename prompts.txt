@@ -643,3 +643,11 @@ The constants defining the PID loops (proportional, integral, derivative constan
 Probably need to track world coordinates for each car, likely to sub-foot precision, since deviation from lane centerline will probably range from 0 to 4ft in most cases, so maybe floats on something (plain javascript Number might work just fine).   
 
 Not sure how to deal with decided when its safe to proceed through an intersection at a stopsign, or uncontrolled intersection, or making a left turn at a stopsign, to avoid a collision?  If you have some reasonably simple idea for a mechanism for this, you can implement it.  Otherwise, feel free to leave that for another day if it's too much, and just have cars pass through each other without colliding (but nonetheless they still try to avoid head-on collisions, as detailed above, since I want them to react in interesting ways to the player car's behavior)
+
+---
+
+Quickly, briefly, based on your experience/context with the traffic features you just implemented, write up your recommended plan for a smaller model to add smarter intersection behavior (eg watching for cross traffic at a stop sign to go straight or turn left, taking turns at a 4-way stop or uncontrolled intersection, etc).  
+
+Your brief recommendations on how to implement this in an effective, accurate, but also clean, maintainable, and performant way that integrates cleanly with the code you just wrote.  
+
+This plan/advice can be committed/pushed in a trafficPlan.txt, which can be referenced from Claude.md, so as not to clutter Claude.md

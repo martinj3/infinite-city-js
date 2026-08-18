@@ -515,6 +515,11 @@ lane. The response is a bias on where lane-centre *is* (`EVADE_BIAS`, so the
 same steering loop handles dodge and recovery), emergency braking scaled by
 time-to-collision, and a honk.
 
+What comes next -- watching for cross traffic before proceeding, taking turns
+at a four-way, left turns that yield -- is planned in `trafficPlan.txt`: one
+new "may I enter the box yet" gate on the existing stop/approach logic, never
+a new control loop.
+
 Honks are the decorative hook, deliberately unpolished: any evasion, and any
 braking near the vehicle's maximum, pushes `{x, y, t}` into `honks` (per-car
 cooldown), and `drawHonks` -- called by `drawScene` after everything else --
