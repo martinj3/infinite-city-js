@@ -491,6 +491,15 @@ body, trim, roof fittings and glass are painted as separate passes, because dept
 sorting compares whole polygons and cannot resolve the wheels tucked inside the body
 -- the same reason buildings hang their windows off a child drawable.
 
+`VEHICLE_FORCE_FULL_DETAIL` bypasses every threshold above at once, for exactly
+one caller: `renderVehicleThumb` (game.js), fitting a vehicle into a ~50px
+dropdown thumbnail lands on whatever `PX_PER_FT` its own bounding box needs, which
+for anything bus- or truck-sized is routinely under `VEHICLE_SOLID_MIN_ZOOM`
+itself -- a fire truck or school bus previewed at its natural fitted zoom was a
+flat rectangle, no wheels, no light bar, nothing recognizable. Set for the one
+`drawVehicle()` call the thumbnail needs and unset immediately after, the same
+save/restore-around-one-call shape as the canvas/ctx swap next to it.
+
 ### Performance
 
 `vehicles/performance.js` gives every car acceleration and braking that vary by

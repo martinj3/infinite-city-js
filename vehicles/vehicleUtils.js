@@ -74,6 +74,15 @@ const VEHICLE_WHEELS_MIN_ZOOM = 1.6;   // a wheel is ~2ft across: under this it 
 const VEHICLE_ROOF_MIN_ZOOM = 2.5;     // things bolted to the roof, like a light bar
 const VEHICLE_GLASS_MIN_ZOOM = 4;      // windows are the first detail worth dropping
 
+// Set true only by a preview renderer (see game.js's renderVehicleThumb, built
+// for the driving game's car switcher) to bypass every threshold above and draw
+// full detail regardless of PX_PER_FT. A thumbnail's own zoom is whatever fits
+// the vehicle in a small canvas -- fine for a 15ft sedan, but a 35ft bus or fire
+// truck fitted the same way lands well under VEHICLE_WHEELS_MIN_ZOOM or
+// VEHICLE_ROOF_MIN_ZOOM, and a preview with no wheels or light bar is a bad
+// preview of what driving the thing actually looks like.
+let VEHICLE_FORCE_FULL_DETAIL = false;
+
 // How far the front wheels turn at full lock, in radians (~29 degrees).
 const WHEEL_MAX_STEER = 0.5;
 
@@ -702,6 +711,7 @@ function _emit(src, cos, sin, dx, dy) {
 // always right.
 function drawVehicle(v, wx, wy, heading, steer, camX, camY) {
     const cos = Math.cos(heading), sin = Math.sin(heading);
+    const full = VEHICLE_FORCE_FULL_DETAIL;
 
     const flush = () => {
         if (_vehCount) projectAndDraw(_vehScratch.slice(0, _vehCount), wx, wy, camX, camY);
@@ -709,12 +719,12 @@ function drawVehicle(v, wx, wy, heading, steer, camX, camY) {
     };
     _vehCount = 0;
 
-    if (PX_PER_FT < VEHICLE_SOLID_MIN_ZOOM) {
+    if (!full && PX_PER_FT < VEHICLE_SOLID_MIN_ZOOM) {
         for (const p of v.flat) _emit(p, cos, sin, 0, 0);
         return flush();
     }
 
-    if (PX_PER_FT >= VEHICLE_WHEELS_MIN_ZOOM) {
+    if (full || PX_PER_FT >= VEHICLE_WHEELS_MIN_ZOOM) {
         const lock = Math.max(-1, Math.min(1, steer || 0)) * WHEEL_MAX_STEER;
         for (const wheel of v.wheels) {
             // A steered wheel turns about its own axis, so its points rotate by
@@ -732,17 +742,17 @@ function drawVehicle(v, wx, wy, heading, steer, camX, camY) {
     for (const p of v.body) _emit(p, cos, sin, 0, 0);
     flush();
 
-    if (v.trim && PX_PER_FT >= VEHICLE_ROOF_MIN_ZOOM) {
+    if (v.trim && (full || PX_PER_FT >= VEHICLE_ROOF_MIN_ZOOM)) {
         for (const p of v.trim) _emit(p, cos, sin, 0, 0);
         flush();
     }
 
-    if (v.roof && PX_PER_FT >= VEHICLE_ROOF_MIN_ZOOM) {
+    if (v.roof && (full || PX_PER_FT >= VEHICLE_ROOF_MIN_ZOOM)) {
         for (const p of v.roof) _emit(p, cos, sin, 0, 0);
         flush();
     }
 
-    if (PX_PER_FT >= VEHICLE_GLASS_MIN_ZOOM) {
+    if (full || PX_PER_FT >= VEHICLE_GLASS_MIN_ZOOM) {
         for (const p of v.glass) _emit(p, cos, sin, 0, 0);
         flush();
     }

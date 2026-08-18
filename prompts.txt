@@ -679,3 +679,5 @@ The driving game, driving.html, needs a new option (enabled by default) to have 
 The rotate buttons in camera controls should continue to work, but now they set the "target desired direction," which the above mechanism will seek to maintain.
 
 Ok by default, checkbox in camera controls (driving.HTML only, of course)
+
+Hmm, looks like maybe some of the vehicles aren't drawing with their full level of detail, in the vehicle selector dropdown?  Particularly cement truck, Firetruck, school bus, and several others.  Maybe add a level of detail override bool to the drawing code, so we can force all details drawn when we generate these preview images?

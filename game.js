@@ -81,7 +81,13 @@ function renderVehicleThumb(type, w, h) {
 
     thumbCtx.fillStyle = 'hsl(0, 0%, 40%)';
     thumbCtx.fillRect(0, 0, w, h);
+    // A thumbnail's own fitted zoom is often well under the wheels/roof/glass
+    // thresholds (vehicles/vehicleUtils.js) for anything bus- or truck-sized, so
+    // without this a fire truck or school bus preview would be a bare box with
+    // no wheels and no light bar. Full detail regardless of PX_PER_FT.
+    VEHICLE_FORCE_FULL_DETAIL = true;
     drawVehicle(v, 0, 0, 0, 0, 0, 0);
+    VEHICLE_FORCE_FULL_DETAIL = false;
 
     canvas = savedCanvas; ctx = savedCtx; PX_PER_FT = savedZoom;
     VIEW_ANGLE = savedAngle; Y_SCALE = savedScale;
