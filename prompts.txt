@@ -673,3 +673,9 @@ In the debug pages like vehicles.html, the debug info pane in the top left is in
 I also want a new dropdown menu button, in the top right next to the camera button, for the player to switch cars.  Each option in the dropdown should have a small pic of the vehicle, and the vehicle name text.
 
 Also check that all debug HTML pages we have are linked on index.html (don't make any new ones, just verify all existing ones are there)
+
+The driving game, driving.html, needs a new option (enabled by default) to have the camera rotate to track the player's car as it turns.  There should be some "dead zone", since following every little twitch would be uncomfortable.  But once the edge of the dead zone is hit, the view should rotate automatically as the car continues turning in that direction.
+
+The rotate buttons in camera controls should continue to work, but now they set the "target desired direction," which the above mechanism will seek to maintain.
+
+Ok by default, checkbox in camera controls (driving.HTML only, of course)

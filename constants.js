@@ -52,6 +52,11 @@ const Y_SCALE_MAX = 0.75;
 const TILT_SPEED = 0.4; // per second when holding R/F
 const ROTATE_SPEED = 1.2; // radians per second when holding Q/E
 
+// Driving game only: half-width of the "camera follows the car" dead zone (see
+// game.js) -- how far the car's own heading can drift from the camera's current
+// facing, on screen, before the view starts rotating to keep up with it.
+const CAMERA_FOLLOW_DEAD_ZONE = 25 * Math.PI / 180;
+
 // Live-computed from current VIEW_ANGLE (changes when user rotates)
 function getCosV() { return Math.cos(VIEW_ANGLE); }
 function getSinV() { return Math.sin(VIEW_ANGLE); }

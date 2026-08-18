@@ -106,6 +106,18 @@ function holdButton(parent, label, title, action) {
 // whole scene, which is more useful there than restoring the default zoom.
 let cameraResetHook = null;
 
+// Likewise for rotation: the driving game's camera-follow option (game.js) wants
+// Q/E and these same rotate buttons to steer its own "desired heading" target
+// instead of VIEW_ANGLE directly, so its dead-zone logic and the buttons are
+// pushing on the same thing rather than fighting each other. Every other page
+// leaves this unset and gets the plain, direct rotation it always had.
+let cameraRotateHook = null;
+
+function rotateView(delta) {
+    if (cameraRotateHook) cameraRotateHook(delta);
+    else VIEW_ANGLE = normA(VIEW_ANGLE + delta);
+}
+
 function resetCamera() {
     VIEW_ANGLE = VIEW_ANGLE_DEFAULT;
     Y_SCALE = Y_SCALE_DEFAULT;
@@ -113,9 +125,16 @@ function resetCamera() {
     else PX_PER_FT = PX_PER_FT_DEFAULT;
 }
 
+// Set once buildCameraToolbar runs, so a page loaded after controls.js (the
+// driving game's own game.js, in particular) can still add rows to the same
+// panel -- e.g. the camera-follow checkbox -- without controls.js having to know
+// any page-specific thing exists.
+let cameraPanelEl = null;
+
 function buildCameraToolbar() {
     const wrap = ctlEl('div', 'ic-cam', document.body);
     const panel = ctlEl('div', 'ic-cam-panel ic-hidden', wrap);
+    cameraPanelEl = panel;
 
     const row = (label) => {
         const r = ctlEl('div', 'ic-row', panel);
@@ -124,8 +143,8 @@ function buildCameraToolbar() {
     };
 
     const rot = row('rotate');
-    holdButton(rot, '↺', 'Rotate view left (Q)', dt => { VIEW_ANGLE -= ROTATE_SPEED * dt; });
-    holdButton(rot, '↻', 'Rotate view right (E)', dt => { VIEW_ANGLE += ROTATE_SPEED * dt; });
+    holdButton(rot, '↺', 'Rotate view left (Q)', dt => rotateView(-ROTATE_SPEED * dt));
+    holdButton(rot, '↻', 'Rotate view right (E)', dt => rotateView(ROTATE_SPEED * dt));
 
     const tilt = row('tilt');
     holdButton(tilt, '▲', 'Tilt view down toward overhead (R)',

@@ -41,6 +41,36 @@ as one family without sharing any more code than the CSS:
   the camera toggle, built the same way but by `game.js` rather than `controls.js`,
   since it is driving-game-only.
 
+The camera panel itself gains one more row on the driving page only: a "follow
+car" checkbox (on by default), added by `game.js` reaching into the already-built
+panel through `cameraPanelEl` -- a reference `buildCameraToolbar()` stashes the
+moment it builds the panel, precisely so a page loaded afterward can still add to
+it without `controls.js` having to know any page-specific row exists. Checked, it
+rotates the view to keep the car's own heading roughly put on screen as it turns,
+with a dead zone (`CAMERA_FOLLOW_DEAD_ZONE`, 25 degrees) so ordinary steering
+wander doesn't tug the camera around -- only a sustained turn past the zone's
+edge pulls the view with it, and keeps pulling for as long as the car keeps
+turning, which is what makes cornering read as a proper chase camera rather than
+either a statue or a bloodhound. `followAnchor` is the on-screen heading the car
+is free to drift the zone's width either side of before `update()`'s per-frame
+check starts compensating, by exactly the excess, every frame -- never the whole
+error, or a sustained turn would snap the view straight rather than smoothly
+keeping pace with it.
+
+Q/E and the toolbar's own rotate buttons still move `VIEW_ANGLE` directly and
+instantly, exactly as they always did, through `rotateView()`
+(`cameraRotateHook`, a hook in the same style as `cameraResetHook`, left `null`
+on every page but this one). What changes is that the same nudge also carries
+`followAnchor` along by the same amount, which is the "set the target" a manual
+rotate now does: it redefines where the dead zone is centred without itself being
+subject to it (a rotate button gated by the zone would sit dead for the first
+quarter-second of every press, which reads as broken, not smoothed), and the
+automatic check above keeps seeking to hold the car within whichever zone was
+last set, however it got there. Flipping the checkbox off doesn't blank
+`followAnchor` -- it stops being read at all until the checkbox comes back on, at
+which point it is recomputed fresh from the car's current heading (`setCameraFollow`),
+so turning the option on or off never itself causes a jump.
+
 ## Streets
 
 `streets.js` grows the city outward from `initMap()`'s two seed nodes,

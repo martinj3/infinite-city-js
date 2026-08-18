@@ -95,6 +95,9 @@ const VEH_PICKER_CSS = `
     border-radius: 6px; cursor: pointer; color: #fff; white-space: nowrap; }
 .gm-veh-row:hover, .gm-veh-row:active { background: rgba(255,255,255,0.16); }
 .gm-veh-row canvas { border-radius: 4px; flex: none; }
+.gm-follow-row { cursor: pointer; }
+.gm-follow-row input { width: 20px; height: 20px; }
+.gm-follow-label { width: auto; text-align: left; }
 `;
 
 function buildVehiclePicker() {
@@ -134,6 +137,53 @@ function buildVehiclePicker() {
 }
 buildVehiclePicker();
 
+// --- Camera follow ---
+// Rotates the view to keep the car's own heading roughly put on screen as it
+// turns, with a dead zone so ordinary steering wander doesn't tug the camera
+// around -- only a sustained turn past the zone's edge pulls the view with it,
+// and it keeps pulling for as long as the car keeps turning.
+//
+// followAnchor is the on-screen heading (player.angle + VIEW_ANGLE) the car is
+// free to drift CAMERA_FOLLOW_DEAD_ZONE either side of before the camera starts
+// compensating. Q/E and the camera toolbar's rotate buttons (controls.js) move
+// VIEW_ANGLE exactly as they always did -- direct and instant, so they keep
+// feeling the way they always have -- but now also carry followAnchor along by
+// the same amount (cameraRotateHook, below), which is what makes them "set the
+// target": each manual nudge redefines where the dead zone is centred, and every
+// frame's automatic correction is seeking to hold the car within that zone,
+// whichever way it last got there.
+let cameraFollow = true;
+let followAnchor = normA(player.angle + VIEW_ANGLE);
+
+function angleDiff(a, b) {
+    const d = normA(a - b);
+    return d > Math.PI ? d - TWO_PI : d;
+}
+
+// Re-anchors to the car's current screen heading, so flipping the option on
+// never causes a jump -- whatever VIEW_ANGLE drifted to while it was off (or
+// before the page even loaded) simply becomes the new centre of the dead zone.
+function setCameraFollow(on) {
+    cameraFollow = on;
+    followAnchor = normA(player.angle + VIEW_ANGLE);
+}
+
+cameraRotateHook = delta => {
+    VIEW_ANGLE = normA(VIEW_ANGLE + delta);
+    followAnchor = normA(followAnchor + delta);
+};
+
+function buildCameraFollowToggle() {
+    if (!CONTROLS_DOM || !cameraPanelEl) return;
+    const row = ctlEl('label', 'ic-row gm-follow-row', cameraPanelEl);
+    const box = ctlEl('input', '', row);
+    box.type = 'checkbox';
+    box.checked = cameraFollow;
+    ctlEl('span', 'ic-label gm-follow-label', row, 'follow car');
+    box.addEventListener('change', () => setCameraFollow(box.checked));
+}
+buildCameraFollowToggle();
+
 // --- Update ---
 function update(dt) {
     // Keys and the touch controls feed the same three inputs. Steering is analog:
@@ -165,8 +215,19 @@ function update(dt) {
     if (keys['-'] || keys['_']) PX_PER_FT = Math.max(PX_PER_FT_MIN, PX_PER_FT / Math.pow(ZOOM_SPEED, dt));
 
     // View rotation (Q/E keys)
-    if (keys['q'] || keys['Q']) VIEW_ANGLE -= ROTATE_SPEED * dt;
-    if (keys['e'] || keys['E']) VIEW_ANGLE += ROTATE_SPEED * dt;
+    if (keys['q'] || keys['Q']) rotateView(-ROTATE_SPEED * dt);
+    if (keys['e'] || keys['E']) rotateView(ROTATE_SPEED * dt);
+
+    // Camera follow: once the car's on-screen heading strays past the dead
+    // zone, rotate the view by exactly the excess, every frame, so it keeps
+    // pace with a sustained turn without ever fully re-centring (which reads as
+    // sluggish, always a beat behind) or snapping dead ahead (which reads as
+    // twitchy on every little correction).
+    if (cameraFollow) {
+        const diff = angleDiff(normA(player.angle + VIEW_ANGLE), followAnchor);
+        if (diff > CAMERA_FOLLOW_DEAD_ZONE) VIEW_ANGLE = normA(VIEW_ANGLE - (diff - CAMERA_FOLLOW_DEAD_ZONE));
+        else if (diff < -CAMERA_FOLLOW_DEAD_ZONE) VIEW_ANGLE = normA(VIEW_ANGLE - (diff + CAMERA_FOLLOW_DEAD_ZONE));
+    }
 
     // View tilt (R/F keys)
     if (keys['r'] || keys['R']) Y_SCALE = Math.min(Y_SCALE_MAX, Y_SCALE + TILT_SPEED * dt);
