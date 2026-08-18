@@ -47,6 +47,12 @@ const player = { x: 200, y: laneOffset(seedStreet), angle: 0, speed: 0, steer: 0
 // player's car changes -- at spawn, and again from the picker below.
 player.perf = vehiclePerf(player.vehicle);
 
+// A phone's screen wants more of the view turned toward the road ahead than
+// a desktop monitor does -- see VIEW_ANGLE_DEFAULT_MOBILE, constants.js. Set
+// here, before the intro flourish below captures its own starting angle, so
+// the sweep starts and settles on whichever default this device gets.
+VIEW_ANGLE = viewAngleDefault();
+
 // --- Vehicle picker ---
 // A dropdown next to the camera toolbar for switching the player's own car
 // mid-drive. Position and speed carry over untouched -- only vehicle and perf
@@ -216,6 +222,48 @@ function buildCameraFollowToggle() {
 }
 buildCameraFollowToggle();
 
+// --- Car draw offset ---
+// Pins the car down and to the left of dead-centre rather than dead-centre
+// itself: a driver gets far more use out of a longer look at what's coming up
+// than out of the space behind the car, which is what mostly sat in the extra
+// room this claims. On by default, on both mobile and desktop, with a
+// checkbox in the camera panel (next to "follow car") to go back to
+// dead-centre. All rotation still happens about the car exactly as before --
+// this only moves where dead-centre itself sits on screen (CAM_OFFSET_X/Y,
+// added to the translate in applyCamera, drawing.js).
+let carOffsetEnabled = true;
+
+// Recomputed every frame rather than once, since the canvas can resize (a
+// phone rotating, a desktop window resizing) and touchDrive.shown/driveBarHeight()
+// can change once the pedal bar first appears.
+function updateCamOffset() {
+    if (!carOffsetEnabled) { CAM_OFFSET_X = 0; CAM_OFFSET_Y = 0; return; }
+    const W = canvas.width, H = canvas.height;
+    CAM_OFFSET_X = -CAR_OFFSET_X_FRAC * W;
+    let dy = CAR_OFFSET_Y_FRAC * H;
+    // Shifting the car down is exactly what would tuck it under the pedal bar
+    // and the street-name sign, both anchored to the bottom of a touch
+    // screen -- driveBarHeight() (drawing.js) is the pedal bar's own measured
+    // height, and the extra margin covers the street sign sitting level with
+    // it just above. Desktop has neither, so the plain fraction always applies.
+    if (touchDrive.shown) {
+        const clearance = driveBarHeight() + STREET_SIGN_FONT_TOUCH + 24;
+        dy = Math.min(dy, Math.max(0, H / 2 - clearance));
+    }
+    CAM_OFFSET_Y = dy;
+}
+
+function buildCarOffsetToggle() {
+    if (!CONTROLS_DOM || !cameraPanelEl) return;
+    const row = ctlEl('label', 'ic-row gm-follow-row', cameraPanelEl);
+    const box = ctlEl('input', '', row);
+    box.type = 'checkbox';
+    box.checked = carOffsetEnabled;
+    ctlEl('span', 'ic-label gm-follow-label', row, 'shift car view');
+    box.addEventListener('change', () => { carOffsetEnabled = box.checked; });
+}
+buildCarOffsetToggle();
+
 // --- Intro sequence ---
 // A four-second flourish on load: the camera does one full turn around the
 // parked car while the tilt oscillates and settles, and the zoom eases in from
@@ -327,6 +375,8 @@ function update(dt) {
 
     player.x += Math.cos(player.angle) * player.speed * dt;
     player.y += Math.sin(player.angle) * player.speed * dt;
+
+    updateCamOffset();
 
     if (elapsed < INTRO_DURATION) {
         updateIntroCamera();

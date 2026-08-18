@@ -191,7 +191,7 @@ function drawCurveWL(s) {
 // Leaves the transform on the stack -- callers must ctx.restore().
 function applyCamera(camX, camY) {
     ctx.save();
-    ctx.translate(canvas.width / 2, canvas.height / 2);
+    ctx.translate(canvas.width / 2 + CAM_OFFSET_X, canvas.height / 2 + CAM_OFFSET_Y);
     ctx.scale(1, Y_SCALE);
     ctx.rotate(VIEW_ANGLE);
     ctx.translate(-camX * PX_PER_FT, -camY * PX_PER_FT);

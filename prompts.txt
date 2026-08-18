@@ -754,3 +754,10 @@ Street generation.  Today, I think the player has to pass through an intersectio
 
 Instead, I thought of a new, hopefully simpler idea:  Once every second or two (don't have to time it exactly, could be every 50 frames or something, whatever is easy and efficient to track and calculate), look for any unvisited/ungenerated intersections within a 500ft radius of the player, and generate all of those (one at at time, each immediately after the last).
 Try to do the search in an efficient manner.  Maybe you can skip the square root and do the manhattan distance rather than cartesian distance or whatever (1000ft per side square centered on the player, rather than a 500ft radius circle).  Doesn't need to be precise.
+
+A couple minor things.  the current default initial camera rotation angle is fine on desktop. It works well. But on mobile, I think we want the players car aimed a little bit more towards the top of the screen. Perhaps the street the player starts on should make maybe a 60° angle with the horizontal instead of what is currently probably 45°. This should be achieved purely by changing the default camera rotation angle on mobile only.  this is because phone screens tend to be a lot taller than they are wide, so this allows the player to see more of what's coming ahead.
+
+For the same reason, perhaps we can shift the view centerpoint where the players car is drawn slightly down and to the left.  This part can apply to both mobile and desktop, though on mobile we need to be sure the player car isn't covered by the mobile control bar or street name at the bottom.
+All camera rotations should still happen about the players car, of course, and the players car should still remain in a fixed position on the screen.
+
+This last part can have a checkbox in the camera controls to toggle it on or off, but default to this new shifted player car draw position, on both mobile and desktop.

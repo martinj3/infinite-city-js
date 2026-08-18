@@ -158,6 +158,37 @@ speed is scaled against -- unaffected in practice, since none of them show the
 touch pedals `touchDrive.shown` would need, but `wantsTouchControls()` still
 answers correctly for a phone visiting those pages directly.
 
+## Mobile vs desktop default view angle and car position
+
+Two more driving-only defaults split the same way as zoom above, both off the
+same `wantsTouchControls()` test: `viewAngleDefault()` (`controls.js`) picks
+`VIEW_ANGLE_DEFAULT_MOBILE` (-60 degrees) over the plain `VIEW_ANGLE_DEFAULT`
+(-45 degrees, still what every non-driving camera page gets) because a phone's
+portrait screen has much less width to spare than a desktop monitor's, and
+turning the view further round trades some of that scarce width for a longer
+look at the road ahead. `game.js` sets `VIEW_ANGLE` from it once, before the
+startup intro (below) captures its own starting angle, and `resetCamera()`
+(`controls.js`) reads it too, so double-tapping to reset lands back on
+whichever default the device actually gets rather than always the desktop one.
+
+Separately, `CAM_OFFSET_X`/`CAM_OFFSET_Y` (`constants.js`) let the point
+`applyCamera` (`drawing.js`) pins the camera's subject to sit away from dead
+screen-centre -- added straight onto the usual `canvas.width/2, canvas.height/2`
+translate, so every rotation still happens about that same point and it stays
+fixed on screen exactly as before, just not at the middle any more. Every page
+but driving leaves both at 0, which makes the added terms a no-op -- only
+`game.js` ever writes them, via `updateCamOffset()`, called once a frame from
+`update()`. On by default (`carOffsetEnabled`, a checkbox in the camera panel
+next to "follow car", `buildCarOffsetToggle()`), it shifts the car down and
+left of centre by a fixed fraction of the canvas (`CAR_OFFSET_X_FRAC`/`_Y_FRAC`)
+on both mobile and desktop -- down trades the (mostly empty) space behind the
+car for more of what's coming up ahead, left does the same across the width.
+On a touch device the downward half is capped against `driveBarHeight()` (see
+below) plus the street sign's own height, so the shift can never tuck the car
+under either -- both anchored to the bottom of the screen, exactly where
+"down" is headed. Recomputed every frame rather than once, since the canvas
+itself can resize (a phone rotating, a desktop window resizing).
+
 ## Full detail at the mobile default
 
 `vehicles/vehicleUtils.js`'s level-of-detail thresholds used to drop roof

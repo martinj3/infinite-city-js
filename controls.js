@@ -61,6 +61,12 @@ function pxPerFtDefault() {
     return wantsTouchControls() ? PX_PER_FT_DEFAULT_MOBILE : PX_PER_FT_DEFAULT_DESKTOP;
 }
 
+// Same pattern, for VIEW_ANGLE_DEFAULT/_MOBILE (constants.js) -- see the
+// comment there for why mobile starts rotated further round.
+function viewAngleDefault() {
+    return wantsTouchControls() ? VIEW_ANGLE_DEFAULT_MOBILE : VIEW_ANGLE_DEFAULT;
+}
+
 function setZoom(v) {
     PX_PER_FT = Math.max(PX_PER_FT_MIN, Math.min(PX_PER_FT_MAX, v));
 }
@@ -133,7 +139,7 @@ function rotateView(delta) {
 }
 
 function resetCamera() {
-    VIEW_ANGLE = VIEW_ANGLE_DEFAULT;
+    VIEW_ANGLE = viewAngleDefault();
     Y_SCALE = Y_SCALE_DEFAULT;
     if (cameraResetHook) cameraResetHook();
     else PX_PER_FT = pxPerFtDefault();

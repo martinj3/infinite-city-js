@@ -56,6 +56,15 @@ const SIDEWALK_NONE_PROB = 0.2;
 
 // --- Isometric view ---
 const VIEW_ANGLE_DEFAULT = -Math.PI / 4;
+// A phone screen is much taller than it is wide, so the driving game starts
+// rotated further round than desktop's default -- the seed street reads at
+// roughly 60 degrees off horizontal instead of 45 -- trading some of the width
+// a landscape monitor has to spare for a longer look at the road ahead on a
+// portrait screen. viewAngleDefault() (controls.js) is what actually picks
+// between the two, off the same coarse-pointer test every other mobile-vs-
+// desktop default already uses; every other reference to VIEW_ANGLE_DEFAULT
+// (non-driving camera pages, resetCamera()'s fallback) goes through it too.
+const VIEW_ANGLE_DEFAULT_MOBILE = -Math.PI / 3;
 let VIEW_ANGLE = VIEW_ANGLE_DEFAULT;
 let Y_SCALE = 0.5;
 const Y_SCALE_DEFAULT = 0.5;
@@ -63,6 +72,19 @@ const Y_SCALE_MIN = 0.25;
 const Y_SCALE_MAX = 0.75;
 const TILT_SPEED = 0.4; // per second when holding R/F
 const ROTATE_SPEED = 1.2; // radians per second when holding Q/E
+
+// Driving game only: how far down-left of dead-centre the camera pins the
+// player's car (see game.js's "car draw offset" section) -- a fraction of the
+// canvas's own width/height rather than a flat pixel count, so it holds
+// steady across window sizes. CAM_OFFSET_X/Y are the live pixel values
+// game.js recomputes from these every frame; applyCamera (drawing.js) adds
+// them to the usual dead-centre translate, and left at 0 they make it a
+// no-op, which is what keeps every non-driving page (streetTest.js, the
+// building/vehicle grids) drawing exactly as it always has.
+const CAR_OFFSET_X_FRAC = 0.16;
+const CAR_OFFSET_Y_FRAC = 0.12;
+let CAM_OFFSET_X = 0;
+let CAM_OFFSET_Y = 0;
 
 // Driving game only: half-width of the "camera follows the car" dead zone (see
 // game.js) -- how far the car's own heading can drift from the camera's current
