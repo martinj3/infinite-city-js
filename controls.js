@@ -32,6 +32,12 @@ const CONTROLS_DOM = typeof document !== 'undefined' &&
 // keyboard hint on a device that has no keys to press.
 const touchDrive = { steer: 0, gas: false, brake: false, shown: false };
 
+// Set true by game.js during the driving game's own startup intro (see game.js)
+// to shut out drag/pinch gestures on the canvas for the same span keyboard input
+// is locked out. Every other page leaves this false forever, so gestures work
+// everywhere else exactly as before.
+let inputLocked = false;
+
 function controlsParam(k) {
     if (typeof location === 'undefined' || typeof URLSearchParams !== 'function') return null;
     return new URLSearchParams(location.search || '').get(k);
@@ -230,6 +236,7 @@ function initPanZoom(opts) {
         if (!prev) return;
         const dx = e.clientX - prev.x, dy = e.clientY - prev.y;
         prev.x = e.clientX; prev.y = e.clientY;
+        if (inputLocked) return;
 
         if (pts.size >= 2) {
             const [a, b] = twoPointers();
@@ -339,6 +346,12 @@ function initDriveControls() {
 // Injected from here so that adding controls.js to a page is the only change a
 // page needs; nothing in the markup has to know about any of this.
 const CONTROLS_CSS = `
+/* Driving game only (see game.js): body.ic-intro hides every UI panel for the
+   startup flourish, then this same class coming off is what fades them back in
+   -- the transition is declared unconditionally so it's armed before the class
+   is ever toggled, but it only ever fires on pages that add ic-intro at all. */
+.ic-cam, .ic-drive { transition: opacity ${UI_FADE_DURATION}s ease; }
+body.ic-intro .ic-cam, body.ic-intro .ic-drive { opacity: 0; pointer-events: none; }
 .ic-cam { position: fixed; top: 10px; right: 10px; z-index: 10;
     display: flex; flex-direction: column-reverse; align-items: flex-end; gap: 6px;
     font: 13px system-ui, sans-serif; }

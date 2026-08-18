@@ -14,6 +14,7 @@ addEventListener('keydown', e => { if (e.key.startsWith('Arrow')) e.preventDefau
 addEventListener('keyup', e => { keys[e.key] = false; });
 addEventListener('wheel', e => {
     e.preventDefault();
+    if (inputLocked) return;
     const factor = e.deltaY < 0 ? ZOOM_WHEEL : 1 / ZOOM_WHEEL;
     PX_PER_FT = Math.max(PX_PER_FT_MIN, Math.min(PX_PER_FT_MAX, PX_PER_FT * factor));
 }, { passive: false });
@@ -26,7 +27,11 @@ initDriveControls();
 // --- Player ---
 // steer is kept on the player because the car is drawn from it too: the front
 // wheels turn to match whatever is steering the car.
-const player = { x: 200, y: 0, angle: 0, speed: 0, steer: 0, vehicle: generateRandomVehicle() };
+// Picked as a type name rather than through generateRandomVehicle() so the intro
+// sequence below can display it -- a generated vehicle carries no name of its
+// own to read back (see vehicles/vehicleUtils.js).
+const playerVehicleType = randomVehicleType();
+const player = { x: 200, y: 0, angle: 0, speed: 0, steer: 0, vehicle: generateVehicle(playerVehicleType) };
 // Resolved from the vehicle's type (see vehicles/performance.js) whenever the
 // player's car changes -- at spawn, and again from the picker below.
 player.perf = vehiclePerf(player.vehicle);
@@ -190,54 +195,143 @@ function buildCameraFollowToggle() {
 }
 buildCameraFollowToggle();
 
+// --- Intro sequence ---
+// A four-second flourish on load: the camera does one full turn around the
+// parked car while the tilt oscillates and settles, and the zoom eases in from
+// a wider establishing view to the driving default (see constants.js). Driving
+// input, keyboard shortcuts, and touch gestures are locked out for those same
+// four seconds (inputLocked, declared in controls.js and checked there and by
+// the wheel handler above and the block below), and every UI panel stays
+// hidden a further second after that -- body.ic-intro, added below and removed
+// once the reveal timer runs out, fades them in via the CSS transition already
+// declared on .ic-cam/.ic-drive in controls.js -- so nothing competes with the
+// flourish or gets tapped by accident while the car is still being introduced.
+if (CONTROLS_DOM) document.body.classList.add('ic-intro');
+inputLocked = true;
+let introSettled = false;   // true once the flourish has hit its exact rest values
+let uiRevealed = false;     // true once body.ic-intro has been removed
+let uiAlpha = 0;            // 0..1, read by drawing.js to fade in the on-canvas HUD
+const introStartAngle = VIEW_ANGLE;
+
+// Vehicle name banner, pulsing gray/white for the length of the flourish. A
+// DOM overlay rather than a canvas draw so the pulse is just a CSS animation;
+// positioned toward the top rather than centered, since dead center is exactly
+// where the parked car itself is drawn.
+const INTRO_TEXT_CSS = `
+.gm-intro-text { position: fixed; top: 14%; left: 0; right: 0; text-align: center;
+    font: 700 clamp(26px, 5vw, 52px) system-ui, sans-serif; letter-spacing: 0.5px;
+    pointer-events: none; z-index: 20; transition: opacity 0.4s ease;
+    text-shadow: 0 2px 12px rgba(0,0,0,0.4); animation: gm-pulse 1.2s ease-in-out infinite; }
+@keyframes gm-pulse {
+    0%, 100% { color: rgba(150,150,150,0.55); }
+    50% { color: rgba(255,255,255,0.9); }
+}
+`;
+let introTextEl = null;
+if (CONTROLS_DOM) {
+    const style = document.createElement('style');
+    style.textContent = INTRO_TEXT_CSS;
+    document.head.appendChild(style);
+    introTextEl = ctlEl('div', 'gm-intro-text', document.body, vehicleDisplayName(playerVehicleType) + '!');
+}
+
+function updateIntroCamera() {
+    const t = Math.min(1, elapsed / INTRO_DURATION);
+    VIEW_ANGLE = normA(introStartAngle + t * TWO_PI);
+
+    const ez = 1 - Math.pow(1 - t, 3); // ease-out: reaches the new default without overshoot
+    PX_PER_FT = INTRO_ZOOM_START + (PX_PER_FT_DEFAULT - INTRO_ZOOM_START) * ez;
+
+    // Amplitude decays to exactly 0 by t=1, so the seesaw always lands dead on
+    // Y_SCALE_DEFAULT rather than wherever the sine happened to be.
+    const decay = (1 - t) * (1 - t);
+    Y_SCALE = Y_SCALE_DEFAULT + Math.sin(t * TWO_PI * INTRO_TILT_CYCLES) * (Y_SCALE_MAX - Y_SCALE_DEFAULT) * 0.8 * decay;
+}
+
+// Snaps every value the flourish was easing toward onto its exact rest state --
+// the ease and the decaying oscillation both approach but never guarantee exact
+// equality by t=1 -- and hands manual control back cleanly: VIEW_ANGLE resolves
+// to the same heading the rest of the game already expects (not "start + 2*PI"
+// left unreduced), and followAnchor is recentred on it so camera-follow doesn't
+// read the flourish's spin as a sustained turn and immediately fight to correct it.
+function finishIntroCamera() {
+    VIEW_ANGLE = normA(introStartAngle);
+    Y_SCALE = Y_SCALE_DEFAULT;
+    PX_PER_FT = PX_PER_FT_DEFAULT;
+    followAnchor = normA(player.angle + VIEW_ANGLE);
+    inputLocked = false;
+    if (introTextEl) {
+        introTextEl.style.opacity = '0';
+        setTimeout(() => introTextEl.remove(), 400);
+    }
+}
+
 // --- Update ---
 function update(dt) {
     // Keys and the touch controls feed the same three inputs. Steering is analog:
-    // a key is simply the slider pushed all the way over.
-    const gas = keys['ArrowUp'] || touchDrive.gas;
-    const brake = keys['ArrowDown'] || touchDrive.brake;
-    let steer = (keys['ArrowRight'] ? 1 : 0) - (keys['ArrowLeft'] ? 1 : 0);
-    if (steer === 0) steer = touchDrive.steer * TOUCH_STEER_GAIN;
-    player.steer = Math.max(-1, Math.min(1, steer));
+    // a key is simply the slider pushed all the way over. Locked out for the
+    // length of the intro flourish, above.
+    if (!inputLocked) {
+        const gas = keys['ArrowUp'] || touchDrive.gas;
+        const brake = keys['ArrowDown'] || touchDrive.brake;
+        let steer = (keys['ArrowRight'] ? 1 : 0) - (keys['ArrowLeft'] ? 1 : 0);
+        if (steer === 0) steer = touchDrive.steer * TOUCH_STEER_GAIN;
+        player.steer = Math.max(-1, Math.min(1, steer));
 
-    if (gas) player.speed += curveAccel(player.speed, player.perf.accelK) * dt;
-    if (brake) {
-        if (player.speed > 0) { player.speed -= player.perf.brakeDecel * dt; if (player.speed < 0) player.speed = 0; }
-        else player.speed -= curveAccel(player.speed, player.perf.accelK) * 0.5 * dt;
-    }
-    if (!gas && !brake) {
-        if (player.speed > 0) player.speed = Math.max(0, player.speed - DRAG * dt);
-        else if (player.speed < 0) player.speed = Math.min(0, player.speed + DRAG * dt);
-    }
-    player.speed = Math.max(-REVERSE_MAX, Math.min(MAX_SPEED, player.speed));
+        if (gas) player.speed += curveAccel(player.speed, player.perf.accelK) * dt;
+        if (brake) {
+            if (player.speed > 0) { player.speed -= player.perf.brakeDecel * dt; if (player.speed < 0) player.speed = 0; }
+            else player.speed -= curveAccel(player.speed, player.perf.accelK) * 0.5 * dt;
+        }
+        if (!gas && !brake) {
+            if (player.speed > 0) player.speed = Math.max(0, player.speed - DRAG * dt);
+            else if (player.speed < 0) player.speed = Math.min(0, player.speed + DRAG * dt);
+        }
+        player.speed = Math.max(-REVERSE_MAX, Math.min(MAX_SPEED, player.speed));
 
-    const tf = Math.min(Math.abs(player.speed) / 20, 1);
-    player.angle += MAX_TURN_RATE * tf * steer * dt;
+        const tf = Math.min(Math.abs(player.speed) / 20, 1);
+        player.angle += MAX_TURN_RATE * tf * steer * dt;
+    }
 
     player.x += Math.cos(player.angle) * player.speed * dt;
     player.y += Math.sin(player.angle) * player.speed * dt;
 
-    if (keys['='] || keys['+']) PX_PER_FT = Math.min(PX_PER_FT_MAX, PX_PER_FT * Math.pow(ZOOM_SPEED, dt));
-    if (keys['-'] || keys['_']) PX_PER_FT = Math.max(PX_PER_FT_MIN, PX_PER_FT / Math.pow(ZOOM_SPEED, dt));
+    if (elapsed < INTRO_DURATION) {
+        updateIntroCamera();
+    } else {
+        if (!introSettled) { finishIntroCamera(); introSettled = true; }
 
-    // View rotation (Q/E keys)
-    if (keys['q'] || keys['Q']) rotateView(-ROTATE_SPEED * dt);
-    if (keys['e'] || keys['E']) rotateView(ROTATE_SPEED * dt);
+        if (keys['='] || keys['+']) PX_PER_FT = Math.min(PX_PER_FT_MAX, PX_PER_FT * Math.pow(ZOOM_SPEED, dt));
+        if (keys['-'] || keys['_']) PX_PER_FT = Math.max(PX_PER_FT_MIN, PX_PER_FT / Math.pow(ZOOM_SPEED, dt));
 
-    // Camera follow: once the car's on-screen heading strays past the dead
-    // zone, rotate the view by exactly the excess, every frame, so it keeps
-    // pace with a sustained turn without ever fully re-centring (which reads as
-    // sluggish, always a beat behind) or snapping dead ahead (which reads as
-    // twitchy on every little correction).
-    if (cameraFollow) {
-        const diff = angleDiff(normA(player.angle + VIEW_ANGLE), followAnchor);
-        if (diff > CAMERA_FOLLOW_DEAD_ZONE) VIEW_ANGLE = normA(VIEW_ANGLE - (diff - CAMERA_FOLLOW_DEAD_ZONE));
-        else if (diff < -CAMERA_FOLLOW_DEAD_ZONE) VIEW_ANGLE = normA(VIEW_ANGLE - (diff + CAMERA_FOLLOW_DEAD_ZONE));
+        // View rotation (Q/E keys)
+        if (keys['q'] || keys['Q']) rotateView(-ROTATE_SPEED * dt);
+        if (keys['e'] || keys['E']) rotateView(ROTATE_SPEED * dt);
+
+        // Camera follow: once the car's on-screen heading strays past the dead
+        // zone, rotate the view by exactly the excess, every frame, so it keeps
+        // pace with a sustained turn without ever fully re-centring (which reads as
+        // sluggish, always a beat behind) or snapping dead ahead (which reads as
+        // twitchy on every little correction).
+        if (cameraFollow) {
+            const diff = angleDiff(normA(player.angle + VIEW_ANGLE), followAnchor);
+            if (diff > CAMERA_FOLLOW_DEAD_ZONE) VIEW_ANGLE = normA(VIEW_ANGLE - (diff - CAMERA_FOLLOW_DEAD_ZONE));
+            else if (diff < -CAMERA_FOLLOW_DEAD_ZONE) VIEW_ANGLE = normA(VIEW_ANGLE - (diff + CAMERA_FOLLOW_DEAD_ZONE));
+        }
+
+        // View tilt (R/F keys)
+        if (keys['r'] || keys['R']) Y_SCALE = Math.min(Y_SCALE_MAX, Y_SCALE + TILT_SPEED * dt);
+        if (keys['f'] || keys['F']) Y_SCALE = Math.max(Y_SCALE_MIN, Y_SCALE - TILT_SPEED * dt);
     }
 
-    // View tilt (R/F keys)
-    if (keys['r'] || keys['R']) Y_SCALE = Math.min(Y_SCALE_MAX, Y_SCALE + TILT_SPEED * dt);
-    if (keys['f'] || keys['F']) Y_SCALE = Math.max(Y_SCALE_MIN, Y_SCALE - TILT_SPEED * dt);
+    // Drives both the DOM panels' fade-in (removing body.ic-intro lets their own
+    // CSS transition run) and the on-canvas HUD's fade-in (drawing.js reads
+    // uiAlpha directly, since a canvas fill has no transition of its own).
+    uiAlpha = Math.max(0, Math.min(1, (elapsed - INTRO_DURATION - INTRO_UI_DELAY) / UI_FADE_DURATION));
+    if (!uiRevealed && uiAlpha > 0) {
+        if (CONTROLS_DOM) document.body.classList.remove('ic-intro');
+        uiRevealed = true;
+    }
 
     // Traffic first, so the streets generate() is about to create are populated
     // around where the player is now rather than where they were last frame.
@@ -248,14 +342,27 @@ function update(dt) {
 }
 
 // --- Game loop ---
-let lastTime = performance.now(), elapsed = 0, instructionAlpha = 1;
+// instructionAlpha starts at 0 rather than 1 now: the "Arrows: drive..." hint
+// would be actively misleading shown atop a locked-out intro, so it waits for
+// the same reveal moment as the rest of the UI (elapsed passing
+// INTRO_DURATION + INTRO_UI_DELAY, tracked by uiAlpha in update()) before
+// fading in over about a second, then fades back out a few seconds later
+// exactly as it always did.
+let lastTime = performance.now(), elapsed = 0, instructionAlpha = 0;
 function loop(t) {
     const dt = Math.min((t - lastTime) / 1000, 0.05);
     lastTime = t; elapsed += dt;
-    if (elapsed > 4) instructionAlpha = Math.max(0, instructionAlpha - dt);
+    const uiRevealTime = INTRO_DURATION + INTRO_UI_DELAY;
+    if (elapsed > uiRevealTime) instructionAlpha = Math.min(1, instructionAlpha + dt);
+    if (elapsed > uiRevealTime + 4) instructionAlpha = Math.max(0, instructionAlpha - dt);
     update(dt);
     draw();
     requestAnimationFrame(loop);
 }
 initMap();
+// A little more than the bare seed street for a first impression: visit ten
+// more unresolved intersections, picked at random (growCityRandom, streets.js)
+// rather than nearest-origin, so the small extra neighborhood this builds reads
+// as scattered blocks around the seed rather than one corridor in one direction.
+growCityRandom(10);
 requestAnimationFrame(loop);

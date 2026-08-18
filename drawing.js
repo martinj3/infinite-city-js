@@ -278,15 +278,21 @@ function draw() {
     const W = canvas.width, H = canvas.height;
     drawScene(player.x, player.y, player);
 
-    // HUD
-    const mph = Math.abs(player.speed * 3600 / 5280);
-    ctx.fillStyle = 'rgba(0,0,0,0.5)';
-    ctx.fillRect(8, 8, 140, 52);
-    ctx.fillStyle = '#fff';
-    ctx.font = 'bold 18px monospace';
-    ctx.fillText(`${mph.toFixed(0)} mph`, 16, 32);
-    ctx.font = '13px monospace';
-    ctx.fillText(`Streets: ${streets.length}`, 16, 52);
+    // HUD -- hidden through the startup intro sequence (game.js) and faded in
+    // with the rest of the UI via uiAlpha, since a canvas fill has no CSS
+    // transition of its own to lean on the way the DOM panels do.
+    if (uiAlpha > 0) {
+        ctx.globalAlpha = uiAlpha;
+        const mph = Math.abs(player.speed * 3600 / 5280);
+        ctx.fillStyle = 'rgba(0,0,0,0.5)';
+        ctx.fillRect(8, 8, 140, 52);
+        ctx.fillStyle = '#fff';
+        ctx.font = 'bold 18px monospace';
+        ctx.fillText(`${mph.toFixed(0)} mph`, 16, 32);
+        ctx.font = '13px monospace';
+        ctx.fillText(`Streets: ${streets.length}`, 16, 52);
+        ctx.globalAlpha = 1;
+    }
 
     // Nothing to tell someone with no keyboard, and it would sit under the pedals
     if (instructionAlpha > 0 && !touchDrive.shown) {

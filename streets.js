@@ -345,3 +345,22 @@ function growCity(maxStreets) {
     }
     return visited;
 }
+
+// Same idea, but picking the unresolved node at random each visit instead of
+// always the one nearest the origin. growCity's nearest-first order grows one
+// dense patch outward from a point; this is for the driving game's own startup
+// (game.js), where a handful of blocks scattered around the seed street reads as
+// a small established neighborhood rather than a single corridor punched out in
+// one direction.
+function growCityRandom(count) {
+    let visited = 0;
+    for (let i = 0; i < count; i++) {
+        const candidates = [];
+        for (const [, n] of nodes) if (nodeUnresolved(n)) candidates.push(n);
+        if (!candidates.length) break;
+        const node = candidates[Math.floor(Math.random() * candidates.length)];
+        generate(node.x, node.y); // same path the car triggers when it drives through
+        visited++;
+    }
+    return visited;
+}

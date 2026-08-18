@@ -71,6 +71,66 @@ last set, however it got there. Flipping the checkbox off doesn't blank
 which point it is recomputed fresh from the car's current heading (`setCameraFollow`),
 so turning the option on or off never itself causes a jump.
 
+### Startup intro sequence
+
+`driving.html` opens with a four-second flourish rather than dropping the
+player straight into a static, one-street city: `game.js`'s `updateIntroCamera()`
+sweeps `VIEW_ANGLE` through one full turn around the parked car (`introStartAngle`
+`+ TWO_PI`, landing back on the same heading it started from), eases `PX_PER_FT`
+in from a wider establishing shot (`INTRO_ZOOM_START`) to the driving default
+(`PX_PER_FT_DEFAULT`, itself nudged from 2 to 2.4 in this same change -- the old
+wider default made it easy to drift out of a lane without noticing), and swings
+`Y_SCALE` through a couple of decaying oscillations before settling dead on
+`Y_SCALE_DEFAULT`. All three are driven off one shared `t = elapsed / INTRO_DURATION`,
+which is what keeps them visibly part of one flourish rather than three
+independent animations that happen to start together. The decay factor
+(`(1-t)^2`) and the ease (`1 - (1-t)^3`) both approach, but never exactly reach,
+their rest values by floating-point equality, so `finishIntroCamera()` snaps
+every value to its exact default the moment `elapsed` crosses `INTRO_DURATION`
+rather than trusting the animation to land there itself -- and it recentres
+`followAnchor` on the just-settled `VIEW_ANGLE` at the same time, because
+otherwise camera-follow (above) would read the flourish's own 360-degree sweep
+as a sustained turn and spend the first frame after intro violently correcting
+for it.
+
+Every input path is locked out for those same four seconds: keyboard driving
+and the zoom/rotate/tilt keys (gated by `inputLocked` inside `update()`'s own
+branches), the mouse wheel, and pinch-to-zoom (`inputLocked`, declared in
+`controls.js` so pages without `game.js` never set it and keep working exactly
+as before). `inputLocked` flips false the instant `finishIntroCamera()` runs, at
+`elapsed === INTRO_DURATION` -- one second before the UI itself reappears, so a
+player who mashes a key right at the four-second mark is already driving before
+they can see any controls to press.
+
+The UI stays hidden a further second after that (`INTRO_UI_DELAY`) and then
+fades in over `UI_FADE_DURATION`, on two different mechanisms because half the
+UI is DOM and half is canvas. `document.body` carries an `ic-intro` class from
+the moment `game.js` loads; `controls.js`'s shared CSS declares `opacity: 0;
+pointer-events: none` on `.ic-cam`/`.ic-drive` under that class and an
+unconditional `transition: opacity` on the same selectors, so the instant
+`update()` removes the class the camera toolbar, vehicle picker, and touch
+pedals all fade in together for free -- no per-page JS needed, and every other
+page that never adds `ic-intro` is unaffected. The on-canvas HUD (mph, street
+count, and the existing "Arrows: drive" hint in `drawing.js`) has no CSS to
+lean on, so `update()` computes `uiAlpha` manually from the same `elapsed` and
+`drawing.js` wraps that block in a matching `ctx.globalAlpha`. The pre-existing
+"Arrows: drive" hint used to be visible from frame one and fade out around the
+four-second mark on its own; `instructionAlpha` now starts at 0 and rides
+`uiAlpha`'s reveal timing before fading back out a few seconds later, so it
+never appears while the rest of the driving controls are still locked out and
+invisible.
+
+Throughout the four seconds, `game.js` shows the player which vehicle they were
+randomly assigned -- `vehicleDisplayName(playerVehicleType) + '!'` in a `position:
+fixed` banner pulsing grey to white via a plain CSS `@keyframes` animation
+(`gm-pulse`), positioned at `top: 14%` rather than centred so it clears the car
+itself, which `drawScene` puts roughly in the middle of the screen. The banner
+is a DOM overlay rather than a canvas draw specifically so the pulse can be a
+free-running CSS animation instead of something `update()` has to compute every
+frame. `playerVehicleType` is picked via `randomVehicleType()` directly, rather
+than through `generateRandomVehicle()` as before, because a generated vehicle
+carries no name of its own for the banner to read back afterward.
+
 ## Streets
 
 `streets.js` grows the city outward from `initMap()`'s two seed nodes,
@@ -83,6 +143,12 @@ a dead end, `back` always being pre-set by whichever street created the node.
 `growCity(maxStreets)` is the same call in a loop, repeatedly picking the
 unresolved node nearest the origin, for building a whole city up front rather
 than one drive at a time (`streetTest.html`, `tools/render.js`).
+`growCityRandom(count)` is the same loop with one thing changed: it picks the
+unresolved node at *random* on every visit rather than always the nearest one,
+which is what `game.js` calls (ten visits) right after `initMap()` so
+driving.html's first frame is a handful of scattered blocks around the seed
+street rather than a single lonely segment -- nearest-first would instead grow
+one dense patch outward in whatever direction happened to resolve first.
 
 A node the player is standing at gets resolved this way regardless of which
 way they came from or are headed, which is what used to make every

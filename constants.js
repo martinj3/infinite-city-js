@@ -8,7 +8,10 @@ const INTERSECTION_SIZE = MAX_STREET_WIDTH; // fixed size to accommodate widest 
 const HALF_INTERSECTION = INTERSECTION_SIZE / 2;
 const DEFAULT_BLOCK_LEN = 500;
 let PX_PER_FT = 2;
-const PX_PER_FT_DEFAULT = 2;
+// A bit more zoomed in than the original 2: at the old default it was easy to
+// wander out of a 20-24ft lane without noticing. Driving's own intro sequence
+// (game.js) eases the view in to this value from INTRO_ZOOM_START, below.
+const PX_PER_FT_DEFAULT = 2.4;
 const PX_PER_FT_MIN = 0.1;
 const PX_PER_FT_MAX = 20;
 const ZOOM_SPEED = 1.5; // per second (multiplier) for held keys
@@ -56,6 +59,17 @@ const ROTATE_SPEED = 1.2; // radians per second when holding Q/E
 // game.js) -- how far the car's own heading can drift from the camera's current
 // facing, on screen, before the view starts rotating to keep up with it.
 const CAMERA_FOLLOW_DEAD_ZONE = 25 * Math.PI / 180;
+
+// Driving game only: the startup flourish (game.js) -- one full camera turn
+// around the parked car while tilt oscillates and settles and zoom eases in.
+// Kept here rather than entirely inside game.js because controls.js's shared CSS
+// (the UI fade-in) and the on-canvas HUD (drawing.js) both need to agree with
+// game.js on the same timing rather than each guessing a duration.
+const INTRO_DURATION = 4;       // seconds: length of the flourish; input stays locked out until it ends
+const INTRO_UI_DELAY = 1;       // further seconds of stillness before the UI starts fading in
+const UI_FADE_DURATION = 1;     // seconds the UI (panels and HUD) take to fade in once they start
+const INTRO_ZOOM_START = 1.3;   // PX_PER_FT at the start of the intro -- wider than PX_PER_FT_DEFAULT
+const INTRO_TILT_CYCLES = 2.5;  // tilt oscillations during the intro before it settles on Y_SCALE_DEFAULT
 
 // Live-computed from current VIEW_ANGLE (changes when user rotates)
 function getCosV() { return Math.cos(VIEW_ANGLE); }

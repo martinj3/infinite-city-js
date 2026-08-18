@@ -681,3 +681,26 @@ The rotate buttons in camera controls should continue to work, but now they set 
 Ok by default, checkbox in camera controls (driving.HTML only, of course)
 
 Hmm, looks like maybe some of the vehicles aren't drawing with their full level of detail, in the vehicle selector dropdown?  Particularly cement truck, Firetruck, school bus, and several others.  Maybe add a level of detail override bool to the drawing code, so we can force all details drawn when we generate these preview images?
+
+---
+
+OK, and real quick, you coded it so that switching cars will change the performance characteristics of the player's car, not just its appearance, right? just double checking?
+
+---
+
+On driving.HTML, the lone city Street looks a little bit unimpressive, for a first impression. Have it expand the initial city, a little bit, by randomly picking unvisited intersections and visiting them, generating them. One at a time. Have it do this with, let's say, 10 unvisited intersections.
+
+Further, I want a cool intro sequence, animation, on startup of driving.HTML. This sequence should last four seconds.  all controls and UI elements are hidden during this sequence and only appear after five seconds, so one second after the intro sequence completes.
+If it can be done easily, have the UI elements fade in.
+
+The intro sequence consists of rotating the camera through a full 360°, around the players car, just like pressing the rotate buttons does today.
+Simultaneously camera tilt oscillates up and down a couple times until smoothly landing on the default camera tilt value we have today.
+
+Simultaneously, the camera is also zooming in slowly. Camera zoom starts a bit wider than the default zoom we use today, and smoothly zooms in to a new default value, slightly more zoomed in than the current default.
+
+(I want to change the current default zoom to be just slightly more zoomed in, since it's a little hard to keep centered in the narrow lanes, at the current wide default zoom).
+
+Keyboard controls and hot keys are naturally locked out until the sequence completes. Likewise for pinch to Zoom and any other controls on mobile.
+
+Also, throughout the intro sequence, I want to display in text the name of the vehicle type that the player's car was randomly assigned, followed by an exclamation point, in medium-ish size transparent text.  Towards the top of the screen, not dead center, or it would cover the players car.
+The text color for this should pulse from gray to white and back, for emphasis
