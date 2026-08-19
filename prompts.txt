@@ -784,3 +784,26 @@ That new settings dropdown pane thing can have adjustments for all of these valu
 Also on index.html, below the link to driving.html add some plain text description of the controls: WASD/arrows steering/accel, zoom keys or mouse wheel or pinch to zoom, tilt keys, rotate keys.
 
 And then above the other links, add a plain text note that "all the below allow pinch to zoom or scroll wheel zoom and drag to scroll or arrow key/WASD scroll" (make sure WASD scrolling works here too, alongside arrow keys)
+
+---
+
+Look pretty good, except on mobile it's showing both types of steering controls at all times, the analog slider above the buttons. Rather than whichever is selected in the new settings pane (should default to buttons, not slider). This causes the control bar at the bottom to take up a lot of extra height
+
+---
+
+Now for the red "honk" text we display.
+Only 50% of the time should this be the word "honk."
+The other 50% of the time, choose randomly from a set of phrases like:
+"Watch it!"
+"Hey!"
+"Blind?"
+"Buddy!"
+"What!"
+"Jerk!"
+"Crazy."
+"Move!"
+"Stop!"
+
+And any other similar short (10 character max) that you can think of, be creative!
+
+Don't worry about the difference between being cut off, having to slam on the brakes, versus a possible head-on collision.  Just pick from the same list for all cases, don't worry about distinguishing.

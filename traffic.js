@@ -843,10 +843,14 @@ function driveCar(c, dt, player) {
 // than following the car -- a honking car is braking, it won't be far.
 const honks = [];
 const HONK_LIFE = 1.1;    // s on screen
+// Half the time it's a plain honk; the other half a shouted word (10 chars max).
+const HONK_WORDS = ['Watch it!', 'Hey!', 'Blind?', 'Buddy!', 'What!', 'Jerk!', 'Crazy.',
+    'Move!', 'Stop!', 'Wake up!', 'Really?', 'Whoa!', 'Rude!', 'C\'mon!', 'Sheesh!', 'Idiot!'];
 function honk(c) {
     if (simT < c.honkOk) return;
     c.honkOk = simT + 2.5 + Math.random() * 2.5;   // one leaning-on-it per moment of drama
-    honks.push({ x: c.cx, y: c.cy, t: simT });
+    const text = Math.random() < 0.5 ? 'HONK!' : HONK_WORDS[Math.random() * HONK_WORDS.length | 0];
+    honks.push({ x: c.cx, y: c.cy, t: simT, text });
 }
 
 // Screen-space, after everything else has drawn (see drawScene): a honk is heard
@@ -865,7 +869,7 @@ function drawHonks(camX, camY) {
         ctx.textAlign = 'center';
         ctx.translate(sx, sy);
         ctx.rotate((((h.x * 7 + h.y * 13) % 10) / 10 - 0.5) * 0.35);   // a little cockeyed
-        ctx.fillText('HONK!', 0, 0);
+        ctx.fillText(h.text, 0, 0);
         ctx.restore();
     }
 }
