@@ -478,6 +478,14 @@ body.ic-intro .ic-cam, body.ic-intro .ic-drive { opacity: 0; pointer-events: non
     background: rgba(255,255,255,0.16); border: 1px solid rgba(255,255,255,0.35);
     border-radius: 10px; touch-action: none; -webkit-tap-highlight-color: transparent; }
 .ic-steer-btn.ic-held { background: rgba(255,255,255,0.45); }
+/* Compound selectors, not a bare .ic-hidden re-declaration: .ic-steer and
+   .ic-steer-digital each set their own display at the same specificity as
+   plain .ic-hidden, and being the later rules in this same stylesheet they'd
+   otherwise win regardless of which one also carries ic-hidden -- which is
+   exactly what showed both steering widgets stacked at once instead of
+   hiding whichever syncSteerMode() just turned off. Two classes beats one,
+   so these two win no matter their position in the file. */
+.ic-steer.ic-hidden, .ic-steer-digital.ic-hidden { display: none; }
 .ic-pedals { flex: 1 1 62%; display: flex; gap: 10px; }
 .ic-pedal { flex: 1 1 50%; min-height: 84px; color: #fff;
     border: 1px solid rgba(255,255,255,0.35); border-radius: 10px;
