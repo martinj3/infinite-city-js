@@ -65,6 +65,14 @@ const VIEW_ANGLE_DEFAULT = -Math.PI / 4;
 // desktop default already uses; every other reference to VIEW_ANGLE_DEFAULT
 // (non-driving camera pages, resetCamera()'s fallback) goes through it too.
 const VIEW_ANGLE_DEFAULT_MOBILE = -Math.PI / 3;
+// The same trade run the other way, for a phone turned sideways: a landscape
+// screen is short and wide, so the scarce direction is the one the road ahead
+// runs up. Rotating the view back down to 30 degrees off horizontal -- past
+// even the desktop default -- spends the width the phone now has to spare on a
+// flatter, longer look down the street instead of running the road off the top
+// edge a few car lengths ahead. Picked by viewAngleDefault() (controls.js) off
+// the orientation, and re-applied when the phone is turned (syncOrientation).
+const VIEW_ANGLE_DEFAULT_MOBILE_LANDSCAPE = -Math.PI / 6;
 let VIEW_ANGLE = VIEW_ANGLE_DEFAULT;
 let Y_SCALE = 0.5;
 const Y_SCALE_DEFAULT = 0.5;

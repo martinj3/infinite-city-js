@@ -835,3 +835,9 @@ But optionally it can be locked so the players car is always pointing up.
 Make it look nice, put a nice circular border to decorate it to look cool, etc.  
 
 Consider performance, where possible try not to make it too computationally expensive to update
+
+On mobile, add support for landscape orientation, when the user turns their phone sideways (can we easily detect that?).  No effect on desktop.
+
+Controls (buttons and/or slider) should remain the same size, there will just be a gap added between the steering controls on the left, and the gas/brake on the right.  With the game world visible in this gap
+
+You can re-arrange the Ux elements a little if you like, to fit everything neatly.  Just keep the upper right corner open, since the user is usually driving in that direction.  Default camera rotation angle could have the player driving at 30 degrees above the horizontal (rather than 60 in mobile portrait), so they'll have a good view of what's ahead in landscape.

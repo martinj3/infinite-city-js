@@ -236,6 +236,10 @@ look at the road ahead. `game.js` sets `VIEW_ANGLE` from it once, before the
 startup intro (below) captures its own starting angle, and `resetCamera()`
 (`controls.js`) reads it too, so double-tapping to reset lands back on
 whichever default the device actually gets rather than always the desktop one.
+Turning that phone sideways swings it back past both, to
+`VIEW_ANGLE_DEFAULT_MOBILE_LANDSCAPE` (-30 degrees) -- see "Landscape phones"
+below, which also covers how the change is applied to a camera the player has
+since rotated for themselves.
 
 Separately, the driving game draws the car left of and below dead centre rather
 than at it, for the same reason: down trades the (mostly empty) space behind
@@ -279,6 +283,69 @@ holds across window sizes, and on a touch device the downward half is capped
 against `driveBarHeight()` (see below) plus the street sign's own height, so it
 can never tuck the car under either -- both are anchored to the bottom edge,
 exactly where "down" is headed.
+
+## Landscape phones
+
+A phone held sideways is a different shape of screen, not a wider one: it gains
+a few hundred pixels of width and gives up most of its height. Three things
+react to that, all of them gated on `touchLandscape()` (`controls.js`) --
+`wantsTouchControls() && isLandscape()` -- which is what keeps every bit of it
+off desktop, since a monitor is landscape too and nearly always has been.
+`isLandscape()` prefers the `(orientation: landscape)` media query and falls
+back to comparing `innerWidth` against `innerHeight`, which is the same answer
+in the headless harness (`tools/render.js` supplies both dimensions and no
+`matchMedia`). `?touch=1` forces the touch half true, so the whole landscape
+layout can be looked at on a desktop just by making the window wide.
+
+**The drive bar splits in two.** Portrait's bar is one solid strip across the
+bottom with the steering hard against the pedals; sideways, the two clusters
+move to opposite edges and the city shows through the gap between them. The
+controls themselves do not change size -- `applyDriveWidths()` sizes both in
+real pixels off `Math.min(innerWidth, innerHeight)`, the width the same phone
+has when held upright, instead of as a fraction of the wide screen, so all the
+extra width becomes gap rather than stretching the pedals across half a screen.
+On a 760x420 phone that is a 308px window onto the road at the same 152px
+steering and 248px pedals portrait gives. The bar element still spans the full
+width -- it is what holds the clusters apart -- so in landscape it gives up
+both of the things that would otherwise cover that gap: its background, and its
+pointer events, which each cluster takes back for the area it actually occupies
+(`body.ic-landscape` rules in `CONTROLS_CSS`). Without that second half the gap
+would look like open road and still swallow every drag and pinch aimed at the
+canvas under it. The clusters' own padding lands outside the flex basis
+(content-box), so it pads each backdrop without shrinking the buttons inside,
+and the bar drops its top padding to pay for the padding they add.
+
+**The camera flattens out.** In portrait the scarce direction is width, so the
+view turns further round (-60 degrees) to trade some of it for a longer look
+ahead. Sideways that reverses: width is what the screen now has spare and
+height is what it hasn't, so the view rotates back to -30 degrees -- past even
+the desktop default -- for a flatter, longer look down the street instead of
+running the road off the top edge a few car lengths out.
+
+**Both are re-applied when the phone is actually turned**, not just chosen at
+load: `syncOrientation()` runs off the `resize` event (every browser that fires
+`orientationchange` fires a resize alongside, and resize alone also catches a
+desktop window dragged across the square with `?touch=1` on) and returns
+immediately unless the answer changed, so a resize storm costs one comparison
+each. The view angle is the interesting half. By the time a phone gets turned
+the player may well have rotated the camera themselves, so it is carried by the
+*difference* between the old and new defaults rather than snapped to the new
+one -- which re-aims for the new screen shape while leaving whatever they were
+looking at intact. It goes through `rotateView()` rather than assigning
+`VIEW_ANGLE`, so the driving game's camera-follow anchor comes along with it
+(`cameraRotateHook`, `game.js`); assigned directly, camera-follow would read
+the change as the car having swung out of its dead zone and immediately steer
+it back out again. The same hook also carries `introStartAngle` (hence `let`,
+not `const`), because the startup flourish drives `VIEW_ANGLE` from that angle
+absolutely on every frame and would otherwise overwrite a phone turned
+mid-intro on the next one.
+
+Nothing else needed moving. The three toolbars and the radar are already in the
+top left and the on-canvas HUD in the two bottom corners (see "Keeping the top
+right clear" above), which is exactly the arrangement a landscape screen wants:
+the corner the road runs toward stays clear, and the sign and speedometer sit
+above the two clusters rather than over the gap, since both already clear
+`driveBarHeight()` and that measures the split bar just the same.
 
 ## Full detail at the mobile default
 

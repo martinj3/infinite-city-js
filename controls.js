@@ -15,7 +15,9 @@
 //                    have no keyboard. Shown on desktop too.
 //   driving controls a steering slider and gas/brake pedals along the bottom,
 //                    on touch screens only. ?touch=1 forces them on so they can
-//                    be tried on a desktop, ?touch=0 forces them off.
+//                    be tried on a desktop, ?touch=0 forces them off. Turned
+//                    sideways they split to the two edges with the city visible
+//                    between them -- see "Turning the phone sideways" below.
 //
 // With no real DOM (the headless harness in tools/render.js) every entry point
 // below turns into a no-op and the page still runs, so the render tests are
@@ -53,6 +55,23 @@ function wantsTouchControls() {
     return typeof navigator !== 'undefined' && navigator.maxTouchPoints > 0;
 }
 
+// A screen wider than it is tall. The orientation media query is the direct
+// answer where there is one; comparing the viewport's own two dimensions is the
+// same answer everywhere else, including the headless harness (tools/render.js),
+// which supplies both and no matchMedia.
+function isLandscape() {
+    if (typeof matchMedia === 'function') return matchMedia('(orientation: landscape)').matches;
+    return typeof innerWidth === 'number' && typeof innerHeight === 'number' && innerWidth > innerHeight;
+}
+
+// A phone or tablet held sideways -- the one condition any of the landscape
+// handling below reacts to. Every landscape rule goes through this rather than
+// through isLandscape() alone, which is what keeps all of it off desktop: a
+// desktop monitor is landscape too, and nearly always has been. ?touch=1 forces
+// the touch half true, so the whole landscape layout can still be looked at on
+// a desktop by making the window wider than it is tall.
+function touchLandscape() { return wantsTouchControls() && isLandscape(); }
+
 // The mobile/desktop default zoom (constants.js), picked live off the same test
 // as the touch controls themselves rather than cached, so it stays right even if
 // wantsTouchControls()'s answer could change (it can't mid-session in practice,
@@ -61,10 +80,12 @@ function pxPerFtDefault() {
     return wantsTouchControls() ? PX_PER_FT_DEFAULT_MOBILE : PX_PER_FT_DEFAULT_DESKTOP;
 }
 
-// Same pattern, for VIEW_ANGLE_DEFAULT/_MOBILE (constants.js) -- see the
-// comment there for why mobile starts rotated further round.
+// Same pattern, for VIEW_ANGLE_DEFAULT/_MOBILE/_MOBILE_LANDSCAPE (constants.js)
+// -- see the comments there for why a phone starts rotated further round than a
+// monitor, and why turning that phone sideways swings it back past both.
 function viewAngleDefault() {
-    return wantsTouchControls() ? VIEW_ANGLE_DEFAULT_MOBILE : VIEW_ANGLE_DEFAULT;
+    if (!wantsTouchControls()) return VIEW_ANGLE_DEFAULT;
+    return isLandscape() ? VIEW_ANGLE_DEFAULT_MOBILE_LANDSCAPE : VIEW_ANGLE_DEFAULT_MOBILE;
 }
 
 // Same pattern again, for INTRO_UI_DELAY/UI_DELAY_MOBILE_EARLIER (constants.js)
@@ -150,6 +171,41 @@ function resetCamera() {
     Y_SCALE = Y_SCALE_DEFAULT;
     if (cameraResetHook) cameraResetHook();
     else PX_PER_FT = pxPerFtDefault();
+}
+
+// --- Turning the phone sideways ---
+// Landscape is a layout change and a camera change at once, and a phone can be
+// turned at any moment, so neither can be settled at load. Everything that
+// depends on it reads touchLandscape() live; all this has to do is re-apply the
+// two things that are latched rather than read: the body class the landscape
+// CSS keys off, and VIEW_ANGLE.
+//
+// The angle is carried by the difference between the old and new defaults
+// rather than snapped to the new one, because by the time the phone is turned
+// the player may well have rotated the view themselves (Q/E, the toolbar, or
+// camera-follow tracking a turn) -- shifting by the delta re-aims the camera
+// for the new shape of the screen while leaving whatever they had aimed at
+// intact. It goes through rotateView rather than assigning VIEW_ANGLE so the
+// driving game's camera-follow anchor comes along with it (cameraRotateHook,
+// game.js); assigned directly, camera-follow would read the change as the car
+// having swung out of its dead zone and spend the next moment steering it back.
+let landscapeNow = touchLandscape();
+let viewAngleBase = viewAngleDefault();
+
+function applyLandscapeClass() {
+    if (CONTROLS_DOM && document.body.classList) {
+        document.body.classList.toggle('ic-landscape', touchLandscape());
+    }
+}
+
+function syncOrientation() {
+    if (touchLandscape() === landscapeNow) return;
+    landscapeNow = !landscapeNow;
+    applyLandscapeClass();
+    applyDriveWidths();
+    const base = viewAngleDefault();
+    rotateView(base - viewAngleBase);
+    viewAngleBase = base;
 }
 
 // Set once buildCameraToolbar runs, so a page loaded after controls.js (the
@@ -303,9 +359,26 @@ let steerSlotEl = null, steerAnalogEl = null, steerDigitalEl = null, pedalsEl = 
 // settings panel whenever the slider there moves.
 function applyDriveWidths() {
     if (!steerSlotEl) return;
-    const pct = Math.max(0, Math.min(1, STEER_WIDTH_FRAC)) * 100;
-    steerSlotEl.style.flex = `0 0 ${pct}%`;
-    pedalsEl.style.flex = `0 0 ${100 - pct}%`;
+    const frac = Math.max(0, Math.min(1, STEER_WIDTH_FRAC));
+    if (touchLandscape()) {
+        // Sideways, the two clusters split to opposite edges with the road
+        // visible between them, so they are sized in real pixels off the short
+        // edge of the screen -- the width the same phone has when held upright
+        // -- rather than as a fraction of the wide one. A control ends up the
+        // size it is in portrait, and the extra width all becomes the gap
+        // instead of stretching the pedals across half a screen.
+        // Minus the bar's own 10px padding either side, which is exactly what
+        // the percentages below resolve against in portrait; the padding the
+        // landscape CSS adds around each cluster's backdrop sits outside the
+        // basis (content-box), so it pads the panel without shrinking the
+        // buttons in it.
+        const inner = Math.max(0, Math.min(innerWidth, innerHeight) - 20);
+        steerSlotEl.style.flex = `0 0 ${Math.round(inner * frac)}px`;
+        pedalsEl.style.flex = `0 0 ${Math.round(inner * (1 - frac))}px`;
+    } else {
+        steerSlotEl.style.flex = `0 0 ${frac * 100}%`;
+        pedalsEl.style.flex = `0 0 ${(1 - frac) * 100}%`;
+    }
 }
 function setSteerWidthFrac(v) { STEER_WIDTH_FRAC = v; applyDriveWidths(); }
 function setSteerDeadZone(v) { STEER_DEAD_ZONE = v; }
@@ -491,6 +564,33 @@ body.ic-intro .ic-cam, body.ic-intro .ic-drive { opacity: 0; pointer-events: non
     border: 1px solid rgba(255,255,255,0.35); border-radius: 10px;
     font: bold 15px system-ui, sans-serif; cursor: pointer;
     touch-action: none; -webkit-tap-highlight-color: transparent; }
+
+/* --- Landscape phones ---
+   Turned sideways the screen is wide and short, so the two clusters split to
+   the left and right edges at their portrait size (applyDriveWidths above) and
+   the city shows through the gap between them, rather than the bar staying one
+   solid band across the whole bottom of a screen that has little height to give
+   away. The bar itself still spans the full width -- it is what holds the two
+   clusters apart -- so it hands over both the things that would otherwise cover
+   that gap: its background, and its pointer events, which each cluster takes
+   back for the area it actually occupies. Without that second half, the gap
+   would look like open road and still swallow every drag and pinch aimed at the
+   canvas underneath it.
+   The side insets pick up the safe area too: in landscape a notch is on one
+   side rather than the top, and it lands on the steering. */
+body.ic-landscape .ic-drive { background: none; pointer-events: none;
+    justify-content: space-between; padding-top: 2px;
+    padding-left: calc(10px + env(safe-area-inset-left, 0px));
+    padding-right: calc(10px + env(safe-area-inset-right, 0px)); }
+/* The padding here is what the bar's own top padding gives up above: each
+   cluster's backdrop now needs its own breathing room, and doubling the two on
+   the axis a sideways phone has least of would push the bar taller for nothing.
+   Horizontally it is left alone -- see applyDriveWidths on why this padding
+   lands outside the width a control is sized to, not inside it. */
+body.ic-landscape .ic-steer-slot, body.ic-landscape .ic-pedals {
+    pointer-events: auto; padding: 8px; border-radius: 16px;
+    background: rgba(0,0,0,0.45); }
+
 .ic-gas { background: rgba(70,190,90,0.55); }
 .ic-brake { background: rgba(210,70,70,0.55); }
 .ic-pedal.ic-held { filter: brightness(1.6); }
@@ -501,6 +601,13 @@ if (CONTROLS_DOM) {
     style.textContent = CONTROLS_CSS;
     document.head.appendChild(style);
     buildCameraToolbar();
+    applyLandscapeClass();
+    // orientationchange is the event this is about, but every browser that fires
+    // it fires a resize alongside, and resize alone also catches a desktop
+    // window dragged across the square with ?touch=1 on. syncOrientation itself
+    // returns immediately unless the answer actually changed, so the ordinary
+    // resize storm during a drag costs one comparison each.
+    addEventListener('resize', syncOrientation);
 
     let heldLast = 0;
     requestAnimationFrame(function heldLoop(t) {

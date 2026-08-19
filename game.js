@@ -47,10 +47,11 @@ const player = { x: 200, y: laneOffset(seedStreet), angle: 0, speed: 0, steer: 0
 // player's car changes -- at spawn, and again from the picker below.
 player.perf = vehiclePerf(player.vehicle);
 
-// A phone's screen wants more of the view turned toward the road ahead than
-// a desktop monitor does -- see VIEW_ANGLE_DEFAULT_MOBILE, constants.js. Set
-// here, before the intro flourish below captures its own starting angle, so
-// the sweep starts and settles on whichever default this device gets.
+// A phone's screen wants more of the view turned toward the road ahead than a
+// desktop monitor does, and the same phone turned sideways wants less again --
+// see VIEW_ANGLE_DEFAULT_MOBILE and _MOBILE_LANDSCAPE, constants.js. Set here,
+// before the intro flourish below captures its own starting angle, so the sweep
+// starts and settles on whichever default this device and orientation gets.
 VIEW_ANGLE = viewAngleDefault();
 
 // --- Vehicle picker ---
@@ -209,6 +210,13 @@ function setCameraFollow(on) {
 cameraRotateHook = delta => {
     VIEW_ANGLE = normA(VIEW_ANGLE + delta);
     followAnchor = normA(followAnchor + delta);
+    // The flourish drives VIEW_ANGLE from introStartAngle absolutely on every
+    // frame (updateIntroCamera below), so anything that moves the camera while
+    // it is still running has to move the angle it is spinning around too or be
+    // overwritten on the next frame. The only thing that does is a phone turned
+    // sideways mid-intro (syncOrientation, controls.js): the keys and buttons
+    // that reach here otherwise are locked out for the flourish's whole length.
+    introStartAngle = normA(introStartAngle + delta);
 };
 
 function buildCameraFollowToggle() {
@@ -385,7 +393,11 @@ buildingFade = false;
 let introSettled = false;   // true once the flourish has hit its exact rest values
 let uiRevealed = false;     // true once body.ic-intro has been removed
 let uiAlpha = 0;            // 0..1, read by drawing.js to fade in the on-canvas HUD
-const introStartAngle = VIEW_ANGLE;
+// `let`, not const: turning the phone sideways during the flourish re-aims the
+// camera for the new screen shape, and the spin has to be re-based onto that
+// new angle rather than snapping back to the one captured here (cameraRotateHook
+// above). Nothing else moves it.
+let introStartAngle = VIEW_ANGLE;
 // Captured once rather than re-read every frame: pxPerFtDefault() itself never
 // changes mid-session (see its own comment, controls.js).
 const introTargetZoom = pxPerFtDefault();
