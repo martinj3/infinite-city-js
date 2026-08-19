@@ -494,6 +494,13 @@ function draw() {
             drawStreetSign(cur.name, marginLeft, streetsY, signFont);
         }
 
+        // Top left, under the toolbars (see minimap.js). The player's own
+        // position, not the camera's -- the camera sits off to one side, and the
+        // arrow at the centre of the radar is the car.
+        if (typeof drawMinimap === 'function') {
+            drawMinimap(player.x, player.y, player.angle, player.vehicle.color);
+        }
+
         ctx.globalAlpha = 1;
     }
 

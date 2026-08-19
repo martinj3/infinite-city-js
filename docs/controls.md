@@ -145,6 +145,63 @@ trick the speedometer uses; unlike the speedometer, though, the sign doesn't
 know its own width until it's measured the name, so it's anchored by its
 left and bottom edges rather than a centre a caller could hand it up front.
 
+## The radar minimap
+
+`minimap.js` is a circular radar in the top left of the canvas HUD, under the
+camera/car/settings toolbar buttons (`MINIMAP_TOP` is 64, clearing the 44px
+buttons pinned at `top: 10px`). It is driving-only -- `driving.html` loads it
+after `game.js`, since it reads that page's canvas and adds a row to the camera
+panel `controls.js` built -- and `drawing.js` calls it from inside the same
+`uiAlpha` block the speedometer and street sign live in, so it fades in with the
+rest of the HUD and stays hidden through the startup flourish. On the canvas
+rather than in the DOM, for the same reason as the other two: it is an
+instrument, not a control.
+
+Streets are their own pavement colour (a flat 2px on desktop, 1.4 on touch --
+a street is really about 1.3px wide at this range, and drawn at its true width
+it would be a dotted smudge), traffic is a dot in the car's own colour, towers
+and churches are small squares, and the player is an arrow at dead centre in
+their car's colour. Every borrowed colour is run through `applyLighting` with a
+straight-up normal -- a radar looks down, so that is the roof's light -- which
+keeps a dot recognisably the same colour as the car it stands for instead of the
+flat unlit value nothing is ever drawn in. Building colours are taken off the
+building's own drawable (first poly in tree order) rather than declared per
+type, so adding a landmark type is one entry in `MINIMAP_LANDMARK_TYPES`.
+
+**Up is north by default, and that is the point.** The main view already
+rotates -- Q/E, camera-follow, the intro's full turn -- so a minimap that
+rotated with it would leave nothing on screen holding still, and no way to tell
+"I came from over there" from "the camera swung round". The "map locks to car"
+checkbox in the camera panel (next to "follow car" and "shift car view") gives
+back the usual game-radar behaviour, and tapping the map itself does the same,
+which is the one control here a phone can reach without opening a panel;
+`setMinimapLocked` is what both go through, so they can't disagree. Locked, the
+map frame is rotated by `-heading - PI/2` and the compass marks ride round the
+rim with it -- the red north tip becomes a real compass needle, which is what
+makes the locked mode survivable at all. The player arrow is drawn pointing up
+and rotated by the heading inside that same frame, so the two modes need no
+second code path: in locked mode the frame's own counter-rotation cancels it.
+
+Two things keep the cost down, both of which start to matter once a city is a
+few thousand streets. Streets and landmarks don't move, so the culled lists are
+cached and only rebuilt once the player has driven `MINIMAP_CACHE_MOVE` (60ft)
+from where they were last built, or `streets.length` has changed -- the cull box
+is padded by that same distance, so nothing can cross the rim between rebuilds
+without having been collected first. And the cached streets are grouped by
+colour at rebuild time, so a frame is one path and one stroke per distinct
+pavement grey (about a dozen) rather than one per street. Traffic is the only
+thing walked every frame, being the only thing that moves, and `traffic` only
+ever holds the cars near the player anyway. Measured on a 900-street city with
+170 cars: 0.065ms of JS a frame against `drawScene`'s 7.9ms, plus a 0.083ms
+rebuild about every twentieth frame at speed.
+
+Everything inside the dial is drawn in *world feet* -- the transform is the
+map's own rotation and scale, so a straight street is its two real endpoints and
+a curve is `ctx.arc` on its real arc, with no per-item projection at all. Widths
+meant to be a fixed number of screen pixels are divided back out by the scale.
+(`tools/render.js` gained a real `clip()` and a transform-aware `stroke()` width
+so the headless harness can render this honestly.)
+
 ## Mobile vs desktop default zoom
 
 The driving game's default `PX_PER_FT` is no longer one constant: a phone's

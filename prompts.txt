@@ -817,3 +817,21 @@ Both in driving.html and towers html.  Often it flickers as you pan or rotate.
 See if there's a quick, easy way to address that, otherwise just remove the plinth/floor layer, if it still looks decent.
 
 Another super common pain point, similar issue, is specifically with pickup trucks.  The grey colored pickup bed cover constantly flickers in and out, as you move and zoom
+
+---
+
+Add a circular minimap or radar.  Put it in the top left, just below the camera/car selector buttons.  
+
+Streets can be 1 or maybe 2 pixels wide, grey color matching the street's pavement color.  Zoomed to show maybe a 2 to 3 block radius (~2 on mobile, ~3 on desktop which has room for a larger minimap).  
+
+Show vehicles as single pixel dots, matching the vehicle's color.  Big buildings (just churches and high rise towers, for now) can show as 2x2 pixel colored squares.  
+
+Player car is a small arrow in the center, colored to match the player car's color.  
+
+By default, player's car is not locked to point up at all times, rather up is always north by default (the main view rotates by default, so doing the opposite hear will help the player keep track of cardinal directions).  
+
+But optionally it can be locked so the players car is always pointing up.  
+
+Make it look nice, put a nice circular border to decorate it to look cool, etc.  
+
+Consider performance, where possible try not to make it too computationally expensive to update

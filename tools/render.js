@@ -39,6 +39,18 @@ function mul(m, n) { // apply n in m's local space
 const apply = (m, x, y) => [m[0] * x + m[2] * y + m[4], m[1] * x + m[3] * y + m[5]];
 
 function parseColor(c) {
+    // A gradient stands in as the average of its stops: this rasterizer fills
+    // flat, so the honest choice is the colour the gradient averages out to
+    // rather than either end of it.
+    if (c && Array.isArray(c.stops)) {
+        if (!c.stops.length) return [255, 0, 255, 1];
+        const acc = [0, 0, 0, 0];
+        for (const s of c.stops) {
+            const p = parseColor(s);
+            for (let i = 0; i < 4; i++) acc[i] += p[i] / c.stops.length;
+        }
+        return acc;
+    }
     if (typeof c !== 'string') return [255, 0, 255, 1];
     let m = /^rgba?\(([^)]+)\)$/.exec(c.trim());
     if (m) {
@@ -76,18 +88,41 @@ class RasterCtx {
         this.lineWidth = 1; this.globalAlpha = 1;
         this.font = ''; this.textAlign = 'left';
         this.canvas = { width: w, height: h };
+        this.mask = null;   // clip: null = everything, else one byte per pixel
     }
 
-    save() { this.stack.push([this.m.slice(), this.fillStyle, this.strokeStyle, this.lineWidth, this.globalAlpha]); }
+    save() { this.stack.push([this.m.slice(), this.fillStyle, this.strokeStyle, this.lineWidth, this.globalAlpha, this.mask]); }
     restore() {
         const s = this.stack.pop();
-        if (s) { this.m = s[0]; this.fillStyle = s[1]; this.strokeStyle = s[2]; this.lineWidth = s[3]; this.globalAlpha = s[4]; }
+        if (s) {
+            this.m = s[0]; this.fillStyle = s[1]; this.strokeStyle = s[2];
+            this.lineWidth = s[3]; this.globalAlpha = s[4]; this.mask = s[5];
+        }
+    }
+
+    // Clip to the current path, intersected with whatever clip is already in
+    // force -- the same nesting a real canvas gives you, which is what the
+    // minimap's circular dial depends on. Hard-edged (no antialiasing), like
+    // every other edge this rasterizer draws. The mask is a fresh array rather
+    // than an edit in place, so the one restore() puts back is untouched.
+    clip() {
+        const next = new Uint8Array(this.w * this.h);
+        const old = this.mask;
+        this.scanPolys(this.path, (x, y, i) => { if (!old || old[i]) next[i] = 1; });
+        this.mask = next;
     }
     setTransform(a, b, c, d, e, f) { this.m = [a, b, c, d, e, f]; }
     translate(x, y) { this.m = mul(this.m, [1, 0, 0, 1, x, y]); }
     scale(x, y) { this.m = mul(this.m, [x, 0, 0, y, 0, 0]); }
     rotate(a) { const c = Math.cos(a), s = Math.sin(a); this.m = mul(this.m, [c, s, -s, c, 0, 0]); }
     setLineDash() { }  // dashes ignored; dashed markings render solid
+    // Flat-filled (see parseColor): the stops are kept, the ramp between them
+    // is not. Enough for the speedometer's bezel to render as a dark disc.
+    createRadialGradient() {
+        const g = { stops: [], addColorStop(_, c) { g.stops.push(c); } };
+        return g;
+    }
+    createLinearGradient() { return this.createRadialGradient(); }
 
     beginPath() { this.path = []; this.cur = null; }
     moveTo(x, y) { this.cur = [apply(this.m, x, y)]; this.path.push(this.cur); }
@@ -110,14 +145,17 @@ class RasterCtx {
 
     px(x, y, col) {
         if (x < 0 || y < 0 || x >= this.w || y >= this.h) return;
+        if (this.mask && !this.mask[y * this.w + x]) return;
         const i = (y * this.w + x) * 3, a = col[3] * this.globalAlpha;
         this.buf[i] = this.buf[i] * (1 - a) + col[0] * a;
         this.buf[i + 1] = this.buf[i + 1] * (1 - a) + col[1] * a;
         this.buf[i + 2] = this.buf[i + 2] * (1 - a) + col[2] * a;
     }
 
-    // Even-odd scanline fill. No antialiasing: thin shapes can drop out.
-    fillPolys(polys, col) {
+    // Even-odd scanline walk over a set of subpaths, calling back with every
+    // pixel inside. No antialiasing: thin shapes can drop out. Shared by fill()
+    // and clip(), so a clip covers exactly the pixels the same path would fill.
+    scanPolys(polys, at) {
         let mnY = Infinity, mxY = -Infinity;
         for (const p of polys) for (const pt of p) {
             if (pt[1] < mnY) mnY = pt[1];
@@ -137,9 +175,13 @@ class RasterCtx {
             for (let i = 0; i + 1 < xs.length; i += 2) {
                 const xa = Math.max(0, Math.ceil(xs[i] - 0.5));
                 const xb = Math.min(this.w - 1, Math.floor(xs[i + 1] - 0.5));
-                for (let x = xa; x <= xb; x++) this.px(x, y, col);
+                for (let x = xa; x <= xb; x++) at(x, y, y * this.w + x);
             }
         }
+    }
+
+    fillPolys(polys, col) {
+        this.scanPolys(polys, (x, y) => this.px(x, y, col));
     }
 
     fill() { if (this.path.length) this.fillPolys(this.path, parseColor(this.fillStyle)); }
@@ -150,7 +192,11 @@ class RasterCtx {
     clearRect() { }
     stroke() {
         const col = parseColor(this.strokeStyle);
-        const lw = Math.max(1, this.lineWidth);
+        // lineWidth is in user space, so it scales with the transform the way
+        // the path itself does -- which is the whole point of drawing the
+        // minimap in world feet (minimap.js) and asking for a 2px street.
+        const m = this.m, sc = Math.sqrt(Math.abs(m[0] * m[3] - m[1] * m[2])) || 1;
+        const lw = Math.max(1, this.lineWidth * sc);
         for (const p of this.path) {
             for (let i = 0; i + 1 < p.length; i++) {
                 const [x0, y0] = p[i], [x1, y1] = p[i + 1];

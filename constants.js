@@ -121,6 +121,36 @@ const SPEEDO_RADIUS_TOUCH = 36;            // smaller on phones -- screen real e
 const STREET_SIGN_FONT_DESKTOP = 19;
 const STREET_SIGN_FONT_TOUCH = 13;
 
+// Driving game only: the radar minimap (minimap.js), top left of the canvas HUD,
+// under the camera/car/settings toolbar buttons. Same desktop-vs-touch split as
+// the two gauges above, and for the same reason -- but here the split is in two
+// places at once, the dial's size on screen AND how much world it holds: a phone
+// gets a smaller dial, so packing three blocks of city into it would leave the
+// streets a smudge. Two blocks in a smaller circle keeps a street the same
+// couple of pixels wide it is on desktop.
+const MINIMAP_RADIUS_DESKTOP = 78;
+const MINIMAP_RADIUS_TOUCH = 56;
+const MINIMAP_RANGE_DESKTOP = 3 * DEFAULT_BLOCK_LEN;   // ft of world, centre to rim
+const MINIMAP_RANGE_TOUCH = 2 * DEFAULT_BLOCK_LEN;
+const MINIMAP_LEFT = 10;        // matches .ic-cam's own left inset (controls.js)
+const MINIMAP_TOP = 64;         // clear of the 44px toolbar buttons at top: 10px
+// Widths in screen pixels. A street is 22-26ft, which at the desktop range is
+// about 1.3px of true width -- drawn at its real width it would be a dotted
+// smudge, so these are flat pixel widths instead, converted back into feet
+// against the current scale (see drawMinimap).
+const MINIMAP_STREET_PX_DESKTOP = 2;
+const MINIMAP_STREET_PX_TOUCH = 1.4;
+const MINIMAP_CAR_PX = 1.6;     // a car is a dot; only its colour and position read
+const MINIMAP_LANDMARK_PX = 3;  // a tower or a church is a square, twice a car's size
+// Rebuild the cached street/landmark lists once the player has moved this far
+// from where they were last cached (see refreshMinimapCache). The cull box is
+// padded by the same distance, so nothing pops in late.
+const MINIMAP_CACHE_MOVE = 60;
+// North up, not car up: the main view already rotates with the car, so a minimap
+// that did the same would leave nothing on screen holding still. Flipped by the
+// "map locks to car" checkbox in the camera panel, or by tapping the map itself.
+const MINIMAP_LOCK_HEADING_DEFAULT = false;
+
 // Live-computed from current VIEW_ANGLE (changes when user rotates)
 function getCosV() { return Math.cos(VIEW_ANGLE); }
 function getSinV() { return Math.sin(VIEW_ANGLE); }
