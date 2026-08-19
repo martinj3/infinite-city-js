@@ -108,6 +108,24 @@ out of the building instead of balancing on it. And every tower gets a plinth (a
 darker course standing proud at the foot, grown from the stage's own ring about its
 centroid so it fits any plan) and a lobby band in darker glass -- without them a
 tower looks pushed into the ground and its ground floor looks like more of the same.
+The plinth is closed with a *ledge* -- the strip between the wall and its own outer
+face -- and not a cap over the whole footprint, which is the same lesson as the
+rooftop plant read backwards. A horizontal polygon spanning the plan projects up the
+screen by half the footprint's depth, and details paint after the walls of the stage
+they belong to, so a cap at ankle height went straight over the near wall: the grey
+slab that used to swallow the bottom several storeys. A wall standing on the plinth
+hid everything of that cap except the ledge anyway.
+
+Stages stack, so they are *nested* -- each hangs off the details of the one below,
+and a shaft is one chain rather than a row of siblings. Siblings are painted in
+depth order, and two stages of a shaft share a centre, so their depths differed only
+by where the polygons happened to average out and the order flipped as the camera
+turned. What that showed was a setback deck painted after the tier standing on it,
+lying across the bottom of it: a grey band that appeared and vanished as you
+rotated. Nested, the order is the one construction guarantees -- a stage is above
+every part of the stage below, so it is nearer, so it always paints after, the same
+argument the crown already rested on. Separate shafts stay siblings, being genuinely
+side by side and wanting the depth sort.
 
 ## Seeing past the tall ones
 

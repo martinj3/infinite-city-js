@@ -177,7 +177,22 @@ face's footprint short where something overhangs its ends: one flank polygon
 spanning most of a truck sorts as mid-truck and paints over what hangs past it,
 which is why `makeTruck()` builds its frame rails in segments -- and when the
 two things simply share a footprint, no push helps and the covered face has to
-go (`spec.roofCovered`, above). And
+go (`spec.roofCovered`, above).
+
+A detail lying on a *horizontal* face has nowhere to push: the direction it wants
+is straight up, and height is exactly what the depth sort ignores. A pickup's bed
+floor and the deck it lies on are concentric, so their depths came out equal to the
+last bit and the rounding error that broke the tie changed with the camera -- the
+bed blinked in and out as the truck drove past, and it had been doing it since the
+bed was built. Lifting it clear does nothing for that; what settles it is
+`depthBias`, feet added to a poly's own sort depth (a quarter of a foot: past any
+rounding, nowhere near the couple of feet that separate the bed from the cab in
+front of it, which still has to hide it in a head-on view). The Wrangler's interior
+floor is the same construct and carries the same bias. `_emit()` copies it into the
+scratch poly with everything else, and it must -- those objects are reused, so a
+field left unwritten is last frame's value on some unrelated poly.
+
+And
 a custom glass pane must walk its bottom edge first, the way `makeCarLike()`'s
 do; wound from the top edge its normal points into the car, and the pane shows
 through from the wrong side instead of its own.

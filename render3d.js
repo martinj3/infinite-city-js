@@ -25,12 +25,21 @@ function project(wx, wy, wz, camX, camY) {
 // stacked details (grilles, badges, taillights) order by their small outward
 // pushes, which move them toward the camera whenever their face is visible.
 // Units are feet of ground depth; only the ordering matters.
+//
+// That last trick is only open to a face standing up: a detail lying flat on a
+// horizontal one -- a pickup's bed floor on its deck -- has nowhere to push, since
+// the direction it wants is straight up and height is exactly what does not count.
+// Two such polys about the same centre come out with the same depth to the last
+// bit, and which one wins is then a rounding error that changes with the camera:
+// the detail flickers on and off as you turn or drive. `depthBias` is feet added
+// to a poly's own depth to settle that -- enough to beat the noise, far too little
+// to outrank anything genuinely nearer.
 function polyDepth(poly, ox, oy, camX, camY) {
     const cosV = getCosV(), sinV = getSinV();
     const wx = ox - camX, wy = oy - camY;
     let d = 0;
     for (const p of poly.pts) d += (p.x + wx) * sinV + (p.y + wy) * cosV;
-    return d / poly.pts.length;
+    return d / poly.pts.length + (poly.depthBias || 0);
 }
 
 // Lettering painted onto a quad -- a company name down a truck's box. The
@@ -129,7 +138,10 @@ function projectAndDraw(polys, ox, oy, camX, camY, staticLit = false) {
         const litColor = staticLit
             ? poly._lit || (poly._lit = applyLighting(poly.color, computeNormal(pts)))
             : applyLighting(poly.color, computeNormal(pts));
-        projected.push({ sp, color: litColor, depth: depth / n, text: poly.text,
+        // Depth here is in pixels, not the feet polyDepth answers in, so a poly's
+        // bias is scaled to match before it is added.
+        projected.push({ sp, color: litColor, text: poly.text,
+                         depth: depth / n + (poly.depthBias || 0) * PX_PER_FT,
                          aspect: poly.text ? dist3(pts[0], pts[1]) / dist3(pts[0], pts[3]) : 0,
                          stroke: poly.stroke, strokeMinZoom: poly.strokeMinZoom });
     }

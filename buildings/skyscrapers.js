@@ -262,7 +262,24 @@ function makePlinth(rings, h, out, color, capColor) {
     let r = 0;
     for (const p of pts) r = Math.max(r, Math.hypot(p.x - cx, p.y - cy));
     const wide = shrinkPts(pts, 1 + out / r);
-    return [...makeLoft({ z: 0, pts: wide }, { z: h, pts: wide }, color), capPoly(wide, h, capColor)];
+    // The top of it is a ledge -- the strip between the wall and the plinth's own
+    // outer face -- and not a cap over the whole footprint. A cap is what this used
+    // to be, and it was the grey slab that swallowed the bottom several storeys of
+    // every tower: a horizontal polygon at ankle height spanning the tower's entire
+    // plan projects up the screen by half the footprint's depth, and details are
+    // painted after the walls of the stage they belong to, so it went straight over
+    // the near wall. The ledge is the only part of that cap a wall standing on it
+    // did not already hide, and it is wound off the outer ring so it faces up
+    // whichever way round the ring runs.
+    const ledge = [];
+    for (let i = 0; i < wide.length; i++) {
+        const j = (i + 1) % wide.length;
+        ledge.push({ pts: [
+            { x: wide[i].x, y: wide[i].y, z: h }, { x: wide[j].x, y: wide[j].y, z: h },
+            { x: pts[j].x, y: pts[j].y, z: h }, { x: pts[i].x, y: pts[i].y, z: h },
+        ], color: capColor });
+    }
+    return [...makeLoft({ z: 0, pts: wide }, { z: h, pts: wide }, color), ...ledge];
 }
 
 // -------------------------------------------------------------------- ribs ---
@@ -806,6 +823,19 @@ function generateTower({ width: lotWidth = 120, depth: lotDepth = 120, setback: 
 
     const children = [];
     for (const shaft of shafts) {
+        // The stages of one shaft are stacked, so each hangs off the one below it
+        // rather than standing beside it. Siblings are painted in depth order, and
+        // two stages of the same shaft share a centre: their depths differ only by
+        // where the polygons happen to average out, so which came first flipped as
+        // the camera turned -- and a setback deck painted after the tier standing on
+        // it lies across the bottom of that tier, which is the grey band that
+        // appeared and vanished as you rotated. Nested, the order is the one
+        // construction guarantees: a stage is above every part of the stage below,
+        // so it is nearer, so it is always painted after. It hangs off that stage's
+        // details rather than off its walls, so the whole shaft is one chain and
+        // nothing anywhere in it is left to a coin toss. Shafts stay siblings, being
+        // genuinely side by side and wanting the depth sort.
+        let below = null;   // the details of the stage below, once there is one
         for (let si = 0; si < shaft.stages.length; si++) {
             const st = shaft.stages[si];
             const details = [];
@@ -842,7 +872,9 @@ function generateTower({ width: lotWidth = 120, depth: lotDepth = 120, setback: 
                     spike: si === shaft.stages.length - 1 ? spike : 0,
                 }));
             }
-            children.push({ polys: stagePolys(st, pal), children: [{ polys: details, children: [] }] });
+            const trim = { polys: details, children: [] };
+            (below ? below.children : children).push({ polys: stagePolys(st, pal), children: [trim] });
+            below = trim;
         }
 
         const last = shaft.stages[shaft.stages.length - 1];
@@ -854,7 +886,7 @@ function generateTower({ width: lotWidth = 120, depth: lotDepth = 120, setback: 
         // The crown hangs off the top stage rather than standing beside it: it is
         // above every part of that stage by construction, so painting it after is
         // always right, and it is far too small to sort against a whole roof.
-        if (polys.length) children[children.length - 1].children.push({ polys, children: [] });
+        if (polys.length) below.children.push({ polys, children: [] });
 
         if (shaft.bridge) {
             const b = shaft.bridge;

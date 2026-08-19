@@ -407,13 +407,21 @@ function makeCarLike(type, spec) {
         const deckZ = x => beltZ - rearDrop * (cabinRear - x) / (cabinRear + hl);
         const xBack = -hl + rail, xFront = cabinRear - rail;
         const yw = Math.max(0.3, hw - rail);
-        const lift = 0.06;   // clear of the deck it sits on, so it sorts in front
+        // It is lifted clear of the deck so it never shares a plane with it, and
+        // biased forward in the sort because lifting it is not enough on its own:
+        // depth is ground depth, height does not count, and the floor and the deck
+        // it lies on are concentric -- their depths came out equal to the last bit,
+        // and the rounding error that broke the tie changed with every camera angle.
+        // That is the bed blinking in and out as the truck drove past. The bias is
+        // a few inches of ground depth: past any rounding, nowhere near the couple
+        // of feet that separate the bed from the cab in front of it.
+        const lift = 0.06;
         body.push({ pts: [
             { x: xBack,  y: -yw, z: deckZ(xBack) + lift },
             { x: xFront, y: -yw, z: deckZ(xFront) + lift },
             { x: xFront, y:  yw, z: deckZ(xFront) + lift },
             { x: xBack,  y:  yw, z: deckZ(xBack) + lift },
-        ], color: BED_LINER_COLOR });
+        ], color: BED_LINER_COLOR, depthBias: 0.25 });
     }
 
     // Glass, drawn only when zoomed in far enough to see it (VEHICLE_GLASS_MIN_ZOOM).
@@ -681,10 +689,14 @@ let _vehCount = 0;
 
 function _emit(src, cos, sin, dx, dy) {
     let d = _vehScratch[_vehCount];
-    if (!d) d = _vehScratch[_vehCount] = { pts: [], color: '', text: null };
+    if (!d) d = _vehScratch[_vehCount] = { pts: [], color: '', text: null, depthBias: 0 };
     _vehCount++;
     d.color = src.color;
     d.text = src.text;   // a lettered panel is otherwise an ordinary poly
+    // Scratch polys are reused, so every field has to be written every time: a
+    // bias left over from whatever was in this slot last frame would nudge some
+    // unrelated poly.
+    d.depthBias = src.depthBias || 0;
     const sp = src.pts, dp = d.pts;
     dp.length = sp.length;
     for (let i = 0; i < sp.length; i++) {

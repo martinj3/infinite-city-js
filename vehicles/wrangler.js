@@ -111,14 +111,15 @@ function generateWrangler() {
 
     if (open) {
         // The interior, seen over the dipped sides: a dark floor floating just
-        // above the tub's top face (the pickup-bed trick), the sport bar with
-        // its rear braces, and two seats.
+        // above the tub's top face (the pickup-bed trick, `depthBias` and all --
+        // floating it is not enough, since height does not enter the depth sort),
+        // the sport bar with its rear braces, and two seats.
         body.push({ pts: [
             { x: -5.8, y: -2.3, z: railZ + 0.06 },
             { x:  1.9, y: -2.3, z: railZ + 0.06 },
             { x:  1.9, y:  2.3, z: railZ + 0.06 },
             { x: -5.8, y:  2.3, z: railZ + 0.06 },
-        ], color: WRANGLER_INTERIOR });
+        ], color: WRANGLER_INTERIOR, depthBias: 0.25 });
         for (const side of [-1, 1]) {
             body.push(...makeRectangularPrism(-1.2, side * 1.9 - 0.09, railZ,
                 0.18, 0.18, 1.8, WRANGLER_TRIM_DARK));

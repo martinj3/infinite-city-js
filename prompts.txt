@@ -807,3 +807,13 @@ The other 50% of the time, choose randomly from a set of phrases like:
 And any other similar short (10 character max) that you can think of, be creative!
 
 Don't worry about the difference between being cut off, having to slam on the brakes, versus a possible head-on collision.  Just pick from the same list for all cases, don't worry about distinguishing.
+
+---
+
+The high rise towers look really nice, but there's a minor painter's algorithm issue with them.
+Particularly with the base/floor plinth, which commonly shows through where it shouldn't.
+Both in driving.html and towers html.  Often it flickers as you pan or rotate.
+
+See if there's a quick, easy way to address that, otherwise just remove the plinth/floor layer, if it still looks decent.
+
+Another super common pain point, similar issue, is specifically with pickup trucks.  The grey colored pickup bed cover constantly flickers in and out, as you move and zoom
